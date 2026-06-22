@@ -1,0 +1,863 @@
+/* Retro hard-sci-fi panels (docs/04). Monochrome phosphor, fixed-width, robust.
+   Heavy CRT treatment lives on the panels; the readout stays stoic and stable.
+
+   Layout model: four fixed SLOTS, each a .panel that can mount ANY .view via its
+   switcher. A view builds its own DOM with CLASSES (never shared ids), so the same
+   view can live in two slots at once. Each view is a flex column: a .scrollarea that
+   grows + scrolls, plus an optional pinned footer (warp selector, AI input). */
+
+:root {
+  --bg: #05060a;
+  --amber: #ffb000;
+  --green: #41ff7e;
+  --cyan: #58c8ff;
+  --violet: #b48cff;
+  --rose: #ff7ec9;
+  --steel: #9fb4c8;
+  --red: #ff4136;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: radial-gradient(circle at 50% 30%, #0b0e16 0%, #05060a 70%, #000 100%);
+  color: var(--amber);
+  font-family: "Consolas", "DejaVu Sans Mono", "Courier New", monospace;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+#console {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  width: 100%;
+  max-width: 1500px;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.panel {
+  --phos: var(--amber);
+  color: var(--phos);
+  flex: 1 1 320px;
+  min-width: 320px;
+  position: relative;
+  border: 2px solid color-mix(in srgb, var(--phos) 45%, #000);
+  border-radius: 10px;
+  background: #03040a;
+  padding: 14px 16px 16px;
+  box-shadow:
+    inset 0 0 60px color-mix(in srgb, var(--phos) 8%, transparent),
+    0 0 2px color-mix(in srgb, var(--phos) 40%, transparent);
+  overflow: hidden;
+  /* Cap each panel to the viewport (minus body padding) so a long readout or chat
+     scrolls *inside* the panel instead of growing it. */
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+}
+
+.panel.amber {
+  --phos: var(--amber);
+}
+.panel.green {
+  --phos: var(--green);
+}
+.panel.cyan {
+  --phos: var(--cyan);
+}
+.panel.violet {
+  --phos: var(--violet);
+}
+.panel.rose {
+  --phos: var(--rose);
+}
+.panel.steel {
+  --phos: var(--steel);
+}
+
+/* scanlines + faint pixel grid — the "every pixel wired separately" feel */
+.panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.22) 3px
+  );
+  mix-blend-mode: multiply;
+  z-index: 1;
+}
+
+/* --- slot chrome: title + switcher --------------------------------------- */
+.panel-title {
+  text-align: center;
+  letter-spacing: 3px;
+  font-size: 12px;
+  padding-bottom: 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--phos) 35%, #000);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--phos) 60%, transparent);
+}
+
+.slot-header {
+  position: relative;
+  z-index: 5;
+}
+
+.slot-title {
+  display: block;
+}
+
+.slot-switch {
+  position: absolute;
+  left: 0;
+  top: -2px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--phos);
+  background: #03040a;
+  border: 1px solid color-mix(in srgb, var(--phos) 40%, #000);
+  border-radius: 4px;
+  padding: 3px 7px;
+  cursor: pointer;
+}
+.slot-switch:hover,
+.slot-switch.open {
+  background: color-mix(in srgb, var(--phos) 18%, #03040a);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--phos) 40%, transparent);
+}
+
+.slot-menu {
+  position: absolute;
+  left: 0;
+  top: 24px;
+  z-index: 40;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  min-width: 210px;
+  text-align: left;
+  letter-spacing: 1px;
+  background: #04060c;
+  border: 1px solid color-mix(in srgb, var(--phos) 45%, #000);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+}
+.slot-menu[hidden] {
+  display: none;
+}
+.slot-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--phos);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+.slot-menu-item:hover {
+  background: color-mix(in srgb, var(--phos) 16%, #03040a);
+}
+.slot-menu-item.active {
+  background: color-mix(in srgb, var(--phos) 26%, #03040a);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--phos) 40%, #000);
+}
+
+/* --- view scaffolding ----------------------------------------------------- */
+.slot-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+.view {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* The scrollable region inside a view. Theme + thin scrollbar inherit --phos. */
+.scrollarea {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--phos) 45%, #000) transparent;
+}
+.scrollarea::-webkit-scrollbar {
+  width: 8px;
+}
+.scrollarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollarea::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--phos) 35%, #000);
+  border-radius: 4px;
+  box-shadow: 0 0 6px color-mix(in srgb, var(--phos) 30%, transparent);
+}
+.scrollarea::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--phos) 55%, #000);
+}
+
+/* shared telemetry-row style (used by several views) */
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.row .k {
+  opacity: 0.7;
+  letter-spacing: 1px;
+}
+.row .v {
+  white-space: pre; /* preserve column alignment from padStart */
+  font-variant-numeric: tabular-nums;
+}
+.rule {
+  height: 1px;
+  background: color-mix(in srgb, var(--phos) 30%, #000);
+  margin: 8px 0;
+}
+
+/* --- NAV scope + readout --- */
+.scope-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.scope {
+  color: var(--phos); /* phosphor color read by the canvas renderer */
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--phos) 50%, transparent));
+}
+.readout {
+  font-size: 13px;
+  line-height: 1.55;
+  text-shadow: 0 0 5px color-mix(in srgb, var(--phos) 45%, transparent);
+}
+
+/* --- NAV time-warp selector (pinned footer) --- */
+.rate-control {
+  padding-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.rate-control .label {
+  opacity: 0.7;
+  letter-spacing: 2px;
+  margin-right: 4px;
+}
+.rate-control button {
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--phos);
+  background: #03040a;
+  border: 1px solid color-mix(in srgb, var(--phos) 40%, #000);
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.rate-control button:hover {
+  background: color-mix(in srgb, var(--phos) 14%, #03040a);
+}
+.rate-control button.active {
+  background: color-mix(in srgb, var(--phos) 22%, #03040a);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--phos) 45%, transparent);
+}
+/* Shown when the executor forces warp down for a burn (telemetry, not user-set). */
+.warp-held {
+  margin-left: 6px;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--red);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--red) 55%, transparent);
+}
+.warp-held[hidden] {
+  display: none;
+}
+
+/* --- MANEUVER view --- */
+.maneuver {
+  font-size: 12px;
+}
+.mnv-head {
+  letter-spacing: 2px;
+  opacity: 0.8;
+  margin-bottom: 8px;
+}
+.mnv-head2 {
+  letter-spacing: 1px;
+  opacity: 0.85;
+  margin-bottom: 4px;
+}
+.mnv-fuel {
+  margin-bottom: 10px;
+}
+.maneuver form {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.mnv-plan-btn {
+  margin-left: auto; /* push PLAN to the right edge */
+}
+
+/* Δv / numeric inputs: a small stacked label over a numeric field. */
+.dv-in {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dv-in span {
+  font-size: 9px;
+  letter-spacing: 1px;
+  opacity: 0.65;
+}
+.dv-in input {
+  width: 52px;
+  background: #03040a;
+  color: var(--phos);
+  border: 1px solid color-mix(in srgb, var(--phos) 40%, #000);
+  border-radius: 4px;
+  padding: 3px 5px;
+  font-family: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.dv-in input:focus {
+  outline: none;
+  border-color: var(--phos);
+}
+
+.mnv-solvers {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed color-mix(in srgb, var(--phos) 25%, #000);
+}
+.mnv-sub {
+  font-size: 10px;
+  letter-spacing: 2px;
+  opacity: 0.55;
+  margin-bottom: 6px;
+}
+.solver-row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.solver-row button {
+  font-size: 11px;
+}
+
+/* generic phosphor buttons inside the maneuver + target views */
+.maneuver button,
+.target button {
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--phos);
+  background: #03040a;
+  border: 1px solid color-mix(in srgb, var(--phos) 40%, #000);
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.maneuver button:hover:not(:disabled),
+.target button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--phos) 14%, #03040a);
+}
+.maneuver button:disabled,
+.target button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.mnv-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.mnv-actions[hidden] {
+  display: none;
+}
+/* EXECUTE is the committing control — render it hot/armed (the red phosphor). */
+.mnv-execute {
+  border-color: color-mix(in srgb, var(--red) 65%, #000) !important;
+  color: var(--red) !important;
+}
+.mnv-execute:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--red) 16%, #03040a) !important;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--red) 45%, transparent);
+}
+.mnv-warn {
+  color: var(--red);
+  margin: 4px 0;
+  line-height: 1.4;
+}
+.mnv-readout {
+  margin-top: 2px;
+}
+.mnv-status {
+  opacity: 0.7;
+  font-style: italic;
+  margin-top: 8px;
+  min-height: 1.1em;
+}
+
+/* --- TARGET view --- */
+.target {
+  font-size: 13px;
+  line-height: 1.55;
+}
+.tgt-select-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.tgt-select-row .label {
+  opacity: 0.7;
+  letter-spacing: 2px;
+  font-size: 12px;
+}
+.tgt-select {
+  flex: 1;
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--phos);
+  background: #03040a;
+  border: 1px solid color-mix(in srgb, var(--phos) 45%, #000);
+  border-radius: 4px;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+.tgt-select:focus {
+  outline: none;
+  border-color: var(--phos);
+}
+.tgt-readout {
+  text-shadow: 0 0 5px color-mix(in srgb, var(--phos) 40%, transparent);
+}
+.tgt-dock {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  min-height: 1.6em;
+}
+/* DOCK reads as a "go" control — green, but greyed when out of the envelope. */
+.dock-btn {
+  border-color: color-mix(in srgb, var(--green) 70%, #000) !important;
+  color: var(--green) !important;
+  letter-spacing: 1px;
+}
+.dock-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--green) 16%, #03040a) !important;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--green) 45%, transparent);
+}
+.dock-btn[hidden],
+.undock-btn[hidden] {
+  display: none;
+}
+.dock-state {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--green);
+  opacity: 0.85;
+}
+.tgt-status {
+  opacity: 0.7;
+  font-style: italic;
+  margin-top: 8px;
+  min-height: 1.1em;
+  font-size: 12px;
+}
+
+/* --- CARGO view: live hold manifest + capacity bar + mass/Δv --- */
+.cargo {
+  font-size: 13px;
+  line-height: 1.55;
+}
+.cargo-head {
+  letter-spacing: 2px;
+  opacity: 0.8;
+  margin-bottom: 12px;
+}
+.cargo-manifest {
+  margin-bottom: 12px;
+}
+.cargo-empty {
+  opacity: 0.4;
+  font-style: italic;
+}
+.cargo-barlabel {
+  font-size: 0.72em;
+  letter-spacing: 2px;
+  opacity: 0.6;
+  margin-bottom: 3px;
+}
+.cargo-bar {
+  height: 8px;
+  border: 1px solid color-mix(in srgb, var(--phos) 40%, #000);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.cargo-bar-fill {
+  height: 100%;
+  width: 0;
+  background: color-mix(in srgb, var(--phos) 55%, transparent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--phos) 50%, transparent);
+  transition: width 0.2s ease;
+}
+.cargo-bar-fill.full {
+  background: var(--rose);
+}
+.cargo-summary {
+  text-shadow: 0 0 5px color-mix(in srgb, var(--phos) 40%, transparent);
+}
+
+/* --- STATION view: docked cargo transfer --- */
+.station {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.stn-dock {
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+  text-shadow: 0 0 6px color-mix(in srgb, var(--phos) 45%, transparent);
+}
+.stn-dock.off {
+  opacity: 0.5;
+  font-style: italic;
+  text-shadow: none;
+}
+.stn-meter {
+  margin-bottom: 14px;
+}
+.stn-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.stn-colhead {
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  opacity: 0.65;
+  margin-bottom: 6px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--phos) 30%, #000);
+  padding-bottom: 4px;
+}
+.stn-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.stn-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "name btn" "qty btn";
+  align-items: center;
+  gap: 0 8px;
+  padding: 6px 8px;
+  border: 1px dashed color-mix(in srgb, var(--phos) 25%, #000);
+  border-radius: 5px;
+}
+.stn-name {
+  grid-area: name;
+}
+.stn-qty {
+  grid-area: qty;
+  font-size: 11px;
+  opacity: 0.55;
+}
+.stn-btn {
+  grid-area: btn;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--phos) 45%, #000);
+  color: var(--phos);
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  padding: 4px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.stn-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--phos) 18%, transparent);
+}
+.stn-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.stn-empty {
+  opacity: 0.4;
+  font-style: italic;
+  font-size: 12px;
+  padding: 6px 2px;
+}
+.stn-status {
+  margin-top: 12px;
+  min-height: 1.2em;
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+/* --- SHIP AI console --- */
+.ai-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--phos) 35%, #000);
+}
+.ai-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+.ai-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--phos) 30%, #000);
+}
+.ai-dot.online {
+  background: var(--phos);
+  box-shadow: 0 0 6px var(--phos);
+  animation: ai-pulse 2s ease-in-out infinite;
+}
+.ai-dot.offline {
+  background: var(--rose);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--rose) 70%, transparent);
+}
+.ai-dot.unknown {
+  background: color-mix(in srgb, var(--phos) 35%, #000);
+}
+@keyframes ai-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.ai-persona {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--phos) 40%, #000);
+  color: var(--phos);
+  font-family: inherit;
+  font-size: 11px;
+  padding: 2px 6px;
+  outline: none;
+  cursor: pointer;
+}
+.ai-persona:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.ai-persona option {
+  background: #0a0a0a;
+  color: var(--phos);
+}
+.ai-log {
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  text-shadow: 0 0 5px color-mix(in srgb, var(--phos) 40%, transparent);
+}
+.ai-line {
+  margin-bottom: 8px;
+}
+.ai-line.user {
+  opacity: 0.85;
+}
+.ai-line.system {
+  opacity: 0.55;
+  font-style: italic;
+}
+.ai-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  border-top: 1px dashed color-mix(in srgb, var(--phos) 35%, #000);
+  padding-top: 10px;
+}
+.ai-form .prompt {
+  opacity: 0.8;
+}
+.ai-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--phos);
+  font-family: inherit;
+  font-size: 13px;
+  caret-color: var(--phos);
+}
+.ai-input::placeholder {
+  color: color-mix(in srgb, var(--phos) 40%, #000);
+}
+
+/* --- FLIGHT view: nav ball + throttle + attitude --- */
+.navball-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.navball {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--phos) 45%, transparent));
+  border-radius: 50%;
+}
+.flight-hud {
+  font-size: 12px;
+  line-height: 1.5;
+  margin-bottom: 14px;
+  text-shadow: 0 0 5px color-mix(in srgb, var(--phos) 40%, transparent);
+}
+.flight-controls {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+}
+
+/* vertical throttle: a track whose fill rises from the bottom; drag anywhere on it */
+.throttle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+.thr-cap,
+.thr-val {
+  font-size: 11px;
+  letter-spacing: 1px;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+.thr-track {
+  position: relative;
+  width: 26px;
+  flex: 1;
+  min-height: 120px;
+  background: #03040a;
+  border: 1px solid color-mix(in srgb, var(--phos) 40%, #000);
+  border-radius: 5px;
+  overflow: hidden;
+  cursor: ns-resize;
+  touch-action: none;
+}
+.thr-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 0%;
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--phos) 55%, #000),
+    color-mix(in srgb, var(--phos) 22%, #000)
+  );
+  box-shadow: 0 0 10px color-mix(in srgb, var(--phos) 35%, transparent);
+}
+.thr-handle {
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  bottom: 0%;
+  height: 2px;
+  background: var(--phos);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--phos) 70%, transparent);
+  transform: translateY(1px);
+}
+
+.attitude {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.att-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.attitude button {
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--phos);
+  background: #03040a;
+  border: 1px solid color-mix(in srgb, var(--phos) 40%, #000);
+  border-radius: 4px;
+  padding: 6px 4px;
+  cursor: pointer;
+  letter-spacing: 1px;
+}
+.attitude button:hover {
+  background: color-mix(in srgb, var(--phos) 14%, #03040a);
+}
+.attitude button.active {
+  background: color-mix(in srgb, var(--phos) 24%, #03040a);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--phos) 45%, transparent);
+}
+.attitude button[data-mode="kill"] {
+  border-color: color-mix(in srgb, var(--red) 55%, #000);
+  color: color-mix(in srgb, var(--red) 85%, var(--phos));
+}
+
+/* the executor toggle reads as armed/green when the autopilot is flying */
+.exec-toggle {
+  margin-top: auto;
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--phos);
+  background: #03040a;
+  border: 1px solid color-mix(in srgb, var(--phos) 40%, #000);
+  border-radius: 4px;
+  padding: 7px 4px;
+  cursor: pointer;
+}
+.exec-toggle:hover {
+  background: color-mix(in srgb, var(--phos) 14%, #03040a);
+}
+.exec-toggle.active {
+  color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 60%, #000);
+  background: color-mix(in srgb, var(--green) 16%, #03040a);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--green) 45%, transparent);
+}
