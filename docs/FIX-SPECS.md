@@ -150,7 +150,7 @@ near a burn, which shrinks (but doesn't remove) the divergence today.
 
 # High
 
-## H1 — `timeToPeriapsis` returns a full period at periapsis ⏱S 🎯low
+## H1 — `timeToPeriapsis` returns a full period at periapsis ⏱S 🎯low — ✅ DONE (2026-06-22)
 
 **Where:** [src/sim/orbit.ts:121](../src/sim/orbit.ts#L121)
 
@@ -172,7 +172,7 @@ and assert `timeToPeriapsis + timeSincePeriapsis ≈ period` for an arbitrary mi
 
 ---
 
-## H2 — Guard non-elliptical / degenerate orbits so NaN can't silently poison telemetry ⏱M 🎯med
+## H2 — Guard non-elliptical / degenerate orbits so NaN can't silently poison telemetry ⏱M 🎯med — ⏸ DEFERRED (resolve when a second SoI lands; escape/hyperbolic orbits become real then)
 
 **Where:** [src/sim/orbit.ts:64-126](../src/sim/orbit.ts#L64-L126) (`propagate`),
 [src/sim/orbit.ts:27-38](../src/sim/orbit.ts#L27-L38) (`solveKepler`),
@@ -227,7 +227,7 @@ planner gate (layer 2) is the important half either way.
 
 ---
 
-## H3 — Concurrent AI chats can commit each other's pending burn (confirmation-gate race) ⏱M 🎯med
+## H3 — Concurrent AI chats can commit each other's pending burn (confirmation-gate race) ⏱M 🎯med — ✅ DONE (2026-06-22, Option A)
 
 **Where:** [src/server/index.ts:229-247](../src/server/index.ts#L229-L247) (async route over shared
 `world`), [src/sim/api.ts:354-377](../src/sim/api.ts#L354-L377) (`executeManeuver` reads/mutates

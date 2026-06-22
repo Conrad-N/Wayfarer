@@ -241,6 +241,11 @@ app.post("/api/flight/executor", (req, res) => res.json(setExecutor(world, req.b
 app.get("/api/ai/status", (_req, res) =>
   res.json({ available: aiAvailable(), personas: PERSONA_LIST, defaultPersona: DEFAULT_PERSONA }),
 );
+// Serialize chat turns over the shared `world` (docs/FIX-SPECS H3). One ship,
+// one operator-at-a-time: each turn's plan→execute tool sequence runs to
+// completion before the next turn touches `world`, so session B can't commit
+// session A's reviewed-but-unconfirmed pending burn (Keystone 2's gate).
+let chatChain: Promise<unknown> = Promise.resolve();
 app.post("/api/ai/chat", async (req, res) => {
   if (!aiAvailable()) {
     return res.status(503).json({
@@ -251,8 +256,10 @@ app.post("/api/ai/chat", async (req, res) => {
   }
   const history = (req.body?.messages ?? []) as ChatMessage[];
   const persona = typeof req.body?.persona === "string" ? req.body.persona : undefined;
+  const run = chatChain.then(() => runShipAI(world, history, persona));
+  chatChain = run.catch(() => {}); // keep the chain alive even if this turn throws
   try {
-    const reply = await runShipAI(world, history, persona);
+    const reply = await run;
     res.json({ reply });
   } catch (err) {
     console.error("[ai] ", err);

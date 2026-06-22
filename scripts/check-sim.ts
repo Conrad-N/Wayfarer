@@ -66,6 +66,23 @@ console.log(
 );
 if (!fasterAtPeriapsis) failures++;
 
+console.log("\n== H1: timeToPeriapsis wraps to 0 at periapsis (no full-period jump) ==");
+// At M=0 the old form returned a whole period instead of 0, and snapped
+// discontinuously across periapsis. The wrapped form maps M=0 -> 0.
+approx(peri.timeToPeriapsis, 0, 1e-6, "timeToPeri @ periapsis [s]");
+approx(apo.timeToPeriapsis, peri.period / 2, 1e-3, "timeToPeri @ apoapsis [s]");
+// And the countdown is continuous: just-before-periapsis is ~period, not a cliff.
+const nearPeri = propagate(ell, body, peri.period - 1);
+approx(nearPeri.timeToPeriapsis, 1, 1e-3, "timeToPeri 1s before peri [s]");
+// Invariant: time-to + time-since = one full period at any mid-orbit phase.
+const midPhase = propagate(ell, body, peri.period * 0.37);
+approx(
+  midPhase.timeToPeriapsis + midPhase.timeSincePeriapsis,
+  peri.period,
+  1e-6,
+  "timeTo + timeSince = period",
+);
+
 console.log("\n== Inclined orbit: 51.6° circular, latitude sweeps ±i (docs/07 §8 crit. 5) ==");
 const RAD = 180 / Math.PI;
 const incl = circularOrbit(body, 400e3, deg(51.6));
@@ -385,6 +402,56 @@ console.log("\n== Executor: flies two separately-authored nodes in sequence ==")
     afterFirst === 1 && sim.nodes.length === 0 && !sim.executorOn && sim.ship.propellantKg < propBefore - 50;
   console.log(`${ok ? "PASS" : "FAIL"}  both nodes consumed; burned ${(propBefore - sim.ship.propellantKg).toFixed(0)} kg`);
   if (!ok) failures++;
+}
+
+console.log("\n== H3: chat-turn mutex serializes plan→execute over the shared world ==");
+// /api/ai/chat runs the AI tool-loop async over one shared `world`, and the
+// pending burn is a single global slot. A turn = plan (write the slot) then,
+// after an await, execute (commit whatever the slot holds). Two overlapping
+// turns can interleave so one turn commits the OTHER's reviewed-but-
+// unconfirmed plan (Keystone 2's gate defeated). The fix is the index.ts
+// `chatChain` mutex; this models it and the race it closes, no AI needed.
+{
+  // One async turn: stamp the shared slot, yield (simulating tool-loop awaits),
+  // then commit whatever the slot now holds — the execute step reads the global.
+  const makeTurn = (slot: { pending: string | null }, committed: string[]) =>
+    async (id: string) => {
+      slot.pending = id; // plan_maneuver
+      await Promise.resolve();
+      await Promise.resolve(); // tool-loop / network round-trips
+      committed.push(slot.pending ?? "none"); // execute_maneuver(confirm:true)
+    };
+
+  // Unserialized (the bug): fire two turns concurrently. A sets pending=A, B
+  // overwrites with B before either commits, so both commit B — A committed a
+  // plan no one in A's turn authored.
+  {
+    const slot = { pending: null as string | null };
+    const committed: string[] = [];
+    const turn = makeTurn(slot, committed);
+    await Promise.all([turn("A"), turn("B")]);
+    const crossCommit = committed[0] !== "A"; // A's turn did NOT commit A's own plan
+    console.log(`${crossCommit ? "PASS" : "FAIL"}  unserialized turns DO interleave (commits=${committed.join(",")})`);
+    if (!crossCommit) failures++;
+  }
+
+  // Serialized (the fix): chain turns through `chatChain` exactly as index.ts
+  // does. Turn B can't start until turn A fully resolves, so each turn commits
+  // its own plan.
+  {
+    const slot = { pending: null as string | null };
+    const committed: string[] = [];
+    const turn = makeTurn(slot, committed);
+    let chatChain: Promise<unknown> = Promise.resolve();
+    const runA = chatChain.then(() => turn("A"));
+    chatChain = runA.catch(() => {});
+    const runB = chatChain.then(() => turn("B"));
+    chatChain = runB.catch(() => {});
+    await Promise.all([runA, runB]);
+    const ok = committed.length === 2 && committed[0] === "A" && committed[1] === "B";
+    console.log(`${ok ? "PASS" : "FAIL"}  mutex: each turn commits its own plan (commits=${committed.join(",")})`);
+    if (!ok) failures++;
+  }
 }
 
 console.log(failures === 0 ? "\nAll checks passed." : `\n${failures} check(s) FAILED.`);

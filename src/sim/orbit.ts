@@ -118,7 +118,7 @@ export function propagate(el: OrbitalElements, body: CentralBody, t: number): Or
     specificAngularMomentum: h,
     flightPathAngle: Math.atan2(e * sinNu, 1 + e * cosNu),
     timeSincePeriapsis: meanAnomaly / meanMotion,
-    timeToPeriapsis: (TWO_PI - meanAnomaly) / meanMotion,
+    timeToPeriapsis: wrapTwoPi(TWO_PI - meanAnomaly) / meanMotion,
     timeToApoapsis,
     latitude: Math.asin(clamp(position.z / radius, -1, 1)),
     position,
