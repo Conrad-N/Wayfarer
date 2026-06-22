@@ -1,5 +1,5 @@
 import type { StateResponse, TargetState, ViewInstance } from "./types";
-import { h, post } from "./dom";
+import { h, post, esc, fixed, errText } from "./dom";
 
 // The TARGET view — pick a rendezvous target from the roster, read its relative state, and
 // dock. The selector POSTs /api/target/select; the rest of the ship (telemetry, solvers,
@@ -7,8 +7,8 @@ import { h, post } from "./dom";
 // the envelope — so the operator can always see the goal, greyed out, and watch it arm.
 
 const row = (k: string, v: string) => `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`;
-const km = (m: number) => (m / 1000).toFixed(2);
-const min = (s: number) => (s / 60).toFixed(1);
+const km = (m: number) => fixed(m / 1000, 2);
+const min = (s: number) => fixed(s / 60, 1);
 
 const KIND_TAG: Record<string, string> = { station: "STATION", depot: "DEPOT", probe: "PROBE" };
 
@@ -35,7 +35,7 @@ export function createTargetView(): ViewInstance {
     status.textContent = pending;
     try {
       const res = await post(url, body);
-      status.textContent = res && res.ok ? done : `[${(res && (await res.json()).error) ?? "failed"}]`;
+      status.textContent = res && res.ok ? done : `[${res ? await errText(res) : "connection error"}]`;
     } catch {
       status.textContent = "[connection error]";
     } finally {
@@ -60,17 +60,17 @@ export function createTargetView(): ViewInstance {
     const t: TargetState = s.target;
     const o = t.orbit;
     readout.innerHTML =
-      row("DESIGNATION", t.name) +
-      row("TYPE", KIND_TAG[t.kind] ?? t.kind.toUpperCase()) +
+      row("DESIGNATION", esc(t.name)) +
+      row("TYPE", esc(KIND_TAG[t.kind] ?? t.kind.toUpperCase())) +
       `<div class="rule"></div>` +
       row("RANGE", `${km(t.range)} km`) +
-      row("CLOSING", `${t.closingSpeed.toFixed(1)} m/s`) +
-      row("REL SPEED", `${t.relSpeed.toFixed(1)} m/s`) +
+      row("CLOSING", `${fixed(t.closingSpeed, 1)} m/s`) +
+      row("REL SPEED", `${fixed(t.relSpeed, 1)} m/s`) +
       `<div class="rule"></div>` +
       row("ALTITUDE", `${km(t.altitude)} km`) +
       row("APOAPSIS", `${km(o.apoapsisAltitude)} km`) +
       row("PERIAPSIS", `${km(o.periapsisAltitude)} km`) +
-      row("INCLINATION", `${((o.i * 180) / Math.PI).toFixed(2)}°`) +
+      row("INCLINATION", `${fixed((o.i * 180) / Math.PI, 2)}°`) +
       row("PERIOD", `${min(t.period)} min`);
 
     // DOCK affordance — always visible, enabled only inside the envelope.
@@ -84,7 +84,7 @@ export function createTargetView(): ViewInstance {
       dockBtn.disabled = !t.canDock;
       dockState.textContent = t.canDock
         ? "in docking envelope"
-        : `need < 1.00 km · < 5.0 m/s (now ${km(t.range)} km · ${t.relSpeed.toFixed(1)} m/s)`;
+        : `need < 1.00 km · < 5.0 m/s (now ${km(t.range)} km · ${fixed(t.relSpeed, 1)} m/s)`;
     }
   }
 

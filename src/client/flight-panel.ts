@@ -1,5 +1,5 @@
 import type { FlightState, StateResponse, ViewInstance } from "./types";
-import { h, post } from "./dom";
+import { h, post, fixed } from "./dom";
 import { drawNavball } from "./navball";
 
 // The FLIGHT view (docs/10 §10 Stage 3): nav ball + throttle + attitude-mode buttons +
@@ -112,8 +112,8 @@ export function createFlightView(): ViewInstance {
     const aligned = f.pointingErrorDeg < 1.5;
     const omegaDeg = mag(f.angularVel) * (180 / Math.PI);
     hud.innerHTML =
-      row("POINTING", aligned ? "ALIGNED" : `${f.pointingErrorDeg.toFixed(1)}° off`) +
-      row("RATE", `${omegaDeg.toFixed(1)}°/s`) +
+      row("POINTING", aligned ? "ALIGNED" : `${fixed(f.pointingErrorDeg, 1)}° off`) +
+      row("RATE", `${fixed(omegaDeg, 1)}°/s`) +
       row("THROTTLE", `${Math.round(f.throttle * 100)}%${f.warpAutoLimited ? " · WARP HELD" : ""}`);
 
     for (const btn of attButtons) {

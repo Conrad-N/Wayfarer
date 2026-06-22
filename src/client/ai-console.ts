@@ -16,6 +16,10 @@ interface AiStatus {
   defaultPersona: string;
 }
 
+// Cap the rolling history POSTed each turn (docs/FIX-SPECS M-aihistory). Pairs with the
+// server-side cap in M-chatvalidate; bounds memory and the prompt billed to the subscription.
+const MAX_HISTORY = 40;
+
 export function createAiView(): ViewInstance {
   const history: ChatMessage[] = [];
   let busy = false;
@@ -86,6 +90,7 @@ export function createAiView(): ViewInstance {
     input.value = "";
     append("user", text);
     history.push({ role: "user", content: text });
+    if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY);
 
     busy = true;
     const pending = append("assistant", "…");
@@ -95,12 +100,15 @@ export function createAiView(): ViewInstance {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ messages: history, persona }),
       });
-      const data = await res.json();
-      if (res.ok) {
+      // Validate the reply is a string before trusting it: a non-string coerces to
+      // "undefined"/"[object Object]" and poisons every later turn's payload (M-aireply).
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && typeof data.reply === "string") {
         pending.textContent = data.reply;
         history.push({ role: "assistant", content: data.reply });
+        if (history.length > MAX_HISTORY) history.splice(0, history.length - MAX_HISTORY);
       } else {
-        pending.textContent = `[${data.error ?? "error"}]`;
+        pending.textContent = `[${typeof data.error === "string" ? data.error : "error"}]`;
         pending.className = "ai-line system";
       }
     } catch {

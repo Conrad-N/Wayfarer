@@ -1,13 +1,13 @@
 import type { StateResponse, ViewInstance } from "./types";
-import { h } from "./dom";
+import { h, esc, fixed } from "./dom";
 
 // The CARGO HOLD view — your hold as live instrumentation: the manifest, a capacity bar,
 // and the mass breakdown that drives Δv. Read-only; transfers happen at the STATION panel
 // (keep one open beside this to watch the budget move as you load). Pairs with docs/03 §M1.
 
 const row = (k: string, v: string) => `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`;
-const t = (kg: number) => (kg / 1000).toFixed(2); // tonnes
-const m3 = (v: number) => v.toFixed(1); // cubic metres
+const t = (kg: number) => fixed(kg / 1000, 2); // tonnes
+const m3 = (v: number) => fixed(v, 1); // cubic metres
 
 export function createCargoView(): ViewInstance {
   const manifest = h("div", { class: "cargo-manifest" });
@@ -34,7 +34,7 @@ export function createCargoView(): ViewInstance {
     const { cargo, ship } = s;
 
     manifest.innerHTML = cargo.items.length
-      ? cargo.items.map((it) => row(`${it.name} ×${it.qty}`, `${t(it.totalKg)} t · ${m3(it.totalM3)} m³`)).join("")
+      ? cargo.items.map((it) => row(`${esc(it.name)} ×${it.qty}`, `${t(it.totalKg)} t · ${m3(it.totalM3)} m³`)).join("")
       : `<div class="cargo-empty">hold empty</div>`;
 
     const massPct = cargo.capacityKg > 0 ? Math.min(100, (cargo.usedKg / cargo.capacityKg) * 100) : 0;

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { performance } from "node:perf_hooks";
 import express from "express";
+import { z } from "zod";
 import { World } from "../sim/world";
 import {
   getClock,
@@ -73,7 +74,15 @@ app.get("/api/central_body", (_req, res) => res.json(getCentralBody(world)));
 app.get("/api/ship", (_req, res) => res.json(getShip(world)));
 app.get("/api/orbit", (_req, res) => res.json(getOrbit(world)));
 app.get("/api/state_vector", (_req, res) => res.json(getStateVector(world)));
-app.get("/api/predict", (req, res) => res.json(predictOrbit(world, Number(req.query.t))));
+app.get("/api/predict", (req, res) => {
+  // Guard the query param: Number(undefined)/Number("abc") is NaN, which would flow into
+  // propagate() and return an all-NaN OrbitState with HTTP 200 (docs/FIX-SPECS H4).
+  const t = Number(req.query.t);
+  if (!Number.isFinite(t)) {
+    return res.status(400).json({ error: "query param t (sim-seconds) must be a finite number" });
+  }
+  res.json(predictOrbit(world, t));
+});
 app.get("/api/target", (_req, res) => res.json(getTarget(world)));
 app.get("/api/targets", (_req, res) => res.json(listTargets(world)));
 
@@ -102,7 +111,10 @@ app.get("/api/state", (_req, res) =>
 // Basic time-warp control (M0 convenience; full time design in docs/08).
 app.post("/api/rate", (req, res) => {
   const r = Number(req.body?.rate);
-  if (Number.isFinite(r) && r >= 0) world.rate = r;
+  if (!Number.isFinite(r) || r < 0) {
+    return res.status(400).json({ error: "rate must be a finite number ≥ 0" });
+  }
+  world.rate = r;
   res.json(getClock(world));
 });
 
@@ -246,6 +258,17 @@ app.get("/api/ai/status", (_req, res) =>
 // completion before the next turn touches `world`, so session B can't commit
 // session A's reviewed-but-unconfirmed pending burn (Keystone 2's gate).
 let chatChain: Promise<unknown> = Promise.resolve();
+
+// Validate + bound the chat body (docs/FIX-SPECS M-chatvalidate). A blind cast lets a
+// malformed `messages` throw inside composePrompt (→ 500), and an unbounded array becomes a
+// large prompt billed to the host's subscription (the Q2 cost concern). zod is already a dep.
+const ChatBody = z.object({
+  messages: z
+    .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().max(8000) }))
+    .max(50),
+  persona: z.string().optional(),
+});
+
 app.post("/api/ai/chat", async (req, res) => {
   if (!aiAvailable()) {
     return res.status(503).json({
@@ -254,18 +277,30 @@ app.post("/api/ai/chat", async (req, res) => {
         "in the server environment.",
     });
   }
-  const history = (req.body?.messages ?? []) as ChatMessage[];
-  const persona = typeof req.body?.persona === "string" ? req.body.persona : undefined;
+  const parsed = ChatBody.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid chat payload" });
+  const history = parsed.data.messages as ChatMessage[];
+  const persona = parsed.data.persona;
   const run = chatChain.then(() => runShipAI(world, history, persona));
   chatChain = run.catch(() => {}); // keep the chain alive even if this turn throws
   try {
     const reply = await run;
     res.json({ reply });
   } catch (err) {
+    // Log full detail server-side; return a generic message. The raw SDK error can carry
+    // auth-failure detail, paths, or token strings to the browser (docs/FIX-SPECS M-aileak).
     console.error("[ai] ", err);
-    const message = err instanceof Error ? err.message : "ship AI error";
-    res.status(500).json({ error: message });
+    res.status(500).json({ error: "ship AI error — see server logs" });
   }
+});
+
+// Terminal error handler (docs/FIX-SPECS H5). Express 5 forwards both synchronous throws and
+// rejected promises from every route here, so a sim/solver edge case yields a JSON 500 — not
+// Express's default HTML stack-trace page leaked to the client. Must be registered last.
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error("[http] route error:", err);
+  if (res.headersSent) return;
+  res.status(500).json({ error: "internal error" });
 });
 
 const PORT = Number(process.env.PORT ?? 8787);

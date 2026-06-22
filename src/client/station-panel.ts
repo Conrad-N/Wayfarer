@@ -1,5 +1,5 @@
 import type { CargoItemSummary, StateResponse, ViewInstance } from "./types";
-import { h, post } from "./dom";
+import { h, post, fixed, errText } from "./dom";
 
 // The STATION view — what you DO once docked (docs/03 §M1). Right now that's cargo
 // transfer: a two-column ledger (your hold ↔ the station's hold) with LOAD/UNLOAD, and a
@@ -10,7 +10,7 @@ import { h, post } from "./dom";
 // goal greyed out, not hidden). A target with no hold (a probe) says so.
 
 const row = (k: string, v: string) => `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`;
-const t = (kg: number) => (kg / 1000).toFixed(2); // tonnes
+const t = (kg: number) => fixed(kg / 1000, 2); // tonnes
 
 export function createStationView(): ViewInstance {
   let busy = false;
@@ -37,7 +37,7 @@ export function createStationView(): ViewInstance {
     status.textContent = direction === "load" ? "loading…" : "unloading…";
     try {
       const res = await post("/api/cargo/transfer", { direction, itemId, qty: 1 });
-      status.textContent = res && res.ok ? "" : `[${(res && (await res.json()).error) ?? "failed"}]`;
+      status.textContent = res && res.ok ? "" : `[${res ? await errText(res) : "connection error"}]`;
     } catch {
       status.textContent = "[connection error]";
     } finally {
@@ -95,10 +95,10 @@ export function createStationView(): ViewInstance {
     meter.innerHTML =
       row("CARGO", `${t(cargo.usedKg)} / ${t(cargo.capacityKg)} t`) +
       row("FREE MASS", `${t(cargo.freeKg)} t`) +
-      row("FREE VOLUME", `${cargo.freeM3.toFixed(1)} / ${cargo.capacityM3.toFixed(1)} m³`) +
+      row("FREE VOLUME", `${fixed(cargo.freeM3, 1)} / ${fixed(cargo.capacityM3, 1)} m³`) +
       row("SHIP MASS", `${t(ship.massKg)} t`) +
       `<div class="rule"></div>` +
-      row("Δv BUDGET", `${ship.dvBudget.toFixed(0)} m/s`);
+      row("Δv BUDGET", `${fixed(ship.dvBudget, 0)} m/s`);
 
     const newSig = JSON.stringify({
       docked,

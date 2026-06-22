@@ -1,5 +1,5 @@
 import type { StateResponse, ViewInstance } from "./types";
-import { h, post, get } from "./dom";
+import { h, post, get, esc, fixed, errText } from "./dom";
 
 // The MANEUVER view — a thin client of the API. Two ways to author a plan, both flowing
 // through the same review → EXECUTE gate:
@@ -11,12 +11,13 @@ import { h, post, get } from "./dom";
 // here too (Keystone 1). EXECUTE commits behind a confirm; JUMP TO BURN skips the coast.
 // (Docking lives in the TARGET view now.)
 
-const km = (m: number) => (m / 1000).toFixed(0);
-const min = (s: number) => (s / 60).toFixed(1);
-const sign = (v: number) => `${v >= 0 ? "+" : ""}${v.toFixed(0)}`;
+const km = (m: number) => fixed(m / 1000, 0);
+const min = (s: number) => fixed(s / 60, 1);
+const sign = (v: number) => (Number.isFinite(v) ? `${v >= 0 ? "+" : ""}${v.toFixed(0)}` : "—");
 const comps = (d: { prograde: number; normal: number; radial: number }) =>
   `${sign(d.prograde)}/${sign(d.normal)}/${sign(d.radial)}`;
 const mmss = (s: number) => {
+  if (!Number.isFinite(s)) return "--:--";
   const t = Math.max(0, Math.round(s));
   return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
 };
@@ -62,7 +63,7 @@ export function createManeuverView(): ViewInstance {
     status.textContent = "computing…";
     try {
       const res = await post(url, body);
-      status.textContent = res && res.ok ? "" : `[${(res && (await res.json()).error) ?? "plan failed"}]`;
+      status.textContent = res && res.ok ? "" : `[${res ? await errText(res) : "connection error"}]`;
     } catch {
       status.textContent = "[connection error]";
     } finally {
@@ -152,7 +153,7 @@ export function createManeuverView(): ViewInstance {
     status.textContent = pending;
     try {
       const res = await post(url, body);
-      status.textContent = res && res.ok ? done : `[${(res && (await res.json()).error) ?? "failed"}]`;
+      status.textContent = res && res.ok ? done : `[${res ? await errText(res) : "connection error"}]`;
     } catch {
       status.textContent = "[connection error]";
     } finally {
@@ -172,7 +173,7 @@ export function createManeuverView(): ViewInstance {
       void seedTof();
     }
     fuel.innerHTML =
-      row("PROPELLANT", `${s.ship.propellantKg.toFixed(0)} kg`) + row("ΔV BUDGET", `${s.ship.dvBudget.toFixed(0)} m/s`);
+      row("PROPELLANT", `${fixed(s.ship.propellantKg, 0)} kg`) + row("ΔV BUDGET", `${fixed(s.ship.dvBudget, 0)} m/s`);
 
     // 1) A maneuver is armed / flying — show the autopilot + JUMP TO BURN.
     const f = s.flight;
@@ -181,11 +182,11 @@ export function createManeuverView(): ViewInstance {
       const aligned = f.pointingErrorDeg < 2;
       readout.innerHTML =
         `<div class="mnv-head2">AUTOPILOT${f.warpAutoLimited ? " · WARP HELD" : ""}</div>` +
-        (n ? row("NEXT BURN", `${n.dvMag.toFixed(0)} m/s${f.nodes.length > 1 ? ` (+${f.nodes.length - 1})` : ""}`) : "") +
-        (n ? row("Δv LEFT", `${n.dvRemaining.toFixed(1)} m/s`) : "") +
+        (n ? row("NEXT BURN", `${fixed(n.dvMag, 0)} m/s${f.nodes.length > 1 ? ` (+${f.nodes.length - 1})` : ""}`) : "") +
+        (n ? row("Δv LEFT", `${fixed(n.dvRemaining, 1)} m/s`) : "") +
         (n ? row("T-MINUS", mmss(n.time - s.clock.t)) : "") +
         row("THROTTLE", `${Math.round(f.throttle * 100)}%`) +
-        row("POINTING", aligned ? "ALIGNED" : `${f.pointingErrorDeg.toFixed(0)}° off`);
+        row("POINTING", aligned ? "ALIGNED" : `${fixed(f.pointingErrorDeg, 0)}° off`);
       actions.hidden = false;
       execute.hidden = true;
       jump.hidden = false;
@@ -196,7 +197,7 @@ export function createManeuverView(): ViewInstance {
     const p = s.pendingManeuver;
     if (p) {
       const multi = p.burns.length > 1;
-      const lines = [`<div class="mnv-head2">${p.label.toUpperCase()}</div>`];
+      const lines = [`<div class="mnv-head2">${esc(p.label.toUpperCase())}</div>`];
       p.burns.forEach((b, i) => {
         const tag = multi ? `BURN ${i + 1} · T+${mmss(b.time - s.clock.t)}` : `T+ ${mmss(b.time - s.clock.t)}`;
         // Retarget nodes (midcourse trims / live velocity match) are computed in flight from the
@@ -204,20 +205,20 @@ export function createManeuverView(): ViewInstance {
         const val = b.live
           ? b.dvMag < 1
             ? "midcourse trim · in flight"
-            : `${comps(b.dvLocal)} · ${b.dvMag.toFixed(0)} m/s · live`
-          : `${comps(b.dvLocal)} · ${b.dvMag.toFixed(0)} m/s`;
+            : `${comps(b.dvLocal)} · ${fixed(b.dvMag, 0)} m/s · live`
+          : `${comps(b.dvLocal)} · ${fixed(b.dvMag, 0)} m/s`;
         lines.push(row(tag, val));
       });
-      lines.push(row("TOTAL Δv", `${p.dvMag.toFixed(1)} m/s · ${p.propellantKg.toFixed(0)} kg`));
+      lines.push(row("TOTAL Δv", `${fixed(p.dvMag, 1)} m/s · ${fixed(p.propellantKg, 0)} kg`));
       if (p.feasible) {
         lines.push(
-          row("ΔV AFTER", `${p.dvBudgetAfter.toFixed(0)} m/s`),
+          row("ΔV AFTER", `${fixed(p.dvBudgetAfter, 0)} m/s`),
           row("RESULT", `apo ${km(p.after.apoapsisAltitude)} · peri ${km(p.after.periapsisAltitude)} km`),
-          row("INCLIN.", `${((p.after.i * 180) / Math.PI).toFixed(2)}°`),
+          row("INCLIN.", `${fixed((p.after.i * 180) / Math.PI, 2)}°`),
           row("PERIOD", `${min(p.after.period)} min`),
         );
       } else {
-        lines.push(`<div class="mnv-warn">⚠ ${p.note ?? "not feasible"}</div>`);
+        lines.push(`<div class="mnv-warn">⚠ ${esc(p.note ?? "not feasible")}</div>`);
       }
       readout.innerHTML = lines.join("");
       actions.hidden = false;

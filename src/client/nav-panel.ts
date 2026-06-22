@@ -1,6 +1,6 @@
 import type { OrbitState } from "../sim/types";
 import type { StateResponse, ViewInstance } from "./types";
-import { h, post } from "./dom";
+import { h, post, esc } from "./dom";
 import { drawScope } from "./scope";
 import { isViewOpen } from "./mounted";
 
@@ -15,9 +15,12 @@ function pad(s: string, n: number): string {
   return s.padStart(n, " ");
 }
 function num(v: number, dp: number, width = 9): string {
-  return pad(v.toFixed(dp), width);
+  // Dash placeholder for a non-finite field — keeps the fixed-width column intact and reads
+  // as a "dead segment" instead of throwing or printing "NaN" (docs/FIX-SPECS H8).
+  return pad(Number.isFinite(v) ? v.toFixed(dp) : "---", width);
 }
 function hms(seconds: number): string {
+  if (!Number.isFinite(seconds)) return "--:--:--";
   const s = Math.max(0, Math.floor(seconds));
   const h2 = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
@@ -52,8 +55,8 @@ function row(label: string, value: string): string {
 export function renderReadout(el: HTMLElement, state: StateResponse, includeTarget = true): void {
   const { orbit, body, ship, clock, target } = state;
   const out = [
-    row("VESSEL", ship.name),
-    row("BODY", body.name),
+    row("VESSEL", esc(ship.name)),
+    row("BODY", esc(body.name)),
     row("SIM CLOCK", `${hms(clock.t)}  x${clock.rate}`),
     `<div class="rule"></div>`,
     ...ROWS.map(([label, fn]) => row(label, fn(orbit))),
@@ -61,7 +64,7 @@ export function renderReadout(el: HTMLElement, state: StateResponse, includeTarg
   if (includeTarget) {
     out.push(
       `<div class="rule"></div>`,
-      row("TARGET", target.name),
+      row("TARGET", esc(target.name)),
       row("RANGE", `${num(target.range / 1000, 2)} km`),
       row("CLOSING", `${num(target.closingSpeed, 1)} m/s`),
       row("TGT ALT", `${num(target.altitude / 1000, 2)} km`),

@@ -271,7 +271,7 @@ B is the multiplayer-correct form.
 
 ---
 
-## H4 — Validate `/api/predict` (and other numeric query/body params) ⏱S 🎯low
+## H4 — Validate `/api/predict` (and other numeric query/body params) ⏱S 🎯low — ✅ DONE (2026-06-22)
 
 **Where:** [src/server/index.ts:61](../src/server/index.ts#L61)
 
@@ -296,7 +296,7 @@ H5's error middleware.)
 
 ---
 
-## H5 — Add a global Express error handler; stop leaking stack traces ⏱S 🎯low
+## H5 — Add a global Express error handler; stop leaking stack traces ⏱S 🎯low — ✅ DONE (2026-06-22)
 
 **Where:** all routes in [src/server/index.ts](../src/server/index.ts); only `/api/ai/chat` has
 try/catch.
@@ -389,7 +389,7 @@ because it's an architecture-rule breach the project explicitly guards against.
 
 ---
 
-## H8 — Finite-guard all telemetry formatters ⏱S 🎯low
+## H8 — Finite-guard all telemetry formatters ⏱S 🎯low — ✅ DONE (2026-06-22)
 
 **Where:** [src/client/nav-panel.ts:14-26](../src/client/nav-panel.ts#L14-L26) (`num`/`hms`) and the
 equivalent helpers in `flight-panel.ts`, `target-panel.ts`, `maneuver-panel.ts`.
@@ -418,7 +418,7 @@ not a thrown render or `"NaN km"`. Columns keep their width.
 
 ---
 
-## H9 — Escape server-supplied strings before `innerHTML` (XSS) ⏱S 🎯low
+## H9 — Escape server-supplied strings before `innerHTML` (XSS) ⏱S 🎯low — ✅ DONE (2026-06-22)
 
 **Where:** the `row()`/`rowHtml` builders that interpolate values into `innerHTML`:
 [nav-panel.ts:46-67](../src/client/nav-panel.ts#L46-L67),
@@ -584,7 +584,7 @@ never call `propagate` on an invalid conic.)
 
 ---
 
-## M-aileak — Don't return raw AI/SDK error text to the client ⏱S 🎯low
+## M-aileak — Don't return raw AI/SDK error text to the client ⏱S 🎯low — ✅ DONE (2026-06-22)
 
 **Where:** [src/server/index.ts:242-246](../src/server/index.ts#L242-L246); thrown from
 [ai-bridge.ts:496-497](../src/server/ai-bridge.ts#L496-L497)
@@ -631,7 +631,7 @@ rather than an immediate mis-placed burn.
 
 ---
 
-## M-chatvalidate — Validate `/api/ai/chat` body shape and bound size ⏱S 🎯low
+## M-chatvalidate — Validate `/api/ai/chat` body shape and bound size ⏱S 🎯low — ✅ DONE (2026-06-22)
 
 **Where:** [src/server/index.ts:237-238](../src/server/index.ts#L237-L238),
 [ai-bridge.ts:449-456](../src/server/ai-bridge.ts#L449-L456) (`composePrompt` calls `m.content.trim()`)
@@ -679,7 +679,7 @@ No CORS middleware needed while same-origin.
 
 ---
 
-## M-aireply — Validate `data.reply` is a string in the AI console ⏱S 🎯low
+## M-aireply — Validate `data.reply` is a string in the AI console ⏱S 🎯low — ✅ DONE (2026-06-22)
 
 **Where:** [src/client/ai-console.ts:98-104](../src/client/ai-console.ts#L98-L104)
 
@@ -704,7 +704,7 @@ poisoned assistant turn into history.
 
 ---
 
-## M-jsonerr — Client error paths shouldn't mislabel real server errors as "[connection error]" ⏱S 🎯low
+## M-jsonerr — Client error paths shouldn't mislabel real server errors as "[connection error]" ⏱S 🎯low — ✅ DONE (2026-06-22)
 
 **Where:** [maneuver-panel.ts:65](../src/client/maneuver-panel.ts#L65),
 [maneuver-panel.ts:155](../src/client/maneuver-panel.ts#L155),
@@ -732,7 +732,7 @@ text, not "[connection error]".
 
 ---
 
-## M-aihistory — Cap AI console history client-side ⏱S 🎯low
+## M-aihistory — Cap AI console history client-side ⏱S 🎯low — ✅ DONE (2026-06-22)
 
 **Where:** [src/client/ai-console.ts:88-101](../src/client/ai-console.ts#L88-L101)
 

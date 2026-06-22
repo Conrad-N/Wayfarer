@@ -37,6 +37,35 @@ export function h<K extends keyof HTMLElementTagNameMap>(
 export const rowHtml = (k: string, v: string) =>
   `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`;
 
+/** Escape a server-supplied string before it goes into innerHTML. "Server-authoritative"
+ *  is not "HTML-safe": the moment a name is AI- or player-influenced, raw interpolation is
+ *  stored XSS (docs/FIX-SPECS H9). Numbers don't need it, but escaping uniformly is simplest. */
+export function esc(s: unknown): string {
+  return String(s).replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
+  );
+}
+
+/** Format a number to `dp` decimals, or an em-dash placeholder when it isn't finite — so a
+ *  missing/NaN telemetry field renders as a dead segment, never "NaN" (docs/FIX-SPECS H8). */
+export function fixed(v: number, dp: number): string {
+  return Number.isFinite(v) ? v.toFixed(dp) : "—";
+}
+
+/** Read an error message off a failed Response without assuming the body is JSON. A non-JSON
+ *  4xx/5xx (e.g. an HTML error page) must not throw and get mislabeled as a connection error
+ *  by the caller's catch (docs/FIX-SPECS M-jsonerr). */
+export async function errText(res: Response): Promise<string> {
+  try {
+    const ct = res.headers.get("content-type") ?? "";
+    if (ct.includes("json")) return (await res.json()).error ?? res.statusText;
+  } catch {
+    /* fall through to status text */
+  }
+  return res.statusText || `HTTP ${res.status}`;
+}
+
 /** POST JSON, swallowing transient errors (the poll re-syncs next tick). */
 export async function post(url: string, body: unknown): Promise<Response | null> {
   try {
