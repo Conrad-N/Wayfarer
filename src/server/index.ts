@@ -203,12 +203,12 @@ app.post("/api/maneuver/match", (_req, res) => {
   res.json(plan);
 });
 
-// Auto transfer-window (porkchop) — the interplanetary path: search departure × TOF.
+// Interplanetary transfer (docs/11): a full cross-SOI plan from inside the current body's SOI —
+// heliocentric porkchop + a self-sized ejection burn. No co-frame gate; it works before you escape.
 app.post("/api/maneuver/transfer_window", (_req, res) => {
-  if (!getTarget(world).sameFrame) return res.status(409).json({ error: crossFrameError() });
-  const plan = planTransferWindow(world);
-  if (!plan) return res.status(422).json({ error: "no transfer window found within the search horizon" });
-  res.json(plan);
+  const result = planTransferWindow(world);
+  if (!result.ok) return res.status(422).json({ error: result.error });
+  res.json(result.plan);
 });
 
 // Docking (MVP stub) — allowed only inside the envelope; no mechanics yet.

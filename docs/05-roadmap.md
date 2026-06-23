@@ -101,12 +101,15 @@ The signature interaction comes online.
   **hyperbolic** orbits ([src/sim/orbit.ts](../src/sim/orbit.ts)), and **deterministic
   SOI handoffs** in the coast path ([src/sim/world.ts](../src/sim/world.ts)) — escape to
   the parent, capture into a child, warp auto-limit at the boundary, and jump-to-SOI.
-- ✅ **Transfer planning between bodies.** A **two-step flow** (escape your SOI → select
-  the destination planet, now co-frame → intercept), with an **auto transfer-window
-  (porkchop) planner** ([src/sim/solvers.ts](../src/sim/solvers.ts) `suggestTransferWindow`)
-  that searches departure × TOF for the cheapest window. Solver tools are co-frame-gated
-  with a clear "escape first" error. The default ship is an **interplanetary-class drive**
-  (~12 km/s) so these trips are flyable.
+- ✅ **Transfer planning between bodies.** A one-button **cross-SOI transfer planner**
+  ([docs/11](11-interplanetary-transfer-planner.md), [src/sim/solvers.ts](../src/sim/solvers.ts)
+  `suggestInterplanetaryWindow` + `solveInterplanetaryTransfer`): from *inside* the departure
+  body's SOI, a heliocentric porkchop picks the soonest cheap window and the planner **sizes
+  the ejection burn itself** (no manual escape, no overshoot), then flies a guided ejection →
+  heliocentric injection + trims that delivers you into the destination's SOI. (The in-frame
+  Lambert intercept remains the rendezvous instrument, co-frame-gated.) The default ship is an
+  **interplanetary-class drive** (~12 km/s) so these trips are flyable. Powered capture /
+  auto-circularization at the destination is a manual follow-up for now.
 - ✅ **Rendezvous & docking** — Lambert intercept, match-velocity, guided/closed-loop
   midcourse trim, a target selector, and a dock latch. *Docking is an MVP stub (latch
   only, no mechanics — see the docking TODO).*

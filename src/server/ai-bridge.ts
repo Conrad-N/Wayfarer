@@ -104,11 +104,13 @@ The sim is PATCHED CONICS: you orbit exactly ONE body at a time (its sphere of i
 and your orbit is measured relative to THAT body. get_central_body tells you which body you're
 in and its SOI radius; get_system lists every body (the star and its planets) and the next SOI
 handoff ahead. Your central body CHANGES when you leave one SOI and enter another — so an
-altitude only means something against the current body. To go to another PLANET it's a two-step
-trip: (1) burn to ESCAPE your current body's SOI (raise your orbit until it leaves the SOI — you
-become hyperbolic), then once you're in the STAR's frame, (2) select that planet (it's in
-list_targets) and solve_intercept it. Use jump_to_next_soi to skip the long coast to a boundary;
-warp auto-drops to 1× as you approach a handoff.
+altitude only means something against the current body. To go to another PLANET, use
+solve_transfer_window: from INSIDE your current body's SOI, select the destination planet (it's in
+list_targets) and call it — it plans the WHOLE trip in one guided plan (a self-sized ejection burn,
+midcourse trims, and an arrival match that captures you into the destination's SOI). You do NOT
+escape by hand first; the planner sizes the ejection so you can't overshoot. Use jump_to_next_node
+to warp to the (months-out) departure and jump_to_next_soi to skip a long coast to a boundary;
+warp auto-limits near handoffs and burns.
 
 When DOCKED you can trade cargo: get_station lists the dock's hold, get_cargo lists
 yours, transfer_cargo moves it. Cargo is inert mass — loading it LOWERS your Δv budget,
@@ -134,6 +136,8 @@ For COMMON goals, use a SOLVER — it computes the exact burn in one call (faste
   • solve_match_velocity — stop alongside the target (terminal approach). The intercept is
     closed-loop (it flies midcourse trims + a live velocity match), so ONE intercept usually
     lands inside the dock envelope; use match only to trim residual drift, then dock.
+  • solve_transfer_window — plan a full INTERPLANETARY trip to the selected planet from inside
+    your current SOI (sizes the ejection burn for you; the departure is usually months out).
 Reach for plan_maneuver (the FORWARD CALCULATOR) only for burns no solver covers — e.g. a
 plane change, or a custom mix. It does NOT find the burn for a goal: you give it a burn (time
 + prograde/normal/radial Δv), it returns the cost and resulting orbit; reason about WHICH way
@@ -342,20 +346,19 @@ function shipTools(world: World) {
       ),
       tool(
         "solve_transfer_window",
-        "Plan an INTERPLANETARY transfer to the SELECTED planet (must be co-frame — escape your " +
-          "current body's SOI first). A porkchop search over departure time AND time of flight " +
-          "finds the cheapest window (solve_intercept's auto-TOF only sweeps minutes and can't " +
-          "wait out a planet's months-long phasing). Returns a guided intercept departing at the " +
-          "window. Proposes only; does NOT fire. The departure may be days/months out — relay it " +
-          "and use jump_to_next_node to warp there after the operator confirms.",
+        "Plan a FULL INTERPLANETARY transfer to the SELECTED planet — call this from INSIDE your " +
+          "current body's SOI (no need to escape first). A heliocentric porkchop picks the soonest " +
+          "cheap departure window and the planner SIZES THE EJECTION BURN ITSELF, so you can't " +
+          "overshoot. Returns one guided plan: an ejection burn, then a heliocentric injection + " +
+          "midcourse trims (resolved live in the star's frame). It flies you into the destination " +
+          "planet's SOI on a close approach; once captured, circularize manually (solve_circularize). " +
+          "Proposes only; does NOT fire. The departure is typically months out — relay it and use " +
+          "jump_to_next_node to warp there after the operator confirms.",
         {},
-        async () =>
-          reply(
-            planTransferWindow(world) ??
-              (getTarget(world).sameFrame
-                ? { error: "no transfer window found within the search horizon" }
-                : { error: "target is in another body's sphere of influence — escape your current SOI first" }),
-          ),
+        async () => {
+          const r = planTransferWindow(world);
+          return reply(r.ok ? r.plan : { error: r.error });
+        },
       ),
       tool(
         "solve_match_velocity",

@@ -5,7 +5,7 @@ import type { OrbitalElements } from "../src/sim/types";
 import { CRADLE, circularOrbit, deg, defaultSystem } from "../src/sim/constants";
 import { propagate } from "../src/sim/orbit";
 import { previewNode, buildPlan, stateToElements } from "../src/sim/maneuver";
-import { solveCircularize, solveSetApsis, solveHohmann, lambert } from "../src/sim/solvers";
+import { solveCircularize, solveSetApsis, solveHohmann, lambert, suggestInterplanetaryWindow } from "../src/sim/solvers";
 import { World } from "../src/sim/world";
 import { planManeuver, planIntercept, planTransferWindow, executeManeuver, selectTarget, getOrbit, getTarget, listTargets, getShip } from "../src/sim/api";
 import {
@@ -602,21 +602,111 @@ console.log("\n== SOI: capture — a heliocentric approach is caught by Vesper's
   if (!ok) failures++;
 }
 
-console.log("\n== Porkchop: an interplanetary transfer window to Vesper is found and is feasible ==");
+console.log("\n== Transfer planner: a full Cradle→Vesper plan builds from a low Cradle orbit (cross-SOI) ==");
 {
-  const sim = new World();
-  sim.centralBodyId = "sol"; // as if we've escaped Cradle and are heliocentric
-  sim.ship.elements = { a: 1.496e11, e: 0.02, i: 0, raan: 0, argp: 0, meanAnomalyAtEpoch: 0, epoch: 0 }; // ~1 AU
-  sim.recomputeNextSoi();
+  const sim = new World(); // default: 400 km parking orbit about Cradle
   const vesperIdx = listTargets(sim).findIndex((t) => t.name === "Vesper");
   selectTarget(sim, vesperIdx);
-  const plan = planTransferWindow(sim); // porkchop search over departure × TOF
+  const result = planTransferWindow(sim); // cross-SOI: porkchop + self-sized ejection, from inside Cradle's SOI
   const budget = getShip(sim).dvBudget;
-  const ok = plan != null && plan.feasible && plan.dvMag < budget && plan.nodes.length >= 2;
+  // Ejection + a guided heliocentric injection + 2 trims = 4 nodes; depart within years not centuries.
+  const ok =
+    result.ok &&
+    result.plan.feasible &&
+    result.plan.dvMag < budget &&
+    result.plan.nodes.length === 4 &&
+    result.plan.nodes[0].time - sim.time <= 2400 * 86400;
   console.log(
-    plan
-      ? `${ok ? "PASS" : "FAIL"}  window: Δv ${(plan.dvMag / 1000).toFixed(2)} km/s (budget ${(budget / 1000).toFixed(1)}), depart +${((plan.nodes[0].time - sim.time) / 86400).toFixed(0)} d, feasible=${plan.feasible}`
-      : "FAIL  no transfer window found",
+    result.ok
+      ? `${ok ? "PASS" : "FAIL"}  ${result.plan.label}; ejection Δv ${(result.plan.dvMag / 1000).toFixed(2)} km/s (budget ${(budget / 1000).toFixed(1)}), ${result.plan.nodes.length} nodes, feasible=${result.plan.feasible}`
+      : `FAIL  ${result.error}`,
+  );
+  if (!ok) failures++;
+}
+
+console.log("\n== Interplanetary window: Cradle→Vesper solves from INSIDE Cradle's SOI, bounded + soonest ==");
+{
+  const sys = defaultSystem();
+  const A = sys.body("cradle");
+  const B = sys.body("vesper");
+  const r0 = A.radius + 400_000; // a 400 km parking orbit about Cradle
+  const win = suggestInterplanetaryWindow(A, B, sys, 0, r0);
+  // Hohmann time between the two heliocentric radii — the physical TOF scale; our cap is 1.75×.
+  const muP = sys.body(A.parentId!).mu;
+  const rA = Math.hypot(sys.relativeState(A.parentId!, A.id, 0).position.x, sys.relativeState(A.parentId!, A.id, 0).position.y);
+  const rB = Math.hypot(sys.relativeState(B.parentId!, B.id, 0).position.x, sys.relativeState(B.parentId!, B.id, 0).position.y);
+  const tH = Math.PI * Math.sqrt(((rA + rB) / 2) ** 3 / muP);
+  const departDays = win ? win.departureTime / 86400 : NaN;
+  const tofDays = win ? win.tofSeconds / 86400 : NaN;
+  // Bounded: TOF within the Hohmann-scaled cap (no decade-long arc), departure within ~2 synodic
+  // periods (Cradle/Vesper synodic ≈ 3.2 yr) — i.e. years, never the old centuries.
+  const ok =
+    win != null &&
+    win.tofSeconds <= 1.75 * tH + 1 &&
+    win.departureTime <= 2400 * 86400 && // < ~6.5 yr
+    win.dvEject > 0 &&
+    win.dvCapture > 0 &&
+    win.dvTotal < 12_200; // under the ship's budget
+  console.log(
+    win
+      ? `${ok ? "PASS" : "FAIL"}  depart +${departDays.toFixed(0)} d, TOF ${tofDays.toFixed(0)} d (≤${((1.75 * tH) / 86400).toFixed(0)}), Δv eject ${(win.dvEject / 1000).toFixed(2)} + capture ${(win.dvCapture / 1000).toFixed(2)} = ${(win.dvTotal / 1000).toFixed(2)} km/s`
+      : "FAIL  no interplanetary window found",
+  );
+  if (!ok) failures++;
+}
+
+console.log("\n== Interplanetary window: prefers the SOONER of two comparably-cheap departures ==");
+{
+  const sys = defaultSystem();
+  const A = sys.body("cradle");
+  const B = sys.body("vesper");
+  const r0 = A.radius + 400_000;
+  // A wide margin makes the next synodic window "acceptable" too; we must still pick the earlier.
+  const wide = suggestInterplanetaryWindow(A, B, sys, 0, r0, { marginFrac: 5, departSpanS: 4 * 365 * 86400 });
+  const tight = suggestInterplanetaryWindow(A, B, sys, 0, r0, { marginFrac: 1.01, departSpanS: 4 * 365 * 86400 });
+  // With a generous margin the chosen departure should be no later than the strict-cheapest one.
+  const ok = wide != null && tight != null && wide.departureTime <= tight.departureTime + 1;
+  console.log(`${ok ? "PASS" : "FAIL"}  soonest-pick depart +${(wide ? wide.departureTime / 86400 : NaN).toFixed(0)} d ≤ strict +${(tight ? tight.departureTime / 86400 : NaN).toFixed(0)} d`);
+  if (!ok) failures++;
+}
+
+console.log("\n== Transfer planner: the plan FLIES — escape Cradle → heliocentric leg → enter Vesper's SOI ==");
+{
+  const sim = new World(); // 400 km parking orbit about Cradle
+  selectTarget(sim, listTargets(sim).findIndex((t) => t.name === "Vesper"));
+  const result = planTransferWindow(sim);
+  let escaped = false;
+  let enteredVesper = false;
+  let minRange = Infinity;
+  if (result.ok) {
+    executeManeuver(sim, true);
+    // Fly each node: jump to its window (SOI-aware), then advance until it's consumed.
+    let guard = 0;
+    while ((sim.executorOn || sim.nodes.length > 0) && guard++ < 20) {
+      const before = sim.nodes.length;
+      sim.jumpToNextNode();
+      let g2 = 0;
+      while (sim.nodes.length >= before && sim.executorOn && g2++ < 300000) {
+        sim.rate = 10;
+        sim.advance(2);
+        if (sim.centralBodyId === "sol") escaped = true;
+      }
+    }
+    // Post-plan: coast (SOI-aware) through arrival, fine steps to catch the SOI passage.
+    const tEnd = sim.time / 86400 + 320;
+    let g3 = 0;
+    while (sim.time / 86400 < tEnd && g3++ < 60000) {
+      sim.rate = 1500;
+      sim.advance(60); // ~1 day/step
+      if (sim.centralBodyId === "sol") escaped = true;
+      if (sim.centralBodyId === "vesper") enteredVesper = true;
+      minRange = Math.min(minRange, getTarget(sim).range);
+    }
+  }
+  const vesperSoi = sim.system.body("vesper").soiRadius ?? 0;
+  const ok = result.ok && escaped && enteredVesper && minRange < vesperSoi && sim.ship.propellantKg > 0;
+  console.log(
+    `${ok ? "PASS" : "FAIL"}  escaped Cradle=${escaped}, entered Vesper SOI=${enteredVesper}, closest approach ${(minRange / 1000).toFixed(0)} km (SOI ${(vesperSoi / 1000).toFixed(0)} km), prop left ${(sim.ship.propellantKg / 1000).toFixed(1)} t`,
   );
   if (!ok) failures++;
 }

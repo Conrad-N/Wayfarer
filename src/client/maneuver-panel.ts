@@ -122,9 +122,10 @@ export function createManeuverView(): ViewInstance {
       solverBtn("INTERCEPT TGT", () => void plan("/api/maneuver/intercept", { tof: tofS(), revs: revsN() })),
       solverBtn("MATCH VEL", () => void plan("/api/maneuver/match", {})),
     ),
-    // Interplanetary path: a porkchop search finds a departure window to a co-frame planet
-    // (escape your SOI first). May take a moment; the departure can be days/months out.
-    h("div", { class: "solver-row" }, solverBtn("FIND WINDOW (interplanetary)", () => void plan("/api/maneuver/transfer_window", {}))),
+    // Interplanetary path: plan a full transfer to the selected PLANET from inside the current
+    // SOI — a heliocentric porkchop picks the window and the planner sizes the ejection burn
+    // itself (no manual escape, no overshoot). The departure is usually months out (docs/11).
+    h("div", { class: "solver-row" }, solverBtn("FIND WINDOW → PLANET", () => void plan("/api/maneuver/transfer_window", {}))),
   );
 
   const scroll = h(

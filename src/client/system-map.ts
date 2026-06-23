@@ -11,9 +11,12 @@ const SHIP_COL = "#ff7ec9"; // rose, matches the ship/target language elsewhere
 const MIN_SOI_PX = 3;
 
 function hms(seconds: number): string {
+  // Compact d:h:m:s — day count prefixed only past 24 h (docs/11 §5).
   if (!Number.isFinite(seconds)) return "--:--:--";
   const s = Math.max(0, Math.floor(seconds));
-  return `${String(Math.floor(s / 3600)).padStart(2, "0")}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  const days = Math.floor(s / 86400);
+  const hms = `${String(Math.floor((s % 86400) / 3600)).padStart(2, "0")}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  return days > 0 ? `${days}:${hms}` : hms;
 }
 
 function draw(canvas: HTMLCanvasElement, sys: SystemState, tNow: number): void {

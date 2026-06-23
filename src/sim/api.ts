@@ -8,7 +8,8 @@ import {
   solveIntercept,
   solveMatchVelocity,
   suggestInterceptTof,
-  suggestTransferWindow,
+  suggestInterplanetaryWindow,
+  solveInterplanetaryTransfer,
   type Apsis,
 } from "./solvers";
 import type { Vec3 } from "./types";
@@ -375,19 +376,38 @@ export function planIntercept(w: World, tofSeconds?: number, maxRevs?: number): 
   return parkPlan(w, buildPlan(w.ship.elements, w.body, fuelOf(w), label, nodes));
 }
 
-/** Auto transfer-window (porkchop): search departure time × TOF for the cheapest transfer to
- *  the selected target, then lay that guided intercept. This is the INTERPLANETARY path —
- *  `planIntercept`'s auto-TOF only sweeps minutes and can't wait out a planet's phasing. The
- *  target must be co-frame (escape your SOI first). Returns null if no window solves. */
-export function planTransferWindow(w: World): ManeuverPlan | null {
-  if (!targetCoFrame(w)) return null;
-  const win = suggestTransferWindow(w.ship.elements, w.body, w.time, w.selectedTargetDef().elements);
-  if (!win) return null;
-  const nodes = solveIntercept(w.ship.elements, w.body, win.departureTime, w.selectedTargetDef().elements, win.tofSeconds, 0, true);
-  if (!nodes) return null;
+/** Plan a full INTERPLANETARY transfer to the selected planet — from INSIDE the current body's
+ *  SOI (no need to escape first). A heliocentric porkchop picks the soonest cheap window and the
+ *  planner sizes the ejection burn itself, so a manual escape can't overshoot (docs/11). Returns
+ *  the parked plan, or a reason it couldn't (wrong target / not a sibling / no window). The result
+ *  is a guided plan: one real ejection burn, then live heliocentric trims + an arrival match. */
+export function planTransferWindow(w: World): { ok: true; plan: ManeuverPlan } | { ok: false; error: string } {
+  const def = w.selectedTargetDef();
+  if (!def.transferBodyId) {
+    return { ok: false, error: `${def.name} isn't an interplanetary destination — select a planet (a sibling of your current body)` };
+  }
+  if (!w.system.has(def.transferBodyId)) {
+    return { ok: false, error: `unknown destination body "${def.transferBodyId}"` };
+  }
+  const A = w.body;
+  const B = w.system.body(def.transferBodyId);
+  if (A.id === B.id) return { ok: false, error: `you're already orbiting ${B.name}` };
+  if (A.parentId == null) {
+    return { ok: false, error: `you're in the ${A.name} frame — drop into a planet's SOI before planning a sibling transfer` };
+  }
+  if (A.parentId !== B.parentId) {
+    return { ok: false, error: `${B.name} isn't a sibling of ${A.name} — no direct transfer between them` };
+  }
+  const p = propagate(w.ship.elements, A, w.time).position;
+  const r0 = Math.hypot(p.x, p.y, p.z); // ship's current orbital radius about A — the ejection is sized from here
+  const win = suggestInterplanetaryWindow(A, B, w.system, w.time, r0);
+  if (!win) return { ok: false, error: `no transfer window to ${B.name} found within the search horizon` };
+  const nodes = solveInterplanetaryTransfer(w.ship.elements, A, w.time, B, win);
+  if (!nodes) return { ok: false, error: `couldn't lay a transfer plan to ${B.name} (degenerate window)` };
   const departDays = (win.departureTime - w.time) / 86400;
-  const label = `transfer window → ${w.selectedTargetDef().name} (depart +${departDays.toFixed(1)} d, ${(win.tofSeconds / 86400).toFixed(0)} d TOF)`;
-  return parkPlan(w, buildPlan(w.ship.elements, w.body, fuelOf(w), label, nodes));
+  const arriveDays = (win.arrivalTime - w.time) / 86400;
+  const label = `transfer → ${B.name} (depart +${departDays.toFixed(0)} d, arrive +${arriveDays.toFixed(0)} d)`;
+  return { ok: true, plan: parkPlan(w, buildPlan(w.ship.elements, A, fuelOf(w), label, nodes)) };
 }
 
 /** The cheapest intercept TOF for the selected target right now — the panel uses it to seed a

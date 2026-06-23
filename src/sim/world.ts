@@ -29,6 +29,12 @@ import { bestTransfer } from "./solvers";
 const DT_PHYS = 1 / 64; // s
 const MAX_SUBSTEPS = 4096; // per advance() call
 
+// The fastest warp left untouched near burns and SOI handoffs. A gentle 10× is always safe:
+// coasting is analytic (and clamps exactly to the SOI boundary), and a burn steps on the fixed
+// DT_PHYS grid regardless of warp — at 10× that's ~10 substeps/tick, far under MAX_SUBSTEPS, so
+// fidelity is unchanged. Only the high warps (100×+) must drop near events; they clamp to this.
+const SAFE_WARP = 10;
+
 // A rendezvous target: another object orbiting the same body (docs/05 §M2 — but single-
 // body, so no patched conics). MVP keeps them co-planar + circular so the solvers are
 // well-posed. `kind` is flavour for the target panel.
@@ -51,6 +57,10 @@ export interface TargetDef {
   // docs/08). Stations orbit Cradle; a planet "target" orbits Sol. Relative telemetry resolves
   // both ship and target to the root frame, but the Lambert solvers need a co-frame target.
   bodyId: string;
+  // When this target IS a body the ship can fly to (a sibling planet), the System body id to
+  // transfer toward — what the cross-SOI transfer planner sizes the ejection + capture for
+  // (docs/11). A station orbiting a body leaves this absent (it's not a transfer destination).
+  transferBodyId?: string;
   elements: OrbitalElements;
   // What this target will trade across the dock. Stations/depots stock goods; a probe
   // has none (docking it offers no cargo services). Absent = no hold to transfer with.
@@ -216,7 +226,7 @@ export class World {
       // The other planet, as a heliocentric destination (it orbits Sol, not Cradle). You can
       // see its range from anywhere, but a Lambert intercept needs you co-frame — escape
       // Cradle's SOI first, then it's reachable in the Sol frame (the two-step transfer).
-      { name: "Vesper", kind: "planet", bodyId: "sol", elements: VESPER.elements as OrbitalElements },
+      { name: "Vesper", kind: "planet", bodyId: "sol", transferBodyId: "vesper", elements: VESPER.elements as OrbitalElements },
     ];
     this.selectedTarget = 0;
     this.dockedTo = null;
@@ -384,7 +394,11 @@ export class World {
     // Closed-loop guidance: resolve a retarget node's Δv from the ship's ACTUAL coasted state
     // the moment it becomes active (coast is analytic, so this is stable once the prior burn
     // has folded). A midcourse trim / live match cancels the open-loop error of a long transfer.
-    if (node.retarget && !this.poweredState) this.resolveRetarget(node);
+    // BUT only resolve once no SOI handoff is still pending before this node: a cross-frame plan
+    // (the interplanetary ejection → heliocentric trims) must resolve its trims AFTER the escape
+    // handoff, in the parent frame — resolving early in the wrong frame freezes a garbage Δv (docs/11).
+    const handoffPending = this.nextSoi != null && this.nextSoi.time < node.time - 1e-9;
+    if (node.retarget && !this.poweredState && !handoffPending) this.resolveRetarget(node);
     const dvMag = dvMagnitude(node.dvLocal);
     const accel = this.ship.thrustN / this.currentMass();
     const burnDur = accel > 0 ? dvMag / accel : 0;
@@ -394,12 +408,13 @@ export class World {
     this.burnTargetDir = nodeWorldDir(node.dvLocal, r, v);
     this.attitudeMode = "node";
 
-    // Auto-limit warp as the burn window approaches (docs/08).
+    // Auto-limit warp as the burn window approaches (docs/08) — clamp to SAFE_WARP (10×), not
+    // 1×: the burn integrates on the fixed DT_PHYS grid, so 10× is exact (docs/11 §4).
     const lead = Math.max(20, burnDur);
     const inWindow = this.time >= burnStart - lead;
     this.inBurnWindow = inWindow; // tells advance() to step on the fixed DT_PHYS grid
-    this.warpAutoLimited = inWindow && this.rate > 1;
-    if (inWindow && this.rate > 1) this.rate = 1;
+    this.warpAutoLimited = inWindow && this.rate > SAFE_WARP;
+    if (inWindow && this.rate > SAFE_WARP) this.rate = SAFE_WARP;
 
     const aligned = this.pointingError(this.burnTargetDir) < deg(2);
     if (this.time >= burnStart && this.burnDelivered >= dvMag) {
@@ -418,15 +433,25 @@ export class World {
     this.throttle = this.time >= burnStart && aligned && this.burnDelivered < dvMag ? 1 : 0;
   }
 
-  /** Jump-to-event: coast (analytically) to just before the next node's burn window
-   *  so the executor can fly it. Returns false if no node is queued. */
+  /** Jump-to-event: coast to just before the next node's burn window so the executor can fly it.
+   *  SOI-aware: if a handoff (escape/capture) lies before the node — as on an interplanetary plan,
+   *  whose trims live in the parent frame after the ejection — the coast crosses it via
+   *  `stepCoastWithSoi` (processing the handoff) instead of teleporting past it, and the retarget
+   *  is left for `driveExecutor` to resolve at the node's time in the CORRECT frame. Returns false
+   *  if no node is queued. */
   jumpToNextNode(): boolean {
     const node = this.nodes[0];
     if (!node) return false;
-    if (node.retarget && !this.poweredState) this.resolveRetarget(node); // size the window from the real trim
+    const handoffBefore = this.nextSoi != null && this.nextSoi.time < node.time;
+    // Pre-resolve to size the burn window only when we stay in this frame; across a handoff the
+    // frame is wrong, so defer to driveExecutor (the planned dvLocal is ~0 for a trim anyway).
+    if (node.retarget && !this.poweredState && !handoffBefore) this.resolveRetarget(node);
     const burnDur = dvMagnitude(node.dvLocal) / Math.max(1e-9, this.ship.thrustN / this.currentMass());
     const arrive = node.time - burnDur / 2 - 25; // 25 s lead to settle + slew
-    if (arrive > this.time) this.time = arrive; // instant coast (orbit is analytic)
+    if (arrive > this.time) {
+      if (handoffBefore) this.stepCoastWithSoi(arrive - this.time); // cross the SOI boundary en route
+      else this.time = arrive; // pure analytic coast — no boundary between (orbit is analytic)
+    }
     this.executorOn = true;
     return true;
   }
@@ -521,13 +546,14 @@ export class World {
     this.recomputeNextSoi();
   }
 
-  /** Drop warp to 1× within SOI_LEAD of the next handoff (coast only; the executor owns warp
-   *  near burns). Telemetry via `warpAutoLimited`. */
+  /** Clamp warp to SAFE_WARP (10×) within SOI_LEAD of the next handoff (coast only; the executor
+   *  owns warp near burns). 10× is safe — the coast lands exactly on the boundary. Telemetry via
+   *  `warpAutoLimited`. */
   private limitWarpForSoi(): void {
     if (this.executorOn || this.inBurnWindow || this.poweredState) return;
     if (this.nextSoi && this.nextSoi.time - this.time <= World.SOI_LEAD) {
-      if (this.rate > 1) {
-        this.rate = 1;
+      if (this.rate > SAFE_WARP) {
+        this.rate = SAFE_WARP; // 10× is safe — the coast clamps exactly to the boundary (docs/11 §4)
         this.warpAutoLimited = true;
       }
     } else if (this.warpAutoLimited) {

@@ -20,12 +20,16 @@ function num(v: number, dp: number, width = 9): string {
   return pad(Number.isFinite(v) ? v.toFixed(dp) : "---", width);
 }
 function hms(seconds: number): string {
+  // Compact d:h:m:s — HH:MM:SS under a day, prefixed with the day count once past 24 h. The
+  // interplanetary countdowns run to hundreds of days, so hours alone would overflow (docs/11 §5).
   if (!Number.isFinite(seconds)) return "--:--:--";
   const s = Math.max(0, Math.floor(seconds));
-  const h2 = Math.floor(s / 3600);
+  const days = Math.floor(s / 86400);
+  const h2 = Math.floor((s % 86400) / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
-  return `${String(h2).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  const hms = `${String(h2).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+  return days > 0 ? `${days}:${hms}` : hms;
 }
 
 // Conversion from SI to operator-friendly units happens here, at the presentation edge —
@@ -42,8 +46,8 @@ const ROWS: Array<[string, (o: OrbitState) => string]> = [
   ["RADIUS", (o) => `${num(o.radius / 1000, 2)} km`],
   ["LATITUDE", (o) => `${num(o.latitude * DEG, 3)} deg`],
   ["FLIGHT PATH", (o) => `${num(o.flightPathAngle * DEG, 3)} deg`],
-  ["T-PERIAPSIS", (o) => pad(hms(o.timeToPeriapsis), 9)],
-  ["T-APOAPSIS", (o) => pad(hms(o.timeToApoapsis), 9)],
+  ["T-PERIAPSIS", (o) => pad(hms(o.timeToPeriapsis), 12)],
+  ["T-APOAPSIS", (o) => pad(hms(o.timeToApoapsis), 12)],
 ];
 
 function row(label: string, value: string): string {
@@ -67,12 +71,12 @@ export function renderReadout(el: HTMLElement, state: StateResponse, includeTarg
   const out = [
     row("VESSEL", esc(ship.name)),
     row("BODY", esc(body.name) + (body.parentName ? `  <span class="dim">/ ${esc(body.parentName)}</span>` : "")),
-    row("SOI XFER", soi && soiName ? `${soiVerb} ${esc(soiName)} ${pad(hms(soi.time - clock.t), 9)}` : "—"),
+    row("SOI XFER", soi && soiName ? `${soiVerb} ${esc(soiName)} ${pad(hms(soi.time - clock.t), 12)}` : "—"),
     row("SIM CLOCK", `${hms(clock.t)}  x${clock.rate}`),
     `<div class="rule"></div>`,
     ...ROWS.map(([label, fn]) => {
       if (escaping && label === "APOAPSIS") return row("APOAPSIS", pad("ESCAPE", 9));
-      if (escaping && label === "T-APOAPSIS") return row("T-ESCAPE", pad(hms(tEscape), 9));
+      if (escaping && label === "T-APOAPSIS") return row("T-ESCAPE", pad(hms(tEscape), 12));
       return row(label, fn(orbit));
     }),
   ];

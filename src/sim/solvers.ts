@@ -1,8 +1,9 @@
 import type { CentralBody, OrbitalElements, Vec3 } from "./types";
-import { propagate } from "./orbit";
+import { propagate, nextEscapeTime } from "./orbit";
 import { worldDvToLocal, dvMagnitude } from "./flight";
 import { stateToElements } from "./maneuver";
 import type { ManeuverInput } from "./maneuver";
+import type { Body, System } from "./system";
 
 // Inverse solvers — deterministic, well-posed instruments that emit maneuver NODES into the
 // planner pipeline (docs/10 §6 follow-up; the "library of well-posed solvers" from the design
@@ -376,61 +377,194 @@ export function suggestInterceptTof(
   return best;
 }
 
-/** Cheapest INTERPLANETARY transfer window to `targetEl`: a porkchop search over BOTH the
- *  departure time and the time of flight (the inner-system `suggestInterceptTof` only sweeps
- *  TOF over minutes — it can't wait out a planet's months-long phasing). Coarse grid over
- *  [now, now+departSpan] × [tofMin, tofMax], then a local refine around the minimum. Ranges
- *  default from the two orbits' periods (and the synodic period for the departure span).
- *  Returns the departure time to hand to `solveIntercept` (as its tNow), the TOF, and Δv. */
-export function suggestTransferWindow(
-  shipEl: OrbitalElements,
-  body: CentralBody,
-  tNow: number,
-  targetEl: OrbitalElements,
-  opts: { maxRevs?: number; departSpanS?: number; tofMinS?: number; tofMaxS?: number } = {},
-): { departureTime: number; tofSeconds: number; dvMag: number } | null {
-  const maxRevs = opts.maxRevs ?? 0; // direct arc is the interplanetary norm
-  const Ps = propagate(shipEl, body, tNow).period;
-  const Pt = propagate(targetEl, body, tNow).period;
-  // Synodic period sets how long until a departure window recurs — search at least one cycle.
-  const synodic = Math.abs(1 / Ps - 1 / Pt) > 1e-15 ? 1 / Math.abs(1 / Ps - 1 / Pt) : 5 * Math.max(Ps, Pt);
-  const departSpan = opts.departSpanS ?? Math.min(synodic, 5 * Math.max(Ps, Pt));
-  const tofMin = opts.tofMinS ?? 0.2 * Math.min(Ps, Pt);
-  const tofMax = opts.tofMaxS ?? 0.8 * Math.max(Ps, Pt);
+// --- INTERPLANETARY transfer (cross-SOI, docs/11) ---------------------------
+// A real transfer planner you invoke from INSIDE the departure body's SOI: it runs a porkchop
+// in the parent (Sun) frame — frame-independent, so it works before you escape — and sizes the
+// ejection burn itself, so a manual prograde escape can't overshoot you onto a decade-long
+// solar orbit. The heliocentric leg + capture are then flown with the existing guided machinery.
 
-  const score = (departOffset: number, tof: number): number => {
-    const nodes = solveIntercept(shipEl, body, tNow + departOffset, targetEl, tof, maxRevs);
-    if (!nodes) return Infinity;
-    return nodes.reduce((s, n) => s + dvMagnitude(n.dvLocal), 0);
+/** A solved interplanetary window. Δv excesses are in the PARENT frame; the burn estimates are
+ *  what the ship actually pays from/into a parking orbit (the porkchop's scoring currency). */
+export interface InterplanetaryWindow {
+  departureTime: number; // sim-time the ejection burn targets
+  arrivalTime: number; // sim-time the ship reaches the destination body
+  tofSeconds: number; // heliocentric time of flight
+  vInfOut: Vec3; // hyperbolic excess leaving the departure body (parent frame)
+  vInfIn: Vec3; // hyperbolic excess arriving at the destination body (parent frame)
+  vDepHelio: Vec3; // heliocentric velocity the ship needs at departure (= vBodyA + vInfOut)
+  dvEject: number; // ejection burn from a circular parking orbit of radius r0 about A
+  dvCapture: number; // capture burn into a low parking orbit about B
+  dvTotal: number; // dvEject + dvCapture (the score)
+}
+
+/** Cheapest, SOONEST interplanetary window from body A to sibling body B (both orbiting the same
+ *  parent), computable from inside A's SOI. A porkchop over departure × TOF in the parent frame,
+ *  with ranges anchored to the Hohmann time between the two heliocentric radii (NOT orbital
+ *  periods — that's what produced the old decade-long results). Prefers the earliest departure
+ *  within `marginFrac` of the cheapest Δv seen. `r0` is the ship's current orbital radius about A
+ *  (the ejection is sized from there). Returns null if A,B aren't siblings or no window solves. */
+export function suggestInterplanetaryWindow(
+  A: Body,
+  B: Body,
+  system: System,
+  tNow: number,
+  r0: number,
+  opts: { rParkB?: number; departSpanS?: number; tofMinS?: number; tofMaxS?: number; marginFrac?: number } = {},
+): InterplanetaryWindow | null {
+  if (A.parentId === null || B.parentId === null || A.parentId !== B.parentId) return null; // need siblings
+  if (!A.elements || !B.elements || A.id === B.id) return null;
+  const P = system.body(A.parentId);
+  const muP = P.mu;
+
+  // A and B states in the parent frame (relativeState handles a non-root parent too).
+  const stateA = (t: number) => system.relativeState(P.id, A.id, t);
+  const stateB = (t: number) => system.relativeState(P.id, B.id, t);
+
+  // Hohmann-time bounds on TOF — physical and bounded, unlike period-scaled ranges.
+  const rAm = mag(stateA(tNow).position);
+  const rBm = mag(stateB(tNow).position);
+  const aT = (rAm + rBm) / 2;
+  const tH = Math.PI * Math.sqrt((aT * aT * aT) / muP);
+  const tofMin = opts.tofMinS ?? 0.35 * tH;
+  const tofMax = opts.tofMaxS ?? 1.75 * tH;
+
+  // Search at least one synodic cycle of departures so a window is guaranteed in range.
+  const PA = propagate(A.elements, P, tNow).period;
+  const PB = propagate(B.elements, P, tNow).period;
+  const synodic = Math.abs(1 / PA - 1 / PB) > 1e-15 ? 1 / Math.abs(1 / PA - 1 / PB) : 5 * Math.max(PA, PB);
+  const departSpan = opts.departSpanS ?? 1.5 * synodic;
+
+  const rParkB = opts.rParkB ?? B.radius + 200_000;
+  const ejectDv = (vInf: number) => Math.sqrt(vInf * vInf + (2 * A.mu) / r0) - Math.sqrt(A.mu / r0);
+  const captureDv = (vInf: number) => Math.sqrt(vInf * vInf + (2 * B.mu) / rParkB) - Math.sqrt(B.mu / rParkB);
+
+  type Cell = InterplanetaryWindow;
+  const evaluate = (departOffset: number, tof: number): Cell | null => {
+    if (departOffset < 0 || tof <= 0) return null;
+    const tDep = tNow + departOffset;
+    const tArr = tDep + tof;
+    const sA = stateA(tDep);
+    const sB = stateB(tArr);
+    const sol = lambert(sA.position, sB.position, tof, muP, true, 0);
+    if (!sol) return null;
+    const vInfOut = sub(sol.v1, sA.velocity);
+    const vInfIn = sub(sol.v2, sB.velocity);
+    const dvEject = ejectDv(mag(vInfOut));
+    const dvCapture = captureDv(mag(vInfIn));
+    const dvTotal = dvEject + dvCapture;
+    if (!Number.isFinite(dvTotal)) return null;
+    return { departureTime: tDep, arrivalTime: tArr, tofSeconds: tof, vInfOut, vInfIn, vDepHelio: sol.v1, dvEject, dvCapture, dvTotal };
   };
 
-  // Coarse grid → the minimum cell → refine within ±one cell. Cheap: a direct-arc Lambert each.
-  let best: { departureTime: number; tofSeconds: number; dvMag: number } | null = null;
-  const search = (d0: number, d1: number, t0: number, t1: number, nDep: number, nTof: number) => {
-    const dStep = (d1 - d0) / nDep;
-    const tStep = (t1 - t0) / nTof;
+  // Collect every feasible cell on a grid, then pick the EARLIEST departure within marginFrac of
+  // the cheapest (optimum-decades-out is never what the player wants).
+  const margin = opts.marginFrac ?? 1.15;
+  const collect = (d0: number, d1: number, t0: number, t1: number, nDep: number, nTof: number): Cell[] => {
+    const out: Cell[] = [];
     for (let i = 0; i <= nDep; i++) {
-      const dep = d0 + i * dStep;
-      if (dep < 0) continue;
       for (let j = 0; j <= nTof; j++) {
-        const tof = t0 + j * tStep;
-        if (tof <= 0) continue;
-        const dv = score(dep, tof);
-        if (Number.isFinite(dv) && (!best || dv < best.dvMag)) {
-          best = { departureTime: tNow + dep, tofSeconds: tof, dvMag: dv };
-        }
+        const c = evaluate(d0 + (i * (d1 - d0)) / nDep, t0 + (j * (t1 - t0)) / nTof);
+        if (c) out.push(c);
       }
     }
-    return { dStep, tStep };
+    return out;
+  };
+  const pick = (cells: Cell[]): Cell | null => {
+    if (cells.length === 0) return null;
+    const minDv = Math.min(...cells.map((c) => c.dvTotal));
+    const acceptable = cells.filter((c) => c.dvTotal <= margin * minDv);
+    acceptable.sort((a, b) => a.departureTime - b.departureTime || a.dvTotal - b.dvTotal);
+    return acceptable[0];
   };
 
-  const coarse = search(0, departSpan, tofMin, tofMax, 48, 40);
-  if (!best) return null;
-  // Refine around the coarse minimum (one cell each way) for a sharper window.
-  const b = best as { departureTime: number; tofSeconds: number; dvMag: number };
-  const dCtr = b.departureTime - tNow;
-  search(dCtr - coarse.dStep, dCtr + coarse.dStep, b.tofSeconds - coarse.tStep, b.tofSeconds + coarse.tStep, 12, 12);
-  return best;
+  const dStep = departSpan / 48;
+  const tStep = (tofMax - tofMin) / 40;
+  const coarse = pick(collect(0, departSpan, tofMin, tofMax, 48, 40));
+  if (!coarse) return null;
+  // Refine within ±one coarse cell of the chosen window for a sharper departure/TOF.
+  const dCtr = coarse.departureTime - tNow;
+  const fine = pick(collect(Math.max(0, dCtr - dStep), dCtr + dStep, Math.max(1, coarse.tofSeconds - tStep), coarse.tofSeconds + tStep, 12, 12));
+  return fine ?? coarse;
+}
+
+const INTERPLANETARY_LEAD = 120; // s — slew/review margin before the ejection burn
+const EJECT_VINF = 1000; // m/s — modest hyperbolic excess for the ejection: enough to clear the SOI
+// in a few days, small enough that the heliocentric orbit stays near the departure body's (so the
+// REAL injection — aiming the transfer — is done in the parent frame where Lambert can point any way).
+
+/** Assemble the full cross-SOI transfer as maneuver nodes (docs/11 §2.3). The hard part is that a
+ *  burn inside the departure body's SOI can't freely aim the heliocentric v∞ (a prograde ejection
+ *  to an INNER planet would add energy the wrong way). So we split it: a cheap EJECTION leaves the
+ *  SOI near the porkchop's departure time, then a guided INJECTION + trims in the PARENT frame —
+ *  full Lambert burns resolved live, where any direction is reachable — fly the actual transfer.
+ *  Capture into B's SOI then happens on the coast (handoff); circularize there manually. One plan
+ *  spans the A→parent handoff; node Δv is local/resolved-live so it crosses frames cleanly. */
+export function solveInterplanetaryTransfer(
+  shipEl: OrbitalElements,
+  A: Body,
+  tNow: number,
+  B: Body,
+  window: InterplanetaryWindow,
+  opts: { maxRevs?: number } = {},
+): ManeuverInput[] | null {
+  if (A.parentId === null || A.soiRadius == null || !B.elements) return null;
+  const maxRevs = opts.maxRevs ?? 0;
+
+  // Ejection at the porkchop's departure time (the phasing the window depends on), at the point in
+  // the parking orbit whose prograde best aligns with v∞_out — so the small excess we DO add points
+  // the right way, shrinking the injection burn. Sized for a modest EJECT_VINF (a clean escape).
+  const vInfMag = Math.max(1, mag(window.vInfOut));
+  const Ppark = propagate(shipEl, A, window.departureTime).period;
+  let tEject = window.departureTime;
+  if (Number.isFinite(Ppark) && Ppark > 0) {
+    let bestDot = -Infinity;
+    const N = 64;
+    for (let k = 0; k < N; k++) {
+      const t = window.departureTime + (k * Ppark) / N;
+      const v = propagate(shipEl, A, t).velocity;
+      const vm = mag(v);
+      const d = vm > 0 ? dot3(v, window.vInfOut) / (vm * vInfMag) : -Infinity;
+      if (d > bestDot) {
+        bestDot = d;
+        tEject = t;
+      }
+    }
+  }
+  if (tEject < tNow + INTERPLANETARY_LEAD) tEject = Math.max(tEject + (Number.isFinite(Ppark) ? Ppark : 0), tNow + INTERPLANETARY_LEAD);
+
+  const sEject = propagate(shipEl, A, tEject);
+  const r0 = mag(sEject.position);
+  const v0 = mag(sEject.velocity);
+  if (!(v0 > 0)) return null;
+  const dvEject = Math.sqrt(EJECT_VINF * EJECT_VINF + (2 * A.mu) / r0) - v0; // prograde escape
+  const ejection: ManeuverInput = { time: tEject, dvLocal: { prograde: dvEject, normal: 0, radial: 0 } };
+
+  // Predicted escape time of the post-burn hyperbola — the parent-frame burns must land after it.
+  const vDir = { x: sEject.velocity.x / v0, y: sEject.velocity.y / v0, z: sEject.velocity.z / v0 };
+  const vPost: Vec3 = { x: sEject.velocity.x + dvEject * vDir.x, y: sEject.velocity.y + dvEject * vDir.y, z: sEject.velocity.z + dvEject * vDir.z };
+  const postEl = stateToElements(sEject.position, vPost, A, tEject);
+  const tEsc = nextEscapeTime(postEl, A, tEject, A.soiRadius) ?? tEject + 0.05 * (window.arrivalTime - tEject);
+
+  const tArrive = window.arrivalTime;
+  if (!(tArrive > tEsc)) return null;
+
+  // Parent-frame legs, all guided (resolved live, in the correct frame, by the executor):
+  //  • INJECTION right after escape — a full Lambert to B's arrival position. This is the real
+  //    transfer burn; it can aim anywhere, so it fixes whatever the ejection couldn't.
+  //  • two TRIMS later — cancel the residual open-loop error of a long arc.
+  const Bhelio = B.elements;
+  const tInject = tEsc + 0.01 * (tArrive - tEsc);
+  const leg = (t: number): ManeuverInput => ({
+    time: t,
+    dvLocal: { prograde: 0, normal: 0, radial: 0 },
+    retarget: { kind: "transfer", targetEl: Bhelio, arrivalTime: tArrive, maxRevs },
+  });
+  const injection = leg(tInject);
+  const trims = [0.45, 0.8].map((f) => leg(tInject + f * (tArrive - tInject)));
+
+  // No arrival match: the transfer threads B's position, so the ship enters B's SOI on the coast
+  // and is captured (handoff). Circularize into a parking orbit manually (docs/11 §6).
+  return [ejection, injection, ...trims];
 }
 
 /** Match the target's velocity NOW — kill the relative velocity in one burn. Computed live
