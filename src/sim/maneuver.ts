@@ -99,10 +99,17 @@ export function stateToElements(
     if (ry < 0) nu = TWO_PI - nu;
   }
 
-  // ν → eccentric anomaly E → mean anomaly M, stored at this epoch so that
-  // propagate(result, body, epoch) reproduces (position, velocity) exactly.
-  const E = 2 * Math.atan2(Math.sqrt(1 - e) * Math.sin(nu / 2), Math.sqrt(1 + e) * Math.cos(nu / 2));
-  const meanAnomalyAtEpoch = wrapTwoPi(E - e * Math.sin(E));
+  // ν → (eccentric / hyperbolic) anomaly → mean anomaly M, stored at this epoch so that
+  // propagate(result, body, epoch) reproduces (position, velocity) exactly. Hyperbolic
+  // states (e > 1, from an SOI escape or a fast approach) use the sinh form and don't wrap.
+  let meanAnomalyAtEpoch: number;
+  if (e < 1) {
+    const E = 2 * Math.atan2(Math.sqrt(1 - e) * Math.sin(nu / 2), Math.sqrt(1 + e) * Math.cos(nu / 2));
+    meanAnomalyAtEpoch = wrapTwoPi(E - e * Math.sin(E));
+  } else {
+    const H = 2 * Math.atanh(Math.sqrt((e - 1) / (e + 1)) * Math.tan(nu / 2));
+    meanAnomalyAtEpoch = e * Math.sinh(H) - H; // unwrapped — a hyperbola is flown once
+  }
 
   return { a, e, i, raan, argp, meanAnomalyAtEpoch, epoch };
 }

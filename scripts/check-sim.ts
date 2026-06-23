@@ -2,12 +2,12 @@
 // as runnable assertions. Run with `npm run check`.
 import assert from "node:assert/strict";
 import type { OrbitalElements } from "../src/sim/types";
-import { CRADLE, circularOrbit, deg } from "../src/sim/constants";
+import { CRADLE, circularOrbit, deg, defaultSystem } from "../src/sim/constants";
 import { propagate } from "../src/sim/orbit";
 import { previewNode, buildPlan, stateToElements } from "../src/sim/maneuver";
 import { solveCircularize, solveSetApsis, solveHohmann, lambert } from "../src/sim/solvers";
 import { World } from "../src/sim/world";
-import { planManeuver, planIntercept, executeManeuver, selectTarget, getOrbit, getTarget } from "../src/sim/api";
+import { planManeuver, planIntercept, planTransferWindow, executeManeuver, selectTarget, getOrbit, getTarget, listTargets, getShip } from "../src/sim/api";
 import {
   stepPowered,
   integrateAttitude,
@@ -452,6 +452,193 @@ console.log("\n== H3: chat-turn mutex serializes plan→execute over the shared 
     console.log(`${ok ? "PASS" : "FAIL"}  mutex: each turn commits its own plan (commits=${committed.join(",")})`);
     if (!ok) failures++;
   }
+}
+
+console.log("\n== Hyperbolic: a state above escape speed round-trips through elements (e > 1) ==");
+{
+  // Around Cradle, a tangential velocity 1.2× escape → an open (hyperbolic) trajectory.
+  const r0 = { x: 7e6, y: 0, z: 0 };
+  const vEsc = Math.sqrt((2 * body.mu) / 7e6);
+  const v0 = { x: 0, y: 1.2 * vEsc, z: 0 };
+  const el = stateToElements(r0, v0, body, 0);
+  const back = propagate(el, body, 0); // same epoch — must reproduce r,v
+  const dR = Math.hypot(back.position.x - r0.x, back.position.y - r0.y, back.position.z - r0.z);
+  const dV = Math.hypot(back.velocity.x - v0.x, back.velocity.y - v0.y, back.velocity.z - v0.z);
+  // Energy is conserved as it coasts outward; period/apoapsis are Infinity (open orbit).
+  const later = propagate(el, body, 500);
+  const energy0 = back.speed * back.speed / 2 - body.mu / back.radius;
+  const energy1 = later.speed * later.speed / 2 - body.mu / later.radius;
+  const ok =
+    el.e > 1 &&
+    dR < 1e-3 &&
+    dV < 1e-6 &&
+    back.apoapsisRadius === Infinity &&
+    later.radius > back.radius &&
+    Math.abs(energy0 - energy1) < 1e-3;
+  console.log(
+    `${ok ? "PASS" : "FAIL"}  e=${el.e.toFixed(3)}, round-trip Δr=${dR.toExponential(1)} m Δv=${dV.toExponential(1)} m/s, energy conserved`,
+  );
+  if (!ok) failures++;
+}
+
+console.log("\n== System: heliocentric hierarchy resolves analytically (patched-conic frame) ==");
+{
+  const sys = defaultSystem();
+  const AU = 1.495978707e11;
+  // The root star is the origin of the inertial frame.
+  const sol = sys.bodyStateInRoot("sol", 12345);
+  const solAtOrigin = Math.hypot(sol.position.x, sol.position.y, sol.position.z) === 0;
+  // Cradle orbits Sol at ~1 AU; its heliocentric distance holds (circular orbit) across time.
+  const cr = sys.bodyStateInRoot("cradle", 7777);
+  const cradleDist = Math.hypot(cr.position.x, cr.position.y, cr.position.z);
+  // Vesper's state seen from Cradle equals (Vesper − Cradle) in the root frame.
+  const rel = sys.relativeState("cradle", "vesper", 7777);
+  const ve = sys.bodyStateInRoot("vesper", 7777);
+  const relConsistent =
+    Math.abs(rel.position.x - (ve.position.x - cr.position.x)) < 1e-3 &&
+    Math.abs(rel.velocity.y - (ve.velocity.y - cr.velocity.y)) < 1e-6;
+  const ok = solAtOrigin && Math.abs(cradleDist - AU) < 1 && relConsistent;
+  console.log(
+    `${ok ? "PASS" : "FAIL"}  Sol@origin=${solAtOrigin}, Cradle ${(cradleDist / AU).toFixed(4)} AU from Sol, relativeState consistent=${relConsistent}`,
+  );
+  if (!ok) failures++;
+}
+
+console.log("\n== Targets: a cross-SOI planet is visible but its intercept is gated until co-frame ==");
+{
+  const sim = new World();
+  // Vesper is in the roster (it orbits Sol, not Cradle) and shows a real heliocentric range.
+  const list = listTargets(sim);
+  const vesperIdx = list.findIndex((t) => t.name === "Vesper");
+  const vesper = list[vesperIdx];
+  const visibleFarAway = vesper && !vesper.sameFrame && vesper.range > 1e10; // ~0.2 AU away, cross-frame
+  // Selecting it while around Cradle: intercept is unavailable (no shared frame).
+  selectTarget(sim, vesperIdx);
+  const blockedWhileAtCradle = getTarget(sim).sameFrame === false && planIntercept(sim) === null;
+  // Once we're in the Sol frame (escaped Cradle), the SAME target becomes interceptable.
+  sim.centralBodyId = "sol";
+  sim.ship.elements = { a: 1.0e11, e: 0.05, i: 0, raan: 0, argp: 0, meanAnomalyAtEpoch: 0, epoch: 0 }; // a heliocentric orbit
+  sim.recomputeNextSoi();
+  const coFrameNow = getTarget(sim).sameFrame === true;
+  const plan = planIntercept(sim, 4e6); // explicit-TOF heliocentric Lambert to Vesper (~46 days)
+  const interceptable = coFrameNow && plan != null && plan.dvMag > 0;
+  const ok = visibleFarAway && blockedWhileAtCradle && interceptable;
+  console.log(
+    `${ok ? "PASS" : "FAIL"}  Vesper range ${(vesper.range / 1.496e11).toFixed(2)} AU; gated@Cradle=${blockedWhileAtCradle}; interceptable@Sol=${interceptable}`,
+  );
+  if (!ok) failures++;
+}
+
+// Ship position in the root (heliocentric) frame — for checking continuity across handoffs.
+function shipRootPos(sim: World) {
+  const s = propagate(sim.ship.elements, sim.body, sim.time);
+  const base = sim.system.bodyStateInRoot(sim.centralBodyId, sim.time);
+  return { x: base.position.x + s.position.x, y: base.position.y + s.position.y, z: base.position.z + s.position.z };
+}
+
+console.log("\n== SOI: escape — a high ellipse leaves Cradle's SOI and hands off to Sol ==");
+{
+  function runEscape(chunk: number) {
+    const sim = new World();
+    const cradle = sim.body;
+    const rp = cradle.radius + 400e3;
+    const ra = 2 * (cradle.soiRadius as number); // apoapsis well beyond the SOI
+    sim.ship.elements = {
+      a: (rp + ra) / 2,
+      e: (ra - rp) / (ra + rp),
+      i: deg(51.6),
+      raan: 0,
+      argp: 0,
+      meanAnomalyAtEpoch: 0, // start at periapsis
+      epoch: 0,
+    };
+    sim.recomputeNextSoi();
+    const total = (sim.nextSoi?.time ?? 0) + 50_000; // enough to cross the boundary
+    let elapsed = 0;
+    while (elapsed < total) {
+      const c = Math.min(chunk, total - elapsed);
+      sim.advance(c); // rate = 1 ⇒ simDelta = c
+      elapsed += c;
+    }
+    return { body: sim.centralBodyId, time: sim.time, root: shipRootPos(sim) };
+  }
+  const fine = runEscape(50); // many small ticks
+  const coarse = runEscape(20_000); // few huge ticks — must reach the SAME boundary
+  const escaped = fine.body === "sol" && coarse.body === "sol";
+  const dRoot = Math.hypot(fine.root.x - coarse.root.x, fine.root.y - coarse.root.y, fine.root.z - coarse.root.z);
+  const ok = escaped && Math.abs(fine.time - coarse.time) < 1e-6 && dRoot < 1; // boundary crossing is chunk-independent
+  console.log(
+    `${ok ? "PASS" : "FAIL"}  Cradle→${fine.body}; crossing deterministic across tick size (Δroot ${dRoot.toExponential(1)} m)`,
+  );
+  if (!ok) failures++;
+}
+
+console.log("\n== SOI: capture — a heliocentric approach is caught by Vesper's SOI ==");
+{
+  const sim = new World();
+  sim.centralBodyId = "sol"; // pretend we've already escaped Cradle and are cruising
+  const vesper = sim.system.body("vesper");
+  const vState = sim.system.bodyStateInRoot("vesper", 0);
+  const vp = vState.position;
+  const vpMag = Math.hypot(vp.x, vp.y, vp.z);
+  const u = { x: vp.x / vpMag, y: vp.y / vpMag, z: vp.z / vpMag }; // Sun→Vesper direction
+  const off = (vesper.soiRadius as number) * 1.5; // start just outside the SOI
+  const shipPos = { x: vp.x + u.x * off, y: vp.y + u.y * off, z: vp.z + u.z * off };
+  const vIn = 200; // m/s closing toward Vesper
+  const shipVel = { x: vState.velocity.x - u.x * vIn, y: vState.velocity.y - u.y * vIn, z: vState.velocity.z - u.z * vIn };
+  sim.ship.elements = stateToElements(shipPos, shipVel, sim.body, 0);
+  sim.time = 0;
+  sim.recomputeNextSoi();
+  const predicted = sim.nextSoi?.toBodyId;
+  let t = 0;
+  while (sim.centralBodyId === "sol" && t < 1e7) {
+    sim.advance(500);
+    t += 500;
+  }
+  // After capture the ship is bound to Vesper, inside its SOI.
+  const inSoi = propagate(sim.ship.elements, sim.body, sim.time).radius < (vesper.soiRadius as number) + 1;
+  const ok = predicted === "vesper" && sim.centralBodyId === "vesper" && inSoi;
+  console.log(`${ok ? "PASS" : "FAIL"}  Sol→${sim.centralBodyId} (predicted ${predicted}); inside SOI=${inSoi}`);
+  if (!ok) failures++;
+}
+
+console.log("\n== Porkchop: an interplanetary transfer window to Vesper is found and is feasible ==");
+{
+  const sim = new World();
+  sim.centralBodyId = "sol"; // as if we've escaped Cradle and are heliocentric
+  sim.ship.elements = { a: 1.496e11, e: 0.02, i: 0, raan: 0, argp: 0, meanAnomalyAtEpoch: 0, epoch: 0 }; // ~1 AU
+  sim.recomputeNextSoi();
+  const vesperIdx = listTargets(sim).findIndex((t) => t.name === "Vesper");
+  selectTarget(sim, vesperIdx);
+  const plan = planTransferWindow(sim); // porkchop search over departure × TOF
+  const budget = getShip(sim).dvBudget;
+  const ok = plan != null && plan.feasible && plan.dvMag < budget && plan.nodes.length >= 2;
+  console.log(
+    plan
+      ? `${ok ? "PASS" : "FAIL"}  window: Δv ${(plan.dvMag / 1000).toFixed(2)} km/s (budget ${(budget / 1000).toFixed(1)}), depart +${((plan.nodes[0].time - sim.time) / 86400).toFixed(0)} d, feasible=${plan.feasible}`
+      : "FAIL  no transfer window found",
+  );
+  if (!ok) failures++;
+}
+
+console.log("\n== Δv: the interplanetary-class ship can burn to escape velocity with fuel to spare ==");
+{
+  const sim = new World();
+  const budget = getShip(sim).dvBudget; // remaining Δv budget [m/s]
+  sim.attitudeMode = "prograde";
+  for (let t = 0; t < 40; t += 0.5) sim.advance(0.5); // settle pointing prograde
+  sim.throttle = 1; // sustained prograde burn raises the orbit until it goes hyperbolic
+  let t = 0;
+  while (t < 1500 && getOrbit(sim).e < 1) {
+    sim.advance(0.5);
+    t += 0.5;
+  }
+  const e = getOrbit(sim).e;
+  const ok = budget > 10_000 && e >= 1 && sim.ship.propellantKg > 0; // escaped, didn't run dry
+  console.log(
+    `${ok ? "PASS" : "FAIL"}  budget ${(budget / 1000).toFixed(1)} km/s; burned to e=${e.toFixed(2)} (escape) with ${(sim.ship.propellantKg / 1000).toFixed(1)} t left`,
+  );
+  if (!ok) failures++;
 }
 
 console.log(failures === 0 ? "\nAll checks passed." : `\n${failures} check(s) FAILED.`);

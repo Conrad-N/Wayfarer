@@ -11,7 +11,7 @@ start and never needs a rewrite.
 
 ---
 
-## Status at a glance *(updated 2026-06-22)*
+## Status at a glance *(updated 2026-06-23)*
 
 - **Milestone 0 — ✅ done.** Orbit, nav readout, scope, and the LLM ship-AI all ship
   and pass the numeric acceptance test (`npm run check`).
@@ -22,11 +22,16 @@ start and never needs a rewrite.
   autopilot) — not the impulsive Δv this milestone first scoped. The negotiation loop
   exists as a *mechanism* (the AI re-calls the solvers and re-presents) but there is
   no constraint-driven objective solver yet ("minimize fuel" / "arrive by T").
-- **Milestone 2 — 🟡 partial.** The **single-body rendezvous & docking** slice is
-  already done (Lambert intercept, match-velocity, guided midcourse trim, a target
-  selector, and a dock latch). The rest of M2 — **multiple bodies, patched conics,
-  SOI transitions, inter-body transfers** — is **not started** (the sim is still a
-  single central body). Docking itself is an MVP stub (latch only, no mechanics).
+- **Milestone 2 — ✅ done.** The **single-body rendezvous & docking** slice shipped
+  earlier (Lambert intercept, match-velocity, guided midcourse trim, target selector,
+  dock latch). The **multi-body leap is in**: a **heliocentric patched-conic sim**
+  (Sol + Cradle + Vesper), **hyperbolic propagation**, and **deterministic SOI
+  transitions** (escape/capture, warp auto-limit, jump-to-SOI). Interplanetary travel
+  is a **two-step flow** (escape to the Sol frame, then intercept a co-frame planet),
+  now served by an **auto transfer-window (porkchop) planner** that searches departure ×
+  TOF. The ship is an **interplanetary-class drive** (~12 km/s budget) so the missions
+  are actually flyable, and a **SYSTEM MAP** view draws the heliocentric layout +
+  trajectory. Docking itself is still an MVP stub (latch only, no mechanics).
 - **Milestone 3 — 🟡 early slice.** A **cargo + docked-transfer + station-inventory**
   MVP exists (two-limit mass/volume hold; inert cargo mass correctly shrinks the Δv
   budget). Ship-building/refit, mining, and the market/credits are **not started**.
@@ -88,20 +93,29 @@ The signature interaction comes online.
 
 ---
 
-## Milestone 2 — A bigger sky — 🟡 partial
+## Milestone 2 — A bigger sky — ✅ done
 
-- ⬜ Multiple bodies; patched conics; sphere-of-influence transitions. *(Not started —
-  the sim is still a single central body.)*
-- ⬜ Transfer planning between bodies. *(Not started — needs multi-body first.)*
-- ✅ **Rendezvous & docking** — matching position and velocity with a target. Done in
-  the single-body sim: Lambert intercept, match-velocity, guided/closed-loop
-  midcourse trim, a target selector over multiple co-planar targets, and a dock latch.
-  *Docking is an MVP stub (latch only, no mechanics — see the docking TODO).*
-- 🟡 The orbit **scope** display matures (see [04-aesthetic.md](04-aesthetic.md)). A
-  working scope exists; still basic.
+- ✅ **Multiple bodies; patched conics; sphere-of-influence transitions.** A
+  heliocentric system (Sol + Cradle + Vesper) with a body hierarchy
+  ([src/sim/system.ts](../src/sim/system.ts)), analytic per-patch propagation,
+  **hyperbolic** orbits ([src/sim/orbit.ts](../src/sim/orbit.ts)), and **deterministic
+  SOI handoffs** in the coast path ([src/sim/world.ts](../src/sim/world.ts)) — escape to
+  the parent, capture into a child, warp auto-limit at the boundary, and jump-to-SOI.
+- ✅ **Transfer planning between bodies.** A **two-step flow** (escape your SOI → select
+  the destination planet, now co-frame → intercept), with an **auto transfer-window
+  (porkchop) planner** ([src/sim/solvers.ts](../src/sim/solvers.ts) `suggestTransferWindow`)
+  that searches departure × TOF for the cheapest window. Solver tools are co-frame-gated
+  with a clear "escape first" error. The default ship is an **interplanetary-class drive**
+  (~12 km/s) so these trips are flyable.
+- ✅ **Rendezvous & docking** — Lambert intercept, match-velocity, guided/closed-loop
+  midcourse trim, a target selector, and a dock latch. *Docking is an MVP stub (latch
+  only, no mechanics — see the docking TODO).*
+- ✅ The orbit **scope** renders hyperbolic arcs + the **SOI ring**, the NAV readout shows
+  the current body + a handoff countdown, and a new **SYSTEM MAP** view draws the
+  heliocentric layout (orbit rings, SOI circles, the ship blip).
 
-> The rendezvous slice shipped **without** multi-body, so it arrived in the M1 era.
-> What remains to call M2 "done" is the multi-body / patched-conic / SOI work.
+> The remaining flavour work (a fuller porkchop *plot*, richer map art) is polish, not
+> milestone scope. The patched-conic backbone is in, deterministic, and flyable end-to-end.
 
 ---
 

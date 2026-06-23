@@ -4,6 +4,7 @@ import type { World } from "../sim/world";
 import {
   getClock,
   getCentralBody,
+  getSystem,
   getShip,
   getOrbit,
   predictOrbit,
@@ -16,6 +17,7 @@ import {
   planSetApsis,
   planHohmann,
   planIntercept,
+  planTransferWindow,
   planMatchVelocity,
   dock,
   getCargo,
@@ -23,6 +25,7 @@ import {
   transferCargo,
   executeManeuver,
   jumpToNextNode,
+  jumpToNextSoi,
   setThrottle,
   setAttitudeMode,
   setExecutor,
@@ -89,13 +92,23 @@ export const DEFAULT_PERSONA = PERSONAS[0].id;
 
 // Shared behavioral contract — appended after whichever persona voice is active.
 const BEHAVIOR = `You have instruments, not intuition. To answer anything about the ship's orbit,
-time, or the planet, CALL YOUR TOOLS and reason from the returned numbers. Never
-estimate orbital quantities in your head.
+time, or the bodies around you, CALL YOUR TOOLS and reason from the returned numbers.
+Never estimate orbital quantities in your head.
 
 Returned values are SI: meters, seconds, radians. Present them in operator-friendly
 units (km, minutes, degrees) and say which. Always distinguish ALTITUDE (height
-above the surface) from RADIUS (distance from the planet's center). Use get_ship for
+above the surface) from RADIUS (distance from the body's center). Use get_ship for
 mass, propellant, and remaining Δv budget.
+
+The sim is PATCHED CONICS: you orbit exactly ONE body at a time (its sphere of influence),
+and your orbit is measured relative to THAT body. get_central_body tells you which body you're
+in and its SOI radius; get_system lists every body (the star and its planets) and the next SOI
+handoff ahead. Your central body CHANGES when you leave one SOI and enter another — so an
+altitude only means something against the current body. To go to another PLANET it's a two-step
+trip: (1) burn to ESCAPE your current body's SOI (raise your orbit until it leaves the SOI — you
+become hyperbolic), then once you're in the STAR's frame, (2) select that planet (it's in
+list_targets) and solve_intercept it. Use jump_to_next_soi to skip the long coast to a boundary;
+warp auto-drops to 1× as you approach a handoff.
 
 When DOCKED you can trade cargo: get_station lists the dock's hold, get_cargo lists
 yours, transfer_cargo moves it. Cargo is inert mass — loading it LOWERS your Δv budget,
@@ -114,9 +127,10 @@ For COMMON goals, use a SOLVER — it computes the exact burn in one call (faste
   • solve_set_apsis(which, altitude) — set apoapsis or periapsis to a target altitude.
   • solve_hohmann(altitude) — two-burn transfer to a circular orbit at a target altitude.
   • solve_intercept(tof?) — RENDEZVOUS with the SELECTED target (get_target). Call it with NO
-    time of flight to auto-pick the cheapest; pass one only to hand-tune. There are several
-    co-planar targets — use list_targets to see them and select_target to switch before solving
-    if the operator names a different one.
+    time of flight to auto-pick the cheapest; pass one only to hand-tune. Use list_targets +
+    select_target to choose. NOTE: intercept needs a CO-FRAME target — get_target.sameFrame must
+    be true (the target orbits the same body you do). A planet in another SOI shows sameFrame:false;
+    escape your current body first, then it becomes interceptable.
   • solve_match_velocity — stop alongside the target (terminal approach). The intercept is
     closed-loop (it flies midcourse trims + a live velocity match), so ONE intercept usually
     lands inside the dock envelope; use match only to trim residual drift, then dock.
@@ -158,9 +172,21 @@ function shipTools(world: World) {
       ),
       tool(
         "get_central_body",
-        "Physical parameters of the planet being orbited (mu, radius, name).",
+        "Physical parameters of the body you are CURRENTLY orbiting (id, name, mu, radius), its " +
+          "parent body, and its sphere-of-influence radius (null for the star). Which body this " +
+          "is changes as you cross SOI boundaries — always check it before reasoning about altitude.",
         {},
         async () => reply(getCentralBody(world)),
+        readonly,
+      ),
+      tool(
+        "get_system",
+        "The whole solar system (patched conics): every body — the star and its planets — with " +
+          "mu, radius, sphere-of-influence radius, parent, and current heliocentric position; " +
+          "plus which body you currently orbit and the next SOI handoff ahead (escape or capture) " +
+          "with its time. Use to plan interplanetary travel and answer 'what bodies are out there'.",
+        {},
+        async () => reply(getSystem(world)),
         readonly,
       ),
       tool(
@@ -307,15 +333,38 @@ function shipTools(world: World) {
             .describe("Max full revolutions the transfer may make (default 4). 0 forces a direct arc; more loops can find a cheaper transfer for a poorly-phased target."),
         },
         async (args) =>
-          reply(planIntercept(world, args.tof_s, args.max_revs) ?? { error: "no transfer solution for the current target" }),
+          reply(
+            planIntercept(world, args.tof_s, args.max_revs) ??
+              (getTarget(world).sameFrame
+                ? { error: "no transfer solution — try a different time of flight" }
+                : { error: "target is in another body's sphere of influence — escape your current SOI first, then intercept" }),
+          ),
+      ),
+      tool(
+        "solve_transfer_window",
+        "Plan an INTERPLANETARY transfer to the SELECTED planet (must be co-frame — escape your " +
+          "current body's SOI first). A porkchop search over departure time AND time of flight " +
+          "finds the cheapest window (solve_intercept's auto-TOF only sweeps minutes and can't " +
+          "wait out a planet's months-long phasing). Returns a guided intercept departing at the " +
+          "window. Proposes only; does NOT fire. The departure may be days/months out — relay it " +
+          "and use jump_to_next_node to warp there after the operator confirms.",
+        {},
+        async () =>
+          reply(
+            planTransferWindow(world) ??
+              (getTarget(world).sameFrame
+                ? { error: "no transfer window found within the search horizon" }
+                : { error: "target is in another body's sphere of influence — escape your current SOI first" }),
+          ),
       ),
       tool(
         "solve_match_velocity",
         "Plan a single burn that KILLS the relative velocity to the target (stop alongside it). " +
           "Exact, computed live. Use on terminal approach after an intercept gets you close. " +
-          "Proposes only; does NOT fire.",
+          "Proposes only; does NOT fire. Unavailable for a target in another body's SOI.",
         {},
-        async () => reply(planMatchVelocity(world)),
+        async () =>
+          reply(planMatchVelocity(world) ?? { error: "target is in another body's sphere of influence — escape your current SOI first" }),
       ),
       tool(
         "dock",
@@ -374,6 +423,14 @@ function shipTools(world: World) {
         async () => reply(jumpToNextNode(world)),
       ),
       tool(
+        "jump_to_next_soi",
+        "Warp to just before the next sphere-of-influence handoff (escaping the current body, or " +
+          "being captured by another) so it's crossed at 1×. Use after an escape/transfer burn to " +
+          "skip the long coast to the boundary. Returns an error if no handoff is ahead.",
+        {},
+        async () => reply(jumpToNextSoi(world)),
+      ),
+      tool(
         "set_throttle",
         "Set engine throttle 0..1 (hand-flying; releases the autopilot). Combine with " +
           "set_attitude_mode to burn in a chosen direction.",
@@ -406,6 +463,7 @@ function shipTools(world: World) {
 const ALLOWED_TOOLS = [
   "mcp__ship__get_clock",
   "mcp__ship__get_central_body",
+  "mcp__ship__get_system",
   "mcp__ship__get_ship",
   "mcp__ship__get_flight",
   "mcp__ship__get_orbit",
@@ -418,6 +476,7 @@ const ALLOWED_TOOLS = [
   "mcp__ship__solve_set_apsis",
   "mcp__ship__solve_hohmann",
   "mcp__ship__solve_intercept",
+  "mcp__ship__solve_transfer_window",
   "mcp__ship__solve_match_velocity",
   "mcp__ship__dock",
   "mcp__ship__get_cargo",
@@ -425,6 +484,7 @@ const ALLOWED_TOOLS = [
   "mcp__ship__transfer_cargo",
   "mcp__ship__execute_maneuver",
   "mcp__ship__jump_to_next_node",
+  "mcp__ship__jump_to_next_soi",
   "mcp__ship__set_throttle",
   "mcp__ship__set_attitude_mode",
   "mcp__ship__set_executor",

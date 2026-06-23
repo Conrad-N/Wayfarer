@@ -1,4 +1,4 @@
-import type { CentralBody, OrbitalElements, OrbitState, Vec3 } from "./types";
+import type { OrbitalElements, OrbitState, Vec3 } from "./types";
 import type { ManeuverPlan } from "./maneuver";
 import { stateToElements, dvBudget as dvBudgetOf } from "./maneuver";
 import {
@@ -18,8 +18,9 @@ import {
   nodeWorldDir,
   worldDvToLocal,
 } from "./flight";
-import { CRADLE, circularOrbit, deg } from "./constants";
-import { propagate } from "./orbit";
+import { defaultSystem, circularOrbit, deg, VESPER } from "./constants";
+import { type Body, System } from "./system";
+import { propagate, nextEscapeTime } from "./orbit";
 import { bestTransfer } from "./solvers";
 
 // Fixed integration substep for powered flight & rotation (docs/10 §3). Determinism
@@ -45,7 +46,11 @@ export interface CargoItem {
 
 export interface TargetDef {
   name: string;
-  kind: "station" | "depot" | "probe";
+  kind: "station" | "depot" | "probe" | "planet";
+  // Which body this target orbits — its `elements` are relative to THIS body (patched conics,
+  // docs/08). Stations orbit Cradle; a planet "target" orbits Sol. Relative telemetry resolves
+  // both ship and target to the root frame, but the Lambert solvers need a co-frame target.
+  bodyId: string;
   elements: OrbitalElements;
   // What this target will trade across the dock. Stations/depots stock goods; a probe
   // has none (docking it offers no cargo services). Absent = no hold to transfer with.
@@ -74,10 +79,20 @@ export interface ShipDef {
 // (propagated analytically), and while thrusting it's the integrated state vector
 // (docs/10 — the hybrid). Clients never compute truth; they read telemetry.
 export class World {
-  body: CentralBody;
+  // The whole body hierarchy (docs/05 §M2 — patched conics). The ship is bound to exactly
+  // one body's sphere of influence at a time; `centralBodyId` is which, and `ship.elements`
+  // are Keplerian elements relative to THAT body. `body` (the current central body) is a
+  // getter so every existing call site reads the active body unchanged.
+  system: System;
+  centralBodyId: string;
   ship: ShipDef;
   time: number; // sim-time [s]
   rate: number; // time multiplier (warp; full design in docs/08)
+
+  /** The body the ship is currently orbiting — the frame `ship.elements` live in. */
+  get body(): Body {
+    return this.system.body(this.centralBodyId);
+  }
 
   // Attitude (rigid body, docs/10 §4): orientation + body-frame angular velocity.
   orientation: Quat;
@@ -110,21 +125,33 @@ export class World {
   selectedTarget: number;
   dockedTo: number | null;
 
+  // Patched conics (docs/08 Part A): the next sphere-of-influence handoff the ship will make
+  // on its current conic — an escape to the parent body or a capture into a child. Cached
+  // (recomputed only when the elements or central body change) so warp can jump straight to
+  // it and the coast can clamp to it. null = no handoff ahead (a bound orbit with no moons).
+  nextSoi: { time: number; toBodyId: string } | null;
+
   constructor() {
-    this.body = CRADLE;
+    this.system = defaultSystem();
+    this.centralBodyId = "cradle"; // the ship starts in low orbit around Cradle
     this.ship = {
       id: "SHIP-01",
       name: "Wayfarer",
+      // Interplanetary-class main drive (an advanced high-Isp thermal rocket). Tuned so the
+      // ship can actually fly the patched-conic missions M2 enables: escaping Cradle's SOI is
+      // ~3.2 km/s and a Cradle→Vesper trip + capture is ~8 km/s, so the old ~1.27 km/s budget
+      // couldn't leave home. budget = Isp·g0·ln((dry+prop)/dry) = 900·9.807·ln(32/8) ≈ 12.2 km/s.
+      // (A fixed default until M3 ship-building lets the hull/engine/tankage be chosen.)
       dryMassKg: 8000,
-      propellantKg: 4000, // ~1.27 km/s of Δv at Isp 320 s
-      ispSeconds: 320,
-      thrustN: 50_000, // ~26 s for a 109 m/s burn at 12 t (docs/10 §11)
-      inertia: { ix: 14_000, iy: 107_000, iz: 107_000 }, // ≈10 m × 3 m, 12 t cylinder
+      propellantKg: 24000, // ~12.2 km/s of Δv at Isp 900 s (escape + transfer + capture + margin)
+      ispSeconds: 900,
+      thrustN: 250_000, // ~7.8 m/s² at 32 t wet → burns stay watchable (escape ≈ 6 min at 1×)
+      inertia: { ix: 14_000, iy: 107_000, iz: 107_000 }, // ≈10 m × 3 m cylinder (attitude only)
       maxTorqueNm: 5_500, // ~16 s for a 180° flip
       // Canonical 400 km circular orbit, inclined 51.6° (ISS-like) so the sub-ship
       // latitude sweeps ±51.6° and the AI can answer "when am I next over the pole?"
       // (docs/07 §8, criterion 5). Inclination leaves period, speed, altitude alone.
-      elements: circularOrbit(CRADLE, 400e3, deg(51.6)),
+      elements: circularOrbit(this.body, 400e3, deg(51.6)),
       // Starts EMPTY on purpose: cargo 0 ⇒ structural mass = dry mass, so the tuned
       // Δv budget and the check-sim rendezvous margins are unchanged. Load at a station.
       cargoCapacityKg: 8000,
@@ -164,6 +191,7 @@ export class World {
       {
         name: "Kestrel Station",
         kind: "station",
+        bodyId: "cradle",
         elements: ring(450, 20),
         inventory: [
           { id: "water", name: "Water", massKg: 250, volumeM3: 0.3, qty: 8 },
@@ -175,6 +203,7 @@ export class World {
       {
         name: "Depot Six",
         kind: "depot",
+        bodyId: "cradle",
         elements: ring(520, 75),
         inventory: [
           { id: "ore", name: "Ore", massKg: 500, volumeM3: 0.22, qty: 10 },
@@ -183,10 +212,16 @@ export class World {
         ],
       },
       // A probe has no hold — docking it offers no cargo services (a deliberate edge case).
-      { name: "Probe Ariel", kind: "probe", elements: ring(360, 325) },
+      { name: "Probe Ariel", kind: "probe", bodyId: "cradle", elements: ring(360, 325) },
+      // The other planet, as a heliocentric destination (it orbits Sol, not Cradle). You can
+      // see its range from anywhere, but a Lambert intercept needs you co-frame — escape
+      // Cradle's SOI first, then it's reachable in the Sol frame (the two-step transfer).
+      { name: "Vesper", kind: "planet", bodyId: "sol", elements: VESPER.elements as OrbitalElements },
     ];
     this.selectedTarget = 0;
     this.dockedTo = null;
+    this.nextSoi = null;
+    this.recomputeNextSoi();
   }
 
   /** The active target's definition (name/kind/elements). */
@@ -194,9 +229,33 @@ export class World {
     return this.targets[this.selectedTarget] ?? this.targets[0];
   }
 
-  /** The active rendezvous target's orbital state right now. */
+  /** The active rendezvous target's orbital state right now, about ITS OWN body. */
   targetState(): OrbitState {
-    return propagate(this.selectedTargetDef().elements, this.body, this.time);
+    const def = this.selectedTargetDef();
+    return propagate(def.elements, this.system.body(def.bodyId), this.time);
+  }
+
+  /** The ship's state in the root (heliocentric) frame — its body's root state plus its
+   *  local state. Works while coasting or under power (via `currentRV`). */
+  shipRootState(): { position: Vec3; velocity: Vec3 } {
+    const { r, v } = this.currentRV();
+    const base = this.system.bodyStateInRoot(this.centralBodyId, this.time);
+    return {
+      position: { x: base.position.x + r.x, y: base.position.y + r.y, z: base.position.z + r.z },
+      velocity: { x: base.velocity.x + v.x, y: base.velocity.y + v.y, z: base.velocity.z + v.z },
+    };
+  }
+
+  /** A target's state in the root frame — its body's root state plus its local orbit. Lets
+   *  range/closing-speed to a target in another body's SOI be computed correctly (relative
+   *  vectors are translation-invariant, so bearings are frame-independent). */
+  targetRootState(def: TargetDef): { position: Vec3; velocity: Vec3 } {
+    const base = this.system.bodyStateInRoot(def.bodyId, this.time);
+    const s = propagate(def.elements, this.system.body(def.bodyId), this.time);
+    return {
+      position: { x: base.position.x + s.position.x, y: base.position.y + s.position.y, z: base.position.z + s.position.z },
+      velocity: { x: base.velocity.x + s.velocity.x, y: base.velocity.y + s.velocity.y, z: base.velocity.z + s.velocity.z },
+    };
   }
 
   /** Advance sim-time by `realDtSeconds` of wall-clock × warp. The executor (if on)
@@ -206,14 +265,18 @@ export class World {
     // Let the executor (if on) decide throttle/attitude/warp-clamp from the CURRENT
     // sim-time before we pick a stepping regime.
     if (this.executorOn) this.driveExecutor();
+    // Auto-limit warp approaching an SOI handoff (docs/08) so the player isn't blasted
+    // through a capture/escape at high warp. The coast still lands exactly on the boundary
+    // (it clamps to nextSoi.time); this is the UX drop-to-1× the executor does for burns.
+    this.limitWarpForSoi();
     const simDelta = realDtSeconds * this.rate;
 
     // Fast path: pure coast with nothing time-critical pending (no live burn, and the
     // executor isn't inside a node's burn window). Orbit propagation is analytic, so this
-    // is one exact jump — it's what keeps warp cheap.
+    // is one exact jump — split only at SOI handoffs, which keeps warp cheap.
     const poweredNow = this.throttle > 0 && this.ship.propellantKg > 0;
     if (!poweredNow && !this.poweredState && !this.inBurnWindow) {
-      this.stepCoast(simDelta);
+      this.stepCoastWithSoi(simDelta);
       return;
     }
 
@@ -368,6 +431,143 @@ export class World {
     return true;
   }
 
+  // --- patched conics: SOI transitions (docs/08 Part A) ----------------------
+
+  // How close (sim-seconds) to a handoff before warp is forced to 1×, and how far before
+  // it `jumpToNextSoi` parks the ship so the boundary is crossed under control.
+  private static readonly SOI_LEAD = 120; // s
+  private static readonly CAPTURE_SAMPLES = 2000; // capture-scan resolution per recompute
+
+  /** Recompute the cached next SOI handoff from the live conic + central body. Cheap and
+   *  occasional — called whenever the elements or the central body change. */
+  recomputeNextSoi(): void {
+    this.nextSoi = this.computeNextSoi();
+  }
+
+  /** The earliest SOI handoff strictly after now: an escape (radius leaves the current
+   *  body's SOI → its parent) or a capture (the ship dips inside a child body's SOI). */
+  private computeNextSoi(): { time: number; toBodyId: string } | null {
+    const cur = this.body;
+    let best: { time: number; toBodyId: string } | null = null;
+
+    // Escape — analytic. Only if the current body has a parent and a finite SOI.
+    if (cur.parentId && cur.soiRadius != null) {
+      const t = nextEscapeTime(this.ship.elements, cur, this.time, cur.soiRadius);
+      if (t != null && t > this.time) best = { time: t, toBodyId: cur.parentId };
+    }
+
+    // Capture — scan the relative distance to each child up to the escape time (after which
+    // the conic changes), bounded by a horizon. Children of the current body only.
+    const horizonEnd = best ? best.time : this.time + this.captureHorizon();
+    for (const child of this.system.children(this.centralBodyId)) {
+      if (child.soiRadius == null) continue;
+      const t = this.nextCaptureTime(child, this.time, horizonEnd);
+      if (t != null && (best == null || t < best.time)) best = { time: t, toBodyId: child.id };
+    }
+    return best;
+  }
+
+  /** Scan horizon for a capture when there's no escape to bound it: one orbital period for a
+   *  bound orbit (a closest approach recurs within it), else a fixed cap for an open arc. */
+  private captureHorizon(): number {
+    const o = propagate(this.ship.elements, this.body, this.time);
+    return Number.isFinite(o.period) ? o.period : 5e8;
+  }
+
+  /** The next sim-time in (fromT, toT] at which the ship enters `child`'s SOI — the first
+   *  downward crossing of |r_ship − r_child| through the SOI radius, refined by bisection.
+   *  Both bodies are analytic in the current frame, so this is deterministic sampling. */
+  private nextCaptureTime(child: Body, fromT: number, toT: number): number | null {
+    const soi = child.soiRadius!;
+    const span = toT - fromT;
+    if (span <= 0) return null;
+    const dt = span / World.CAPTURE_SAMPLES;
+    const dist = (t: number): number => {
+      const sp = propagate(this.ship.elements, this.body, t).position;
+      const cp = this.system.relativeState(this.centralBodyId, child.id, t).position; // child in current frame
+      return Math.hypot(sp.x - cp.x, sp.y - cp.y, sp.z - cp.z);
+    };
+    let dPrev = dist(fromT);
+    for (let k = 1; k <= World.CAPTURE_SAMPLES; k++) {
+      const t = fromT + k * dt;
+      const dk = dist(t);
+      if (dPrev >= soi && dk < soi) {
+        // Bracketed a downward crossing in (t−dt, t) — bisect to the boundary.
+        let lo = t - dt;
+        let hi = t;
+        for (let j = 0; j < 50; j++) {
+          const mid = (lo + hi) / 2;
+          if (dist(mid) < soi) hi = mid;
+          else lo = mid;
+        }
+        return hi;
+      }
+      dPrev = dk;
+    }
+    return null;
+  }
+
+  /** Hand the ship off to a new central body at sim-time `t` (patched-conic boundary). The
+   *  state vector is re-expressed in the new body's (inertial, translated) frame and refit to
+   *  elements; the small position/velocity is continuous, the elements are not (docs/08). */
+  transitionTo(newBodyId: string, t: number): void {
+    const s = propagate(this.ship.elements, this.body, t); // state in the current frame
+    const rel = this.system.relativeState(newBodyId, this.centralBodyId, t); // current body in the new frame
+    const r: Vec3 = { x: rel.position.x + s.position.x, y: rel.position.y + s.position.y, z: rel.position.z + s.position.z };
+    const v: Vec3 = { x: rel.velocity.x + s.velocity.x, y: rel.velocity.y + s.velocity.y, z: rel.velocity.z + s.velocity.z };
+    this.centralBodyId = newBodyId;
+    this.ship.elements = stateToElements(r, v, this.body, t);
+    this.time = t;
+    this.recomputeNextSoi();
+  }
+
+  /** Drop warp to 1× within SOI_LEAD of the next handoff (coast only; the executor owns warp
+   *  near burns). Telemetry via `warpAutoLimited`. */
+  private limitWarpForSoi(): void {
+    if (this.executorOn || this.inBurnWindow || this.poweredState) return;
+    if (this.nextSoi && this.nextSoi.time - this.time <= World.SOI_LEAD) {
+      if (this.rate > 1) {
+        this.rate = 1;
+        this.warpAutoLimited = true;
+      }
+    } else if (this.warpAutoLimited) {
+      this.warpAutoLimited = false; // cleared once past/away from the boundary
+    }
+  }
+
+  /** Jump-to-event: analytically warp to just before the next SOI handoff so it's crossed
+   *  under control (mirrors `jumpToNextNode`). Returns false if no handoff is queued. */
+  jumpToNextSoi(): boolean {
+    if (!this.nextSoi) return false;
+    const arrive = this.nextSoi.time - 25; // 25 s lead at 1× to see the boundary approach
+    if (arrive > this.time) this.time = arrive; // pure analytic coast — elements unchanged till the boundary
+    return true;
+  }
+
+  /** Coast `simDelta`, but stop exactly at any SOI handoff inside the interval, perform the
+   *  handoff, and continue with the remainder — so a single high-warp tick can't skip a
+   *  boundary. Determinism: the boundary time is cached/analytic, independent of chunking. */
+  private stepCoastWithSoi(simDelta: number): void {
+    let remaining = simDelta;
+    let guard = 0;
+    while (remaining > 0 && guard++ < 64) {
+      const soi = this.nextSoi;
+      if (soi && soi.time <= this.time + remaining + 1e-9) {
+        const dtTo = soi.time - this.time;
+        if (dtTo > 0) {
+          this.stepCoast(dtTo);
+          remaining -= dtTo;
+        }
+        this.transitionTo(soi.toBodyId, this.time); // recomputes nextSoi
+        // If the recompute didn't advance the boundary, bail to avoid a stall.
+        if (this.nextSoi && this.nextSoi.time <= this.time + 1e-9) break;
+      } else {
+        this.stepCoast(remaining);
+        remaining = 0;
+      }
+    }
+  }
+
   // --- hybrid plumbing -------------------------------------------------------
 
   private seedPowered(): void {
@@ -383,6 +583,7 @@ export class World {
     const ps = this.poweredState!;
     this.ship.elements = stateToElements(ps.r, ps.v, this.body, this.time);
     this.poweredState = null;
+    this.recomputeNextSoi(); // the burn changed the conic — the next handoff may have moved
     // Any un-integrated sim-time stays in physAccum and is consumed as coast by advance()'s
     // loop / remainder drain — no separate carry needed.
   }
@@ -455,9 +656,12 @@ export class World {
     if (mode === "kill") return thrustAxisWorld(this.orientation);
     const { r, v } = this.currentRV();
     if (mode === "target" || mode === "antiTarget") {
-      // Line-of-sight to the selected target (relative position), not an orbital axis.
-      const tp = this.targetState().position;
-      const los = { x: tp.x - r.x, y: tp.y - r.y, z: tp.z - r.z };
+      // Line-of-sight to the selected target (relative position), not an orbital axis. Computed
+      // in the root frame so it's correct even when the target orbits a different body (the
+      // relative vector — hence the bearing — is the same in any non-rotating frame).
+      const tp = this.targetRootState(this.selectedTargetDef()).position;
+      const sp = this.shipRootState().position;
+      const los = { x: tp.x - sp.x, y: tp.y - sp.y, z: tp.z - sp.z };
       const m = Math.hypot(los.x, los.y, los.z);
       if (m < 1e-6) return null; // coincident — nothing to point at
       const s = (mode === "antiTarget" ? -1 : 1) / m;

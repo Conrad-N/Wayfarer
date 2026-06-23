@@ -8,6 +8,7 @@ import {
   solveIntercept,
   solveMatchVelocity,
   suggestInterceptTof,
+  suggestTransferWindow,
   type Apsis,
 } from "./solvers";
 import type { Vec3 } from "./types";
@@ -25,12 +26,41 @@ export function getClock(w: World) {
 }
 
 export function getCentralBody(w: World) {
+  const b = w.body;
+  const parent = b.parentId ? w.system.body(b.parentId) : null;
   return {
-    name: w.body.name,
-    mu: w.body.mu,
-    radius: w.body.radius,
-    rotationPeriod: w.body.rotationPeriod,
+    id: b.id,
+    name: b.name,
+    mu: b.mu,
+    radius: b.radius,
+    rotationPeriod: b.rotationPeriod,
+    parentId: b.parentId,
+    parentName: parent?.name ?? null,
+    soiRadius: b.soiRadius, // null for the root star (infinite SOI)
   };
+}
+
+/** The whole body hierarchy for the scope/AI (patched conics, docs/05 §M2): every body with
+ *  its physical parameters, SOI, parent, and current position in the root (heliocentric)
+ *  frame; plus which body the ship currently orbits and the next SOI handoff ahead. */
+export function getSystem(w: World) {
+  const bodies = w.system.all().map((b) => {
+    const root = w.system.bodyStateInRoot(b.id, w.time).position;
+    return {
+      id: b.id,
+      name: b.name,
+      mu: b.mu,
+      radius: b.radius,
+      parentId: b.parentId,
+      soiRadius: b.soiRadius,
+      orbitRadiusM: b.elements ? b.elements.a : null, // ring radius for the system map (null = root)
+      rootPosition: [root.x, root.y, root.z] as [number, number, number],
+    };
+  });
+  // The ship's own position in the root frame, so the map can plot the blip + draw its body.
+  const sr = w.shipRootState().position;
+  const ship = { bodyId: w.centralBodyId, rootPosition: [sr.x, sr.y, sr.z] as [number, number, number] };
+  return { centralBodyId: w.centralBodyId, bodies, ship, nextSoi: w.nextSoi };
 }
 
 export function getShip(w: World) {
@@ -79,20 +109,29 @@ const DOCK_REL_SPEED = 5; // m/s
  *  to it. The target it reports is whichever one is currently selected (selectTarget). */
 export function getTarget(w: World) {
   const def = w.selectedTargetDef();
-  const ts = w.targetState();
-  const { r, v } = w.currentRV();
-  const rel: Vec3 = { x: ts.position.x - r.x, y: ts.position.y - r.y, z: ts.position.z - r.z };
+  const ts = w.targetState(); // the target's own orbit (about its body) — altitude/period/scope
+  // Relative state in the root (heliocentric) frame so it's correct even when the target
+  // orbits a DIFFERENT body than the ship. Relative vectors (range/closing/bearing) are
+  // translation-invariant, so for a co-frame target this matches the old PCI computation.
+  const shipR = w.shipRootState();
+  const tgtR = w.targetRootState(def);
+  const rel: Vec3 = { x: tgtR.position.x - shipR.position.x, y: tgtR.position.y - shipR.position.y, z: tgtR.position.z - shipR.position.z };
   const range = Math.hypot(rel.x, rel.y, rel.z);
-  const relVel: Vec3 = { x: ts.velocity.x - v.x, y: ts.velocity.y - v.y, z: ts.velocity.z - v.z };
+  const relVel: Vec3 = { x: tgtR.velocity.x - shipR.velocity.x, y: tgtR.velocity.y - shipR.velocity.y, z: tgtR.velocity.z - shipR.velocity.z };
   const relSpeed = Math.hypot(relVel.x, relVel.y, relVel.z);
   // closing speed = −d(range)/dt = −(r̂_rel · v_rel); positive means the gap is shrinking.
   const closingSpeed = range > 1 ? -(rel.x * relVel.x + rel.y * relVel.y + rel.z * relVel.z) / range : 0;
   const direction: Vec3 =
     range > 1 ? { x: rel.x / range, y: rel.y / range, z: rel.z / range } : { x: 0, y: 0, z: 0 };
+  // A Lambert intercept is only well-posed when the ship and target share a central body
+  // (their elements are in the same frame). A cross-frame planet needs an escape burn first.
+  const sameFrame = def.bodyId === w.centralBodyId;
   return {
     index: w.selectedTarget,
     name: def.name,
     kind: def.kind,
+    bodyId: def.bodyId,
+    sameFrame, // intercept/match available only when true (docs/05 §M2 — two-step transfer)
     range,
     relSpeed,
     closingSpeed,
@@ -100,7 +139,7 @@ export function getTarget(w: World) {
     altitude: ts.altitude,
     period: ts.period,
     orbit: ts, // the target's own orbital state (for the scope)
-    canDock: range < DOCK_RANGE && relSpeed < DOCK_REL_SPEED,
+    canDock: sameFrame && range < DOCK_RANGE && relSpeed < DOCK_REL_SPEED,
     docked: w.dockedTo === w.selectedTarget,
   };
 }
@@ -108,14 +147,17 @@ export function getTarget(w: World) {
 /** The roster for the TARGET selector: every target with a snapshot of its altitude,
  *  period, and current range from the ship, plus which one is selected. */
 export function listTargets(w: World) {
-  const { r } = w.currentRV();
+  const shipR = w.shipRootState();
   return w.targets.map((def, index) => {
-    const s = propagate(def.elements, w.body, w.time);
-    const range = Math.hypot(s.position.x - r.x, s.position.y - r.y, s.position.z - r.z);
+    const s = propagate(def.elements, w.system.body(def.bodyId), w.time); // about its own body
+    const tgtR = w.targetRootState(def);
+    const range = Math.hypot(tgtR.position.x - shipR.position.x, tgtR.position.y - shipR.position.y, tgtR.position.z - shipR.position.z);
     return {
       index,
       name: def.name,
       kind: def.kind,
+      bodyId: def.bodyId,
+      sameFrame: def.bodyId === w.centralBodyId,
       altitude: s.altitude,
       period: s.period,
       range,
@@ -312,7 +354,15 @@ export function planHohmann(w: World, targetAltitude: number): ManeuverPlan {
  *  (seconds); omit it (or pass ≤ 0) to auto-pick the cheapest TOF for this target's phasing.
  *  `maxRevs` caps how many full revolutions the transfer may make (0 forces a direct arc; more
  *  loops let a poorly-phased target find a cheaper transfer). Returns null if no solution. */
+/** True when the selected target shares the ship's central body — the precondition for a
+ *  Lambert intercept/match (their elements are in the same frame). A cross-frame planet
+ *  needs an escape burn first (the two-step interplanetary transfer, docs/05 §M2). */
+function targetCoFrame(w: World): boolean {
+  return w.selectedTargetDef().bodyId === w.centralBodyId;
+}
+
 export function planIntercept(w: World, tofSeconds?: number, maxRevs?: number): ManeuverPlan | null {
+  if (!targetCoFrame(w)) return null; // cross-frame target — escape your SOI first
   const tof =
     tofSeconds && tofSeconds > 0
       ? tofSeconds
@@ -325,15 +375,33 @@ export function planIntercept(w: World, tofSeconds?: number, maxRevs?: number): 
   return parkPlan(w, buildPlan(w.ship.elements, w.body, fuelOf(w), label, nodes));
 }
 
+/** Auto transfer-window (porkchop): search departure time × TOF for the cheapest transfer to
+ *  the selected target, then lay that guided intercept. This is the INTERPLANETARY path —
+ *  `planIntercept`'s auto-TOF only sweeps minutes and can't wait out a planet's phasing. The
+ *  target must be co-frame (escape your SOI first). Returns null if no window solves. */
+export function planTransferWindow(w: World): ManeuverPlan | null {
+  if (!targetCoFrame(w)) return null;
+  const win = suggestTransferWindow(w.ship.elements, w.body, w.time, w.selectedTargetDef().elements);
+  if (!win) return null;
+  const nodes = solveIntercept(w.ship.elements, w.body, win.departureTime, w.selectedTargetDef().elements, win.tofSeconds, 0, true);
+  if (!nodes) return null;
+  const departDays = (win.departureTime - w.time) / 86400;
+  const label = `transfer window → ${w.selectedTargetDef().name} (depart +${departDays.toFixed(1)} d, ${(win.tofSeconds / 86400).toFixed(0)} d TOF)`;
+  return parkPlan(w, buildPlan(w.ship.elements, w.body, fuelOf(w), label, nodes));
+}
+
 /** The cheapest intercept TOF for the selected target right now — the panel uses it to seed a
  *  sensible TOF when the operator switches targets (every target's phasing is different).
  *  `maxRevs` matches the cap the panel will solve with, so the seed reflects the same setting. */
 export function suggestIntercept(w: World, maxRevs?: number) {
+  if (!targetCoFrame(w)) return null; // cross-frame — no in-frame Lambert to suggest
   return suggestInterceptTof(w.ship.elements, w.body, w.time, w.selectedTargetDef().elements, maxRevs);
 }
 
-/** Kill the relative velocity to the target (terminal approach): one live, exact burn. */
-export function planMatchVelocity(w: World): ManeuverPlan {
+/** Kill the relative velocity to the target (terminal approach): one live, exact burn. Null
+ *  when the target is in another body's SOI (no shared frame to match velocity in). */
+export function planMatchVelocity(w: World): ManeuverPlan | null {
+  if (!targetCoFrame(w)) return null;
   const node = solveMatchVelocity(w.ship.elements, w.body, w.time, w.selectedTargetDef().elements);
   return parkPlan(w, buildPlan(w.ship.elements, w.body, fuelOf(w), "match target velocity", [node]));
 }
@@ -411,6 +479,13 @@ export function clearNodes(w: World) {
   w.nodes = [];
   w.setExecutor(false);
   return { ok: true as const };
+}
+
+/** Jump-to-event: warp to just before the next sphere-of-influence handoff (escape/capture)
+ *  so it's crossed under control. Returns the orbit + the (possibly new) central body. */
+export function jumpToNextSoi(w: World) {
+  if (!w.jumpToNextSoi()) return { ok: false as const, error: "no SOI handoff ahead on the current orbit" };
+  return { ok: true as const, orbit: getOrbit(w), centralBody: getCentralBody(w), nextSoi: w.nextSoi };
 }
 
 /** Flight telemetry: attitude, throttle, executor state, the orbital-frame markers

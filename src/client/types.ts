@@ -1,5 +1,38 @@
-import type { OrbitState, CentralBody } from "../sim/types";
+import type { OrbitState } from "../sim/types";
 import type { ManeuverPlan } from "../sim/maneuver";
+
+/** The current central body — getCentralBody (patched conics). Adds the hierarchy + SOI
+ *  to the M0 CentralBody fields, since which body you orbit now changes at SOI handoffs. */
+export interface CentralBodyView {
+  id: string;
+  name: string;
+  mu: number;
+  radius: number;
+  rotationPeriod: number | null;
+  parentId: string | null;
+  parentName: string | null;
+  soiRadius: number | null; // null for the root star
+}
+
+/** One body in the system map — getSystem. */
+export interface SystemBody {
+  id: string;
+  name: string;
+  mu: number;
+  radius: number;
+  parentId: string | null;
+  soiRadius: number | null;
+  orbitRadiusM: number | null; // semi-major axis about its parent (null = root)
+  rootPosition: [number, number, number]; // heliocentric position [m]
+}
+
+/** The whole hierarchy + the ship's root-frame position + the next SOI handoff — getSystem. */
+export interface SystemState {
+  centralBodyId: string;
+  bodies: SystemBody[];
+  ship: { bodyId: string; rootPosition: [number, number, number] };
+  nextSoi: { time: number; toBodyId: string } | null;
+}
 
 // Shared client types. These mirror the API's serialised payloads (world frame, SI)
 // and the view/slot contracts. Kept in one place so views, the canvas renderers, and
@@ -50,6 +83,8 @@ export interface TargetState {
   index: number;
   name: string;
   kind: string;
+  bodyId: string; // which body it orbits
+  sameFrame: boolean; // shares the ship's central body → intercept/match available
   range: number; // m
   relSpeed: number; // m/s
   closingSpeed: number; // m/s (>0 = approaching)
@@ -66,6 +101,8 @@ export interface TargetSummary {
   index: number;
   name: string;
   kind: string;
+  bodyId: string;
+  sameFrame: boolean;
   altitude: number; // m
   period: number; // s
   range: number; // m, from the ship
@@ -108,7 +145,8 @@ export interface StationState {
 
 export interface StateResponse {
   clock: { t: number; rate: number };
-  body: CentralBody;
+  body: CentralBodyView;
+  system: SystemState;
   ship: {
     id: string;
     name: string;

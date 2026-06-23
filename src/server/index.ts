@@ -6,6 +6,7 @@ import { World } from "../sim/world";
 import {
   getClock,
   getCentralBody,
+  getSystem,
   getShip,
   getOrbit,
   getStateVector,
@@ -23,12 +24,14 @@ import {
   planSetApsis,
   planHohmann,
   planIntercept,
+  planTransferWindow,
   suggestIntercept,
   planMatchVelocity,
   executeManeuver,
   getPendingManeuver,
   cancelManeuver,
   jumpToNextNode,
+  jumpToNextSoi,
   clearNodes,
   setThrottle,
   setAttitudeMode,
@@ -71,6 +74,7 @@ app.use(express.json());
 // --- THE READ API (docs/07 §5) ---------------------------------------------
 app.get("/api/clock", (_req, res) => res.json(getClock(world)));
 app.get("/api/central_body", (_req, res) => res.json(getCentralBody(world)));
+app.get("/api/system", (_req, res) => res.json(getSystem(world)));
 app.get("/api/ship", (_req, res) => res.json(getShip(world)));
 app.get("/api/orbit", (_req, res) => res.json(getOrbit(world)));
 app.get("/api/state_vector", (_req, res) => res.json(getStateVector(world)));
@@ -97,6 +101,7 @@ app.get("/api/state", (_req, res) =>
   res.json({
     clock: getClock(world),
     body: getCentralBody(world),
+    system: getSystem(world),
     ship: getShip(world),
     orbit: getOrbit(world),
     pendingManeuver: getPendingManeuver(world),
@@ -168,7 +173,14 @@ const revsOf = (v: unknown): number | undefined => {
   return Number.isFinite(n) && n >= 0 ? Math.min(20, Math.round(n)) : undefined;
 };
 
+// A clear reason when a Lambert tool is unavailable because the target is in another SOI.
+const crossFrameError = () => {
+  const t = getTarget(world);
+  return `${t.name} is in another body's sphere of influence — escape your current SOI first, then intercept it`;
+};
+
 app.post("/api/maneuver/intercept", (req, res) => {
+  if (!getTarget(world).sameFrame) return res.status(409).json({ error: crossFrameError() });
   const raw = Number(req.body?.tof);
   const tof = Number.isFinite(raw) && raw > 0 ? raw : undefined; // omitted ⇒ auto-pick the cheapest TOF
   const plan = planIntercept(world, tof, revsOf(req.body?.revs));
@@ -178,12 +190,26 @@ app.post("/api/maneuver/intercept", (req, res) => {
 
 // The cheapest intercept TOF for the selected target (the panel seeds its TOF field with this).
 app.get("/api/maneuver/intercept/suggest", (req, res) => {
+  if (!getTarget(world).sameFrame) return res.status(409).json({ error: crossFrameError() });
   const s = suggestIntercept(world, revsOf(req.query?.revs));
   if (!s) return res.status(422).json({ error: "no intercept solution for the current target" });
   res.json(s);
 });
 
-app.post("/api/maneuver/match", (_req, res) => res.json(planMatchVelocity(world)));
+app.post("/api/maneuver/match", (_req, res) => {
+  if (!getTarget(world).sameFrame) return res.status(409).json({ error: crossFrameError() });
+  const plan = planMatchVelocity(world);
+  if (!plan) return res.status(422).json({ error: "no velocity-match solution for the current target" });
+  res.json(plan);
+});
+
+// Auto transfer-window (porkchop) — the interplanetary path: search departure × TOF.
+app.post("/api/maneuver/transfer_window", (_req, res) => {
+  if (!getTarget(world).sameFrame) return res.status(409).json({ error: crossFrameError() });
+  const plan = planTransferWindow(world);
+  if (!plan) return res.status(422).json({ error: "no transfer window found within the search horizon" });
+  res.json(plan);
+});
 
 // Docking (MVP stub) — allowed only inside the envelope; no mechanics yet.
 app.post("/api/dock", (_req, res) => {
@@ -214,6 +240,12 @@ app.post("/api/maneuver/execute", (req, res) => {
 // Jump-to-event: warp to the next node's burn window; the executor then flies it.
 app.post("/api/maneuver/jump", (_req, res) => {
   const result = jumpToNextNode(world);
+  res.status(result.ok ? 200 : 409).json(result);
+});
+
+// Jump-to-event: warp to just before the next SOI handoff (escape/capture), crossed at 1×.
+app.post("/api/jump_soi", (_req, res) => {
+  const result = jumpToNextSoi(world);
   res.status(result.ok ? 200 : 409).json(result);
 });
 

@@ -376,6 +376,63 @@ export function suggestInterceptTof(
   return best;
 }
 
+/** Cheapest INTERPLANETARY transfer window to `targetEl`: a porkchop search over BOTH the
+ *  departure time and the time of flight (the inner-system `suggestInterceptTof` only sweeps
+ *  TOF over minutes — it can't wait out a planet's months-long phasing). Coarse grid over
+ *  [now, now+departSpan] × [tofMin, tofMax], then a local refine around the minimum. Ranges
+ *  default from the two orbits' periods (and the synodic period for the departure span).
+ *  Returns the departure time to hand to `solveIntercept` (as its tNow), the TOF, and Δv. */
+export function suggestTransferWindow(
+  shipEl: OrbitalElements,
+  body: CentralBody,
+  tNow: number,
+  targetEl: OrbitalElements,
+  opts: { maxRevs?: number; departSpanS?: number; tofMinS?: number; tofMaxS?: number } = {},
+): { departureTime: number; tofSeconds: number; dvMag: number } | null {
+  const maxRevs = opts.maxRevs ?? 0; // direct arc is the interplanetary norm
+  const Ps = propagate(shipEl, body, tNow).period;
+  const Pt = propagate(targetEl, body, tNow).period;
+  // Synodic period sets how long until a departure window recurs — search at least one cycle.
+  const synodic = Math.abs(1 / Ps - 1 / Pt) > 1e-15 ? 1 / Math.abs(1 / Ps - 1 / Pt) : 5 * Math.max(Ps, Pt);
+  const departSpan = opts.departSpanS ?? Math.min(synodic, 5 * Math.max(Ps, Pt));
+  const tofMin = opts.tofMinS ?? 0.2 * Math.min(Ps, Pt);
+  const tofMax = opts.tofMaxS ?? 0.8 * Math.max(Ps, Pt);
+
+  const score = (departOffset: number, tof: number): number => {
+    const nodes = solveIntercept(shipEl, body, tNow + departOffset, targetEl, tof, maxRevs);
+    if (!nodes) return Infinity;
+    return nodes.reduce((s, n) => s + dvMagnitude(n.dvLocal), 0);
+  };
+
+  // Coarse grid → the minimum cell → refine within ±one cell. Cheap: a direct-arc Lambert each.
+  let best: { departureTime: number; tofSeconds: number; dvMag: number } | null = null;
+  const search = (d0: number, d1: number, t0: number, t1: number, nDep: number, nTof: number) => {
+    const dStep = (d1 - d0) / nDep;
+    const tStep = (t1 - t0) / nTof;
+    for (let i = 0; i <= nDep; i++) {
+      const dep = d0 + i * dStep;
+      if (dep < 0) continue;
+      for (let j = 0; j <= nTof; j++) {
+        const tof = t0 + j * tStep;
+        if (tof <= 0) continue;
+        const dv = score(dep, tof);
+        if (Number.isFinite(dv) && (!best || dv < best.dvMag)) {
+          best = { departureTime: tNow + dep, tofSeconds: tof, dvMag: dv };
+        }
+      }
+    }
+    return { dStep, tStep };
+  };
+
+  const coarse = search(0, departSpan, tofMin, tofMax, 48, 40);
+  if (!best) return null;
+  // Refine around the coarse minimum (one cell each way) for a sharper window.
+  const b = best as { departureTime: number; tofSeconds: number; dvMag: number };
+  const dCtr = b.departureTime - tNow;
+  search(dCtr - coarse.dStep, dCtr + coarse.dStep, b.tofSeconds - coarse.tStep, b.tofSeconds + coarse.tStep, 12, 12);
+  return best;
+}
+
 /** Match the target's velocity NOW — kill the relative velocity in one burn. Computed live
  *  from the current states, so it's exact: Δv = v_target − v_ship. The terminal-approach
  *  instrument — after an intercept gets you close, this stops you alongside (then trim the

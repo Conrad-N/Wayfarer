@@ -1,5 +1,6 @@
 import type { ViewDef } from "./types";
 import { createNavView } from "./nav-panel";
+import { createSystemMapView } from "./system-map";
 import { createFlightView } from "./flight-panel";
 import { createManeuverView } from "./maneuver-panel";
 import { createTargetView } from "./target-panel";
@@ -12,6 +13,7 @@ import { createAiView } from "./ai-console";
 // currently holds).
 export const VIEWS: ViewDef[] = [
   { id: "nav", label: "NAV · ORBITAL TELEMETRY", color: "amber", create: createNavView },
+  { id: "map", label: "SYSTEM MAP · HELIOCENTRIC", color: "cyan", create: createSystemMapView },
   { id: "flight", label: "FLIGHT · ATTITUDE", color: "cyan", create: createFlightView },
   { id: "maneuver", label: "MANEUVER · FLIGHT PLAN", color: "violet", create: createManeuverView },
   { id: "target", label: "TARGET · RENDEZVOUS", color: "rose", create: createTargetView },

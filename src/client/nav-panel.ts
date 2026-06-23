@@ -53,13 +53,28 @@ function row(label: string, value: string): string {
 /** Render the orbital telemetry block into `el`. The mini target summary is included
  *  only when `includeTarget` — NAV drops it if a full TARGET panel is already open. */
 export function renderReadout(el: HTMLElement, state: StateResponse, includeTarget = true): void {
-  const { orbit, body, ship, clock, target } = state;
+  const { orbit, body, system, ship, clock, target } = state;
+  // Next sphere-of-influence handoff: name the body we hand off to and count down to it.
+  const soi = system.nextSoi;
+  const soiName = soi ? (system.bodies.find((b) => b.id === soi.toBodyId)?.name ?? soi.toBodyId) : null;
+  const isEscape = !!soi && soi.toBodyId === body.parentId; // next handoff leaves the current body
+  const soiVerb = soi ? (isEscape ? "ESCAPE→" : "ENTER→") : null;
+  // On an escape trajectory the apoapsis is unreachable (you leave the SOI first, or the orbit
+  // is open): show ESCAPE there, and swap T-APOAPSIS for a countdown to the SOI exit (T-ESCAPE).
+  const hyperbolic = orbit.e >= 1 || !Number.isFinite(orbit.apoapsisRadius);
+  const escaping = isEscape || hyperbolic;
+  const tEscape = isEscape ? soi.time - clock.t : NaN; // NaN ⇒ hms dashes (e.g. hyperbolic about the star)
   const out = [
     row("VESSEL", esc(ship.name)),
-    row("BODY", esc(body.name)),
+    row("BODY", esc(body.name) + (body.parentName ? `  <span class="dim">/ ${esc(body.parentName)}</span>` : "")),
+    row("SOI XFER", soi && soiName ? `${soiVerb} ${esc(soiName)} ${pad(hms(soi.time - clock.t), 9)}` : "—"),
     row("SIM CLOCK", `${hms(clock.t)}  x${clock.rate}`),
     `<div class="rule"></div>`,
-    ...ROWS.map(([label, fn]) => row(label, fn(orbit))),
+    ...ROWS.map(([label, fn]) => {
+      if (escaping && label === "APOAPSIS") return row("APOAPSIS", pad("ESCAPE", 9));
+      if (escaping && label === "T-APOAPSIS") return row("T-ESCAPE", pad(hms(tEscape), 9));
+      return row(label, fn(orbit));
+    }),
   ];
   if (includeTarget) {
     out.push(
@@ -73,7 +88,7 @@ export function renderReadout(el: HTMLElement, state: StateResponse, includeTarg
   el.innerHTML = out.join("");
 }
 
-const WARP_RATES = [0, 1, 10, 100, 1000];
+const WARP_RATES = [0, 1, 10, 100, 1000, 10000];
 
 export function createNavView(): ViewInstance {
   const scope = h("canvas", { class: "scope", width: 320, height: 320 }) as HTMLCanvasElement;
@@ -103,7 +118,10 @@ export function createNavView(): ViewInstance {
   const root = h("div", { class: "view nav-view" }, scroll, rateControl);
 
   function render(state: StateResponse): void {
-    drawScope(scope, state.orbit, state.body.radius, state.target.orbit);
+    // Only draw the target ring when it shares our frame; a cross-SOI planet's heliocentric
+    // orbit would blow up the scope's scale (and isn't meaningful around the current body).
+    const tgt = state.target.sameFrame ? state.target.orbit : null;
+    drawScope(scope, state.orbit, state.body.radius, tgt, state.body.soiRadius);
     // Drop the mini target block when a full TARGET panel is already up (no duplication).
     renderReadout(readout, state, !isViewOpen("target"));
     const rate = state.clock.rate;

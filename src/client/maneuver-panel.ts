@@ -122,6 +122,9 @@ export function createManeuverView(): ViewInstance {
       solverBtn("INTERCEPT TGT", () => void plan("/api/maneuver/intercept", { tof: tofS(), revs: revsN() })),
       solverBtn("MATCH VEL", () => void plan("/api/maneuver/match", {})),
     ),
+    // Interplanetary path: a porkchop search finds a departure window to a co-frame planet
+    // (escape your SOI first). May take a moment; the departure can be days/months out.
+    h("div", { class: "solver-row" }, solverBtn("FIND WINDOW (interplanetary)", () => void plan("/api/maneuver/transfer_window", {}))),
   );
 
   const scroll = h(
