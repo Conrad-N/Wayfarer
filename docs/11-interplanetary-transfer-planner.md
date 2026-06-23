@@ -235,13 +235,16 @@ to 10× near burns and SOI boundaries.
 `hms()` currently formats `HH:MM:SS` and overflows hours past a day (e.g. 50 h shows
 `50:..`). The countdowns here run to hundreds of days, so add a day field.
 
-- New shared `dhms(seconds)` → **compact**: `HH:MM:SS` under a day, `D:HH:MM:SS` once it
-  passes 24 h (days uncapped, no leading zero; hours/min/sec zero-padded). E.g. `00:51:23`,
-  `137:04:09:51`. Non-finite ⇒ `--:--:--`. *(Decision: hide the day field under 24 h.)*
-- Replace `hms` in [nav-panel.ts](../src/client/nav-panel.ts) (T-PERIAPSIS, T-APOAPSIS,
-  T-ESCAPE, SIM CLOCK, SOI XFER) and the duplicate in
-  [system-map.ts](../src/client/system-map.ts). Widen the value column pad to fit
-  (`9 → 12`).
+- One shared `dhms(seconds)` in [dom.ts](../src/client/dom.ts) → **always** `DD:HH:mm:ss`
+  (days zero-padded to ≥2, never hidden; hours/min/sec zero-padded). E.g. `00:00:51:23`,
+  `602:04:09:51`. Non-finite ⇒ `--:--:--:--`. *(Decision: every time display uses this one
+  formatter, always all four fields — a minutes:seconds field overflowed to "868258:10".)*
+- It replaces every per-file time formatter: `hms` in [nav-panel.ts](../src/client/nav-panel.ts)
+  (T-PERIAPSIS, T-APOAPSIS, T-ESCAPE, SIM CLOCK, SOI XFER, **PERIOD**) and
+  [system-map.ts](../src/client/system-map.ts) (HANDOFF), and `mmss`/`min` in
+  [maneuver-panel.ts](../src/client/maneuver-panel.ts) (T-MINUS, burn-node T+ tags, PERIOD)
+  and [target-panel.ts](../src/client/target-panel.ts) (PERIOD). Editable number inputs
+  (TOF/T+ fields) stay as-is. Value column padded to 12.
 
 ---
 

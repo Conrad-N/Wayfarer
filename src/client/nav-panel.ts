@@ -1,6 +1,6 @@
 import type { OrbitState } from "../sim/types";
 import type { StateResponse, ViewInstance } from "./types";
-import { h, post, esc } from "./dom";
+import { h, post, esc, dhms as hms } from "./dom";
 import { drawScope } from "./scope";
 import { isViewOpen } from "./mounted";
 
@@ -19,25 +19,12 @@ function num(v: number, dp: number, width = 9): string {
   // as a "dead segment" instead of throwing or printing "NaN" (docs/FIX-SPECS H8).
   return pad(Number.isFinite(v) ? v.toFixed(dp) : "---", width);
 }
-function hms(seconds: number): string {
-  // Compact d:h:m:s — HH:MM:SS under a day, prefixed with the day count once past 24 h. The
-  // interplanetary countdowns run to hundreds of days, so hours alone would overflow (docs/11 §5).
-  if (!Number.isFinite(seconds)) return "--:--:--";
-  const s = Math.max(0, Math.floor(seconds));
-  const days = Math.floor(s / 86400);
-  const h2 = Math.floor((s % 86400) / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  const hms = `${String(h2).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
-  return days > 0 ? `${days}:${hms}` : hms;
-}
-
 // Conversion from SI to operator-friendly units happens here, at the presentation edge —
 // never in the sim (docs/07 §1).
 const ROWS: Array<[string, (o: OrbitState) => string]> = [
   ["ALTITUDE", (o) => `${num(o.altitude / 1000, 2)} km`],
   ["SPEED", (o) => `${num(o.speed, 1)} m/s`],
-  ["PERIOD", (o) => `${num(o.period / 60, 2)} min`],
+  ["PERIOD", (o) => pad(hms(o.period), 12)],
   ["APOAPSIS", (o) => `${num(o.apoapsisAltitude / 1000, 2)} km`],
   ["PERIAPSIS", (o) => `${num(o.periapsisAltitude / 1000, 2)} km`],
   ["ECCENTRICITY", (o) => num(o.e, 5)],

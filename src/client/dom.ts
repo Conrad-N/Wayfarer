@@ -53,6 +53,20 @@ export function fixed(v: number, dp: number): string {
   return Number.isFinite(v) ? v.toFixed(dp) : "—";
 }
 
+/** The ONE time formatter for the whole UI: seconds → DD:HH:mm:ss, ALWAYS all four fields
+ *  (days zero-padded to ≥2, never hidden — interplanetary countdowns run to hundreds of days,
+ *  so a minutes:seconds field would read as e.g. "868258:10"). Non-finite ⇒ a dead segment. */
+export function dhms(seconds: number): string {
+  if (!Number.isFinite(seconds)) return "--:--:--:--";
+  const s = Math.max(0, Math.floor(seconds));
+  const days = Math.floor(s / 86400);
+  const hh = Math.floor((s % 86400) / 3600);
+  const mm = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  const p2 = (n: number) => String(n).padStart(2, "0");
+  return `${p2(days)}:${p2(hh)}:${p2(mm)}:${p2(ss)}`;
+}
+
 /** Read an error message off a failed Response without assuming the body is JSON. A non-JSON
  *  4xx/5xx (e.g. an HTML error page) must not throw and get mislabeled as a connection error
  *  by the caller's catch (docs/FIX-SPECS M-jsonerr). */

@@ -1,5 +1,5 @@
 import type { StateResponse, TargetState, ViewInstance } from "./types";
-import { h, post, esc, fixed, errText } from "./dom";
+import { h, post, esc, fixed, errText, dhms } from "./dom";
 
 // The TARGET view — pick a rendezvous target from the roster, read its relative state, and
 // dock. The selector POSTs /api/target/select; the rest of the ship (telemetry, solvers,
@@ -8,7 +8,6 @@ import { h, post, esc, fixed, errText } from "./dom";
 
 const row = (k: string, v: string) => `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`;
 const km = (m: number) => fixed(m / 1000, 2);
-const min = (s: number) => fixed(s / 60, 1);
 
 const KIND_TAG: Record<string, string> = { station: "STATION", depot: "DEPOT", probe: "PROBE" };
 
@@ -71,7 +70,7 @@ export function createTargetView(): ViewInstance {
       row("APOAPSIS", `${km(o.apoapsisAltitude)} km`) +
       row("PERIAPSIS", `${km(o.periapsisAltitude)} km`) +
       row("INCLINATION", `${fixed((o.i * 180) / Math.PI, 2)}°`) +
-      row("PERIOD", `${min(t.period)} min`);
+      row("PERIOD", dhms(t.period));
 
     // DOCK affordance — always visible, enabled only inside the envelope.
     if (t.docked) {

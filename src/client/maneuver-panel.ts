@@ -1,5 +1,5 @@
 import type { StateResponse, ViewInstance } from "./types";
-import { h, post, get, esc, fixed, errText } from "./dom";
+import { h, post, get, esc, fixed, errText, dhms } from "./dom";
 
 // The MANEUVER view — a thin client of the API. Two ways to author a plan, both flowing
 // through the same review → EXECUTE gate:
@@ -12,15 +12,9 @@ import { h, post, get, esc, fixed, errText } from "./dom";
 // (Docking lives in the TARGET view now.)
 
 const km = (m: number) => fixed(m / 1000, 0);
-const min = (s: number) => fixed(s / 60, 1);
 const sign = (v: number) => (Number.isFinite(v) ? `${v >= 0 ? "+" : ""}${v.toFixed(0)}` : "—");
 const comps = (d: { prograde: number; normal: number; radial: number }) =>
   `${sign(d.prograde)}/${sign(d.normal)}/${sign(d.radial)}`;
-const mmss = (s: number) => {
-  if (!Number.isFinite(s)) return "--:--";
-  const t = Math.max(0, Math.round(s));
-  return `${String(Math.floor(t / 60)).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`;
-};
 const row = (k: string, v: string) => `<div class="row"><span class="k">${k}</span><span class="v">${v}</span></div>`;
 
 const dvInput = (label: string, value: number, step: number) => {
@@ -188,7 +182,7 @@ export function createManeuverView(): ViewInstance {
         `<div class="mnv-head2">AUTOPILOT${f.warpAutoLimited ? " · WARP HELD" : ""}</div>` +
         (n ? row("NEXT BURN", `${fixed(n.dvMag, 0)} m/s${f.nodes.length > 1 ? ` (+${f.nodes.length - 1})` : ""}`) : "") +
         (n ? row("Δv LEFT", `${fixed(n.dvRemaining, 1)} m/s`) : "") +
-        (n ? row("T-MINUS", mmss(n.time - s.clock.t)) : "") +
+        (n ? row("T-MINUS", dhms(n.time - s.clock.t)) : "") +
         row("THROTTLE", `${Math.round(f.throttle * 100)}%`) +
         row("POINTING", aligned ? "ALIGNED" : `${fixed(f.pointingErrorDeg, 0)}° off`);
       actions.hidden = false;
@@ -203,7 +197,7 @@ export function createManeuverView(): ViewInstance {
       const multi = p.burns.length > 1;
       const lines = [`<div class="mnv-head2">${esc(p.label.toUpperCase())}</div>`];
       p.burns.forEach((b, i) => {
-        const tag = multi ? `BURN ${i + 1} · T+${mmss(b.time - s.clock.t)}` : `T+ ${mmss(b.time - s.clock.t)}`;
+        const tag = multi ? `BURN ${i + 1} · T+${dhms(b.time - s.clock.t)}` : `T+ ${dhms(b.time - s.clock.t)}`;
         // Retarget nodes (midcourse trims / live velocity match) are computed in flight from the
         // actual state — show that rather than the nominal (often zero) precomputed Δv.
         const val = b.live
@@ -219,7 +213,7 @@ export function createManeuverView(): ViewInstance {
           row("ΔV AFTER", `${fixed(p.dvBudgetAfter, 0)} m/s`),
           row("RESULT", `apo ${km(p.after.apoapsisAltitude)} · peri ${km(p.after.periapsisAltitude)} km`),
           row("INCLIN.", `${fixed((p.after.i * 180) / Math.PI, 2)}°`),
-          row("PERIOD", `${min(p.after.period)} min`),
+          row("PERIOD", dhms(p.after.period)),
         );
       } else {
         lines.push(`<div class="mnv-warn">⚠ ${esc(p.note ?? "not feasible")}</div>`);
