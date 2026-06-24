@@ -33,7 +33,7 @@ hybrid below seamless.
 ## 2. Two propagation modes (hybrid)
 
 - **On-rails — coasting (throttle = 0):** analytic Kepler / patched-conic propagation,
-  exactly as M0/M1. Warp free, away-game cheap, determinism trivial.
+  exactly as M0/M1. Warp free, skips cheap, determinism trivial.
 - **Powered — thrust on (throttle > 0):** **numerical integration at a fixed timestep**
   (RK4) of `r, v, m` under gravity + thrust along the ship's facing. The conic morphs
   continuously; elements are derived from `(r,v)` each step for the readout.
@@ -43,7 +43,7 @@ hybrid below seamless.
 ## 3. Determinism & time-warp
 
 - Integration is **fixed-substep** (`dt_phys`, e.g. 1/64 s), never wall-clock —
-  identical inputs give identical trajectories, so multiplayer and the away-game hold
+  identical inputs give identical trajectories, so multiplayer and skip-resolution hold
   ([08](08-simulation-and-time.md)). `src/sim` stays pure: `dt` is passed in, no `Date.now()`.
 - **Warp during a burn is allowed — it just isn't free.** Coasting warps arbitrarily
   (analytic, O(1)). Under thrust the integrator does a **lazy catch-up**: it grinds

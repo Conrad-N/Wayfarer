@@ -49,6 +49,14 @@ your own mistakes, not enemies — but undecided.
 to settle this. The standout sub-decision is **total loss**: permadeath vs. insurance
 payout vs. respawn-at-station colors the entire game.
 
+→ **Updated 2026-06-23 — leaning firmly to no *direct* player-vs-player antagonism for
+now**, and the multiplayer time model ([08](08-simulation-and-time.md) Part B, Q7) assumes
+it: with no threat, every wanted meeting is a scheduled convergence and the shared
+event-clock can skip freely. If antagonism is ever added it comes as opt-in **"ambush"
+triggers** (conditional alarms — "wake me when a ship enters this SOI") plus *targeted*
+no-skip pressure near a credible threat, not free-for-all PvP. Danger today is the
+environment and your own mistakes.
+
 ### Q5. What is a "career"? What's the long arc?
 Sandbox with emergent goals (à la space-trucker sims), or authored objectives/
 missions, or a tech/territory progression? What are you *for* once you can fly?
@@ -63,13 +71,21 @@ scarce, how prices move) remain open.
 
 ## Time & multiplayer
 
-### Q7. Multiplayer time model → **DECIDED: fast-forward is required in MP too**
-Non-negotiable — no waiting out real months, even with friends. Baseline mechanism is a
-coordinated global jump/rate (shared clock + optional in-game "jump at XX:XX → YY:YY"
-notice), cheap thanks to analytic propagation resolving every ship and routine in one
-shot. Per-player bubbles are an optional later refinement. Only the coordination *UX* is
-left to polish (at M4); that it happens is settled. See
-[08-simulation-and-time.md](08-simulation-and-time.md) Part B.
+### Q7. Multiplayer time model → **DECIDED: the shared event-clock**
+Governing law: never gate a player's in-game intent on real-world time (skip is a *pull*,
+never a *push*). Mechanism for the small cooperative group (~4 friends): **one shared,
+consistent timeline advanced by a discrete-event scheduler** — the world sleeps to the
+next moment any agent (player or AI) needs, jumps there whenever no one is mid-action, and
+emulates silently through pure-compute events. No out-of-band coordination; one shared
+clock keeps the world mutable *and* paradox-free (per-player bubbles are explicitly out —
+they break causality). Cheap thanks to analytic propagation (cost ∝ events, not duration).
+Full design in [08-simulation-and-time.md](08-simulation-and-time.md) Part B.
+
+**Still open (sub-questions, not the model):** (a) **how the ship AI behaves across a
+skip** — live-conversational vs. headless deterministic standing-orders, and the handoff
+between them (the least-designed corner); (b) the exact rules for what earns a LIVE-hold;
+(c) alarm *priority* (soonest-wins vs. "don't stop me for minor events"). Start
+soonest-wins.
 
 ## AI character
 

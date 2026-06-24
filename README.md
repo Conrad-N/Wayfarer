@@ -42,9 +42,14 @@ of these, the decision is probably wrong.
    interprets results, and negotiates trade-offs. It never does the math itself.
    The AI's tools *are* the ship API.
 
-3. **Routines are the time machine.** You can't unilaterally fast-forward a shared
-   world, but you can write a routine and log off. The world advances; your ship
-   acts; you return to consequences. The away-game is the time-skip.
+3. **Time is shared, event-driven, and never gated on the real world.** A small
+   cooperative group shares one consistent clock that doesn't tick at a fixed rate —
+   it fast-forwards to the next moment any participant actually needs (a burn, an
+   arrival, a wake-up someone asked for) and emulates silently through everything
+   else. No player is ever made to wait *real* time to do what they want. Routines —
+   and the away-game (log off, let a routine run, return to consequences) — are how an
+   absent player stays delegated through a skip; they fall out of this, they aren't
+   the headline.
 
 ---
 
@@ -61,7 +66,7 @@ Read in order:
 | 05 | [Roadmap](docs/05-roadmap.md) | Phased plan; Milestone 0 is one ship, one planet, one AI |
 | 06 | [Open Questions](docs/06-open-questions.md) | Decisions that are still open |
 | 07 | [Milestone 0 Spec](docs/07-milestone-0-spec.md) | The buildable contract: orbital math, the API, the AI's tools |
-| 08 | [Simulation & Time](docs/08-simulation-and-time.md) | Physics-fidelity menu + time-warp / jump-ahead design |
+| 08 | [Simulation & Time](docs/08-simulation-and-time.md) | Physics-fidelity menu + time-warp / jump-ahead + the multiplayer shared event-clock |
 | 09 | [Hazards & Failure](docs/09-hazards-and-failure.md) | The "what's at stake" selection menu |
 
 ## Milestone 0 (the first buildable thing)

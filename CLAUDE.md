@@ -58,6 +58,6 @@ bring-your-own access model is still open question Q2.
 - SI everywhere in `src/sim` and the API; friendly units only in `src/client`.
 - Keep `src/sim` pure and deterministic — no `Date.now()`/`Math.random()` in it, no
   Node or DOM deps. It must give identical output for identical inputs (multiplayer
-  and the away-game depend on this).
+  and skip-resolution depend on this).
 - If a feature needs the client to know something the panels didn't read from the
   API, stop — that breaks Keystone 1.

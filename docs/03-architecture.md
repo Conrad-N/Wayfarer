@@ -60,16 +60,30 @@ This is the same gate whether the action originated from a panel, the AI, or a
 routine — it lives in the API, not in any one client. Standing authorizations
 ("you may make minor corrections without asking") relax it during a session.
 
-## Keystone 3 — Routines are the time machine
+## Keystone 3 — Time is shared, event-driven, never gated on the real world
 
-In a shared persistent world you can't unilaterally warp time. But you can write a
-routine and log off. The world keeps advancing; your routine operates your ship; you
-come back to the results. **The away-game is how an individual effectively
-fast-forwards.**
+The hardest tension in a shared world is time: with real orbital mechanics one player
+faces a 600-day transfer while another wants to do twenty things in-system. The
+resolution is **one law and one mechanism.**
 
-This is why routines belong in the architecture from the start even though they ship
-last: they're not a bonus feature, they're the resolution to the time-vs-multiplayer
-tension (see *Time*, below).
+**The law:** never gate a player's in-game intent on real-world time. A time-skip is
+something a player *pulls* ("I'm leaving" / "I don't want to sit through this"), never
+something the game *pushes* ("to do X, wait real hours").
+
+**The mechanism** (for a small cooperative group — the target is ~4 friends): one
+shared, consistent timeline advanced by a **discrete-event scheduler.** The world
+sleeps until the next moment some participant actually has business, jumps there, and
+emulates silently through everything that's pure computation. Players (and AIs) declare
+when they next need to act; the clock advances to the soonest, whenever no one is
+mid-action. Nobody coordinates out-of-band — the negotiation is implicit. One shared
+clock (not per-player time bubbles) is what keeps the world both mutable and
+paradox-free. Full design: [08](08-simulation-and-time.md) Part B.
+
+This is why **routines belong in the architecture from the start even though they ship
+last**: a skip is only meaningful if you've delegated what your ship does meanwhile, so
+the routine layer and the time model are two halves of one thing. The *away-game* (log
+off, let a routine run, return to consequences) is the pull-direction case of that — not
+the time machine itself.
 
 ## The simulation
 
@@ -96,10 +110,11 @@ Two realistic options:
 
 **Why patched conics is more than a shortcut:** a Keplerian orbit can be *propagated
 analytically*. You can compute "where is this ship at time T" in closed form without
-simulating every intermediate tick. That makes time-warp and the away-game cheap:
+simulating every intermediate tick. That makes time-warp and event-clock skips cheap:
 the server can compute the state hours into the future instantly, and can resolve
-"what did your routine do over 6 hours" without grinding every frame. This single
-property is worth a lot — see *Time*.
+"what did your routine do over 6 hours" without grinding every frame — cost scales with
+the number of events, not the elapsed duration. This single property is worth a lot —
+see *Time*.
 
 ### Determinism
 The sim must be deterministic: same inputs → same outputs, on every machine. Required
@@ -107,24 +122,23 @@ for multiplayer consistency and for replaying/resolving routines headlessly.
 
 ## Time
 
-> **Authoritative detail** — active warp, jump-to-event, the three multiplayer time
-> models, and the away-game — is in [08-simulation-and-time.md](08-simulation-and-time.md)
-> Part B. Active warp + jump-ahead is a confirmed core feature, not just the away-game.
-> Summary below.
+> **Authoritative detail** — the governing law, single-player warp / jump-to-event, and
+> the multiplayer **shared event-clock** — is in
+> [08-simulation-and-time.md](08-simulation-and-time.md) Part B. Summary below.
 
-- The world has its own **sim-time**, decoupled from wall-clock by a **time rate**.
-- **Analytic propagation** (from patched conics) lets the server jump sim-time
-  forward cheaply, including resolving any routines that ran during the jump.
-- **Single-player:** time control is trivial — set the rate, or skip to the next
-  event (next burn node, next SOI change, arrival).
-- **Multiplayer (friends server):** start with a **global server time rate**,
-  coordinated socially ("we're running 60× tonight", "jump to Tuesday 0800"). This is
-  your stated plan and it's fine for a small group.
-- **Confirmed required, not a back-pocket idea:** fast-forward must work in multiplayer
-  (see [08-simulation-and-time.md](08-simulation-and-time.md) Part B). The global jump is
-  cheap because analytic propagation resolves every ship and routine to the target time
-  in one shot. Per-player time bubbles (à la EVE/Elite) remain an optional later
-  refinement, never required for a small trusted group.
+- The world has its own **sim-time**, decoupled from wall-clock.
+- **Analytic propagation** (from patched conics) lets the server jump sim-time forward
+  cheaply — cost scales with the *number of events*, not the *duration* — including
+  resolving any routines that ran during the jump.
+- **Single-player:** time control is trivial — set a rate, or jump to the next event
+  (next burn node, SOI change, arrival).
+- **Multiplayer (small cooperative group):** one shared, consistent timeline advanced by
+  a **discrete-event scheduler** (Keystone 3). Agents declare when they next need to act;
+  the world fast-forwards to the soonest such moment whenever no one is mid-action, and
+  emulates silently through pure-compute events (SOI handoffs, etc.). **No out-of-band
+  coordination.** Per-player time bubbles are explicitly *not* the model — they reintroduce
+  cross-time paradoxes ([08-simulation-and-time.md](08-simulation-and-time.md) Part B).
+- **Governing law:** no player is ever gated on real-world time to do what they want.
 
 ## The AI integration layer
 

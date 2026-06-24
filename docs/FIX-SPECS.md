@@ -88,7 +88,7 @@ decision is re-evaluated per variable, frame-paced tick, so two machines with di
 cadence cross `burnStart` at a different `physAccum` phase, execute a different integer number
 of `throttle===1` substeps, and diverge in `burnDelivered` and final `(r, v)`.
 [docs/10](10-flight-model.md) §3 promises identical inputs → identical trajectories — multiplayer
-and the away-game depend on it. (The analytic coast path is exact and fine; this is confined to
+and skip-resolution depend on it. (The analytic coast path is exact and fine; this is confined to
 the powered path + the executor's per-tick control decisions.)
 
 **Fix (design).** Move control decisions onto the fixed substep grid so the burn is a pure

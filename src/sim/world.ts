@@ -294,7 +294,7 @@ export class World {
     // advance on a FIXED DT_PHYS sim-time grid, re-deciding control at each substep
     // boundary. This makes the burn a pure function of elapsed sim-time — independent of
     // how the wall-clock delta was chunked — which is what determinism (multiplayer and
-    // the away-game, docs/10 §3) requires.
+    // skip-resolution, docs/10 §3) requires.
     this.physAccum += simDelta;
     let steps = 0;
     while (this.physAccum >= DT_PHYS && steps < MAX_SUBSTEPS) {

@@ -32,7 +32,7 @@ subdivided into fixed `DT_PHYS` substeps with a carried remainder. Two machines 
 different frame cadence cross `burnStart` at a different `physAccum` phase, so the
 integer substep count executed while `throttle===1` differs and final `(r,v)` /
 `burnDelivered` diverge. [docs/10](10-flight-model.md) §3 promises identical
-trajectories for identical inputs — multiplayer and the away-game depend on it. The
+trajectories for identical inputs — multiplayer and skip-resolution depend on it. The
 coast path is genuinely analytic and fine; this is confined to the powered path.
 *Fix:* accumulate sim-time and step the sim in whole `DT_PHYS` quanta, making throttle
 decisions only at substep boundaries — don't let a per-tick `simDelta` drive control.

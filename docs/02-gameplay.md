@@ -131,9 +131,13 @@ too steep burns up, too shallow skips back out; then descent and touchdown). Req
 the drag/atmosphere physics in [08-simulation-and-time.md](08-simulation-and-time.md).
 
 ### Routines & the away-game (Milestone 5)
-Write code against the ship API to run while you're logged off. The AI helps you
-author and debug it. This is also how time effectively fast-forwards in a shared
-world. See [03-architecture.md](03-architecture.md).
+Write code against the ship API to run while you're logged off. The AI helps you author
+and debug it. Routines are **deterministic standing orders** (not live AI), which is
+exactly what lets the shared clock skip *through* them — so they're entangled with the
+time model, not a bolt-on. The *away-game* (log off, let a routine run, return to
+consequences) is the pull-direction case of that. Time itself fast-forwards via the
+shared **event-clock**, not via the away-game. See [03-architecture.md](03-architecture.md)
+Keystone 3 and [08-simulation-and-time.md](08-simulation-and-time.md) Part B.
 
 ## Open gameplay questions
 See [06-open-questions.md](06-open-questions.md) — especially the economy, whether

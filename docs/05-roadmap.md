@@ -138,7 +138,10 @@ The signature interaction comes online.
 
 - Stand up the authoritative sim as a hosted server; friends connect their own ships.
 - Persistence: the world and every ship survive logout.
-- Global server **time rate**, coordinated socially (your stated plan).
+- The **shared event-clock** ([08-simulation-and-time.md](08-simulation-and-time.md)
+  Part B): one consistent timeline that fast-forwards to the next moment any participant
+  needs, with no out-of-band coordination. (Per-player time bubbles are explicitly not
+  the model.) M4 work here is the coordination UX, not new sim math.
 - The economy goes **live and player-driven** — prices move; arbitrage and trade routes
   become real play.
 - (Architecture already supports this from M0; this milestone is mostly networking,
@@ -151,8 +154,12 @@ The signature interaction comes online.
 - The **routine** layer: sandboxed scripting over the ship API, metered (tie to the
   compute resource).
 - AI-assisted routine authoring and debugging.
-- The **away-game**: routines execute while you're logged off; analytic propagation
-  resolves what happened. This is also the individual's "time machine" (Keystone 3).
+- Routines are **deterministic standing orders**, so the shared event-clock can skip
+  *through* them — which is why they're entangled with the time model, not merely a late
+  feature (Keystone 3). The **away-game** (log off → routine runs → return to
+  consequences) is the pull-direction case; time itself fast-forwards via the shared
+  clock, not the away-game. See [08-simulation-and-time.md](08-simulation-and-time.md)
+  Part B.
 
 ---
 

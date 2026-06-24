@@ -2,9 +2,9 @@ import type { CentralBody, OrbitalElements, OrbitState, Vec3 } from "./types";
 import { TWO_PI } from "./constants";
 
 // Analytic two-body (Kepler) propagation. Closed-form: state at any time is one
-// evaluation, no stepping — which is what makes time-warp and the away-game cheap
-// later (docs/08, Keystone 3). Patched conics + perturbations layer on top of this
-// without changing the API (docs/03).
+// evaluation, no stepping — which is what makes time-warp and skip-resolution cheap
+// (the shared event-clock, docs/08 Part B / Keystone 3). Patched conics + perturbations
+// layer on top of this without changing the API (docs/03).
 
 type Mat3 = [number, number, number, number, number, number, number, number, number];
 

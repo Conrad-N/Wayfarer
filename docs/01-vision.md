@@ -40,9 +40,12 @@ difference between flying a ship and flying a ship *with someone*.
    the AI, and by automated routine. None is privileged. (See
    [03-architecture.md](03-architecture.md).)
 
-4. **Time is real, so respect it.** Transfers take hours or months. The game leans
-   into that with time control and the away-game rather than pretending space is
-   fast. Patience is a mechanic.
+4. **Time is real, so respect it — but never waste the player's.** Transfers take
+   hours or months; the game leans into that with deep time control rather than
+   pretending space is fast. But the waiting is never *real*-world waiting: a shared,
+   event-driven clock fast-forwards through the dead time to the next moment that
+   matters, and no player is ever gated on the wall clock to do what they want.
+   Patience is a mechanic; tedium is a bug. (See [03](03-architecture.md) Keystone 3.)
 
 5. **A shared, persistent place.** A small universe a few friends actually live in,
    that keeps turning when you log off.

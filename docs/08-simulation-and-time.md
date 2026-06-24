@@ -93,29 +93,120 @@ feature, not a convenience.** Part A is what makes it cheap and honest.
   object, during a finite burn, or on an alarm. You can't blindly warp through
   something that needs your hands. (Standard KSP-style behavior.)
 
-### Multiplayer (M4): a confirmed requirement, not an option
-**Decided:** fast-forward must work in multiplayer too — waiting out real months is a
-non-starter even among friends. The player count is small and trusted, so the mechanism
-can stay simple:
+### Multiplayer (M4): the shared event-clock
 
-- **Baseline — coordinated global jump / rate.** One shared clock. An authorized jump
-  advances the *entire world* to a target time; an optional in-game notice covers async
-  coordination ("at 20:00 the world jumps to day 14, 08:00"). Everyone always shares the
-  same time. Dead simple, and exactly right for a handful of trusted players.
-- **Why it's cheap:** analytic propagation (Part A) resolves *every ship and every
-  routine* to the target time in closed form, in one shot — no grinding the sim through
-  the skipped interval. A global jump is essentially free on the server.
-- **Optional later refinement — per-player bubbles:** let an *isolated* player warp
-  solo, snapping to the common rate near others. More agency, more edge cases; a
-  nice-to-have on top of the baseline, never required.
+**The governing law** (it overrides everything else in this section): *never gate a
+player's in-game intent on real-world time.* A time-skip is something a player **pulls**
+("I'm leaving anyway" / "I don't want to sit through this wait"), never something the game
+**pushes** ("to do X you must now wait real hours"). Occasional short real waits (≲ an hour)
+are tolerable but to be minimized. This is pillar 4 of [01-vision.md](01-vision.md).
 
-Solo warp + jump-to-event stay freely available in single-player and whenever a player
-is isolated. The only thing left for M4 is *polish* of the coordination UX — that it
-happens is settled.
+For a small, trusted, **cooperative** group — target ~4 friends, with no direct
+player-vs-player antagonism ([06](06-open-questions.md) Q4) — one model honors that law
+*without anyone coordinating out-of-band*:
 
-### The away-game (the always-available skip)
-Routines run while you're logged off; on return, analytic propagation + routine
-resolution computes what happened in one shot (see [03-architecture.md](03-architecture.md),
-[05-roadmap.md](05-roadmap.md) M5). It needs no coordination because *you're* gone —
-it's the multiplayer-safe time machine, and another reason the sim must stay cheap to
-propagate.
+> **One shared, consistent timeline, advanced by a discrete-event scheduler.**
+
+Everyone is always at the same sim-time. That keeps the world both **mutable** (players
+affect the same persistent things) and **paradox-free** (there is no "my past" for someone
+else to rewrite — the asteroid is mined at the one shared instant it's mined). This is the
+reason a single clock is the backbone and **per-player time bubbles are explicitly *not* the
+model**: let two players roam the same world at different "nows" and you get the unmineable
+asteroid (A mines it at day 1000; B, earlier in real time but at day 500, mines the same
+full rock in A's past — no consistent history exists). A shared clock dissolves that.
+
+The clock does **not** run at a fixed rate. It **sleeps until the next moment some
+participant actually has business, then jumps there.**
+
+**Every agent declares a time-state** — players *and* their ship AIs, since the AI is
+real-time too:
+
+- **LIVE-hold** — "I'm acting now." Pins the clock to the present. Only grantable by
+  *actually doing a time-sensitive thing* (a burn, docking, a manual maneuver, later
+  combat); **idling does not hold** — after a few seconds of no time-critical action you
+  decay to don't-care, so an AFK player can never freeze the world.
+- **Wake-at-T** — "skip me to sim-time T (or until a condition — see ambush alarms below),
+  then wake me." An alarm.
+- **Don't-care** — no constraint; **forced for offline players.** Means "don't wake me for
+  *others'* stops — only for my own ship's events and my own target," so a long-hauler
+  isn't dragged awake at every short-cadence player's alarm.
+
+**The clock advances** to the soonest of {any agent's wake-time, any agent's own scheduled
+events} — **but only when no agent holds LIVE.** A jump is interruptible: any agent can
+raise a LIVE-hold to halt it, landing exactly at the current sim-time (trivial, because
+coasting is analytic).
+
+**Two kinds of event — and only one stops the clock:**
+
+- **Compute-events** (SOI handoffs, patched-conic frame switches, a routine's deterministic
+  next step, a market tick) need the *server to recalculate*, not a human to decide. The
+  scheduler **emulates straight through them** at CPU speed; no player ever sees a stop.
+  Because propagation is analytic (Part A), their cost scales with the *number of events*,
+  not the *duration* — coasting 200 days through three handoffs is three closed-form
+  evaluations, effectively instant. Only **burns** (numerical) and dense routine
+  micro-stepping cost real compute, and both are short by nature.
+- **Decision-events** (a player wants to hand-fly; a routine hits a condition it isn't
+  authorized to handle; a conditional/ambush trigger fires; someone's explicit wake-at-T)
+  need an agent *in the loop*. **These are the only real stops.**
+
+So **how often a skip stops is a knob you control via how much standing authority you give
+your routine** — more authority → fewer interruptions → smoother skip (ties to the
+review-before-execute gate, [03](03-architecture.md) Keystone 2).
+
+**Two gears, both consensual:** discrete **jump-to-next-event** (skip the dead time) and
+**continuous group warp** (e.g. 10×, to *watch* a maneuver together). Both advance only
+when no one holds LIVE.
+
+**Why it works — and where it wouldn't.** Every meeting two cooperative players actually
+*want* is one they each set an alarm for, so the clock delivers it frictionlessly; the only
+thing lost is the *unplanned* encounter — which only matters when players can be threats to
+each other, and (for now) they can't. At ~4 trusted friends this model is complete. At MMO
+scale it collapses: someone is always LIVE, the clock can never jump, and you're back to a
+real-time-locked EVE — which the governing law forbids. **The small player count is
+load-bearing.**
+
+**Paying compute, not real time, is principle-safe.** A skip that costs the server some
+crunch is a *loading bar* ("the computer is thinking"), not a *gate* ("wait for the
+universe"). Keep it bounded — analytic coasting does this for free; only a pathological
+routine (say a 600-day continuous burn) would warrant a soft cap.
+
+### Co-presence is intentional — and that is the design
+With no antagonism, players rarely share live-time *by accident*, and that's fine: every
+*wanted* meeting is a scheduled convergence the clock makes cheap ("Vesper, day 900" → both
+arrive at that instant). Where serendipity *is* wanted, it's engineered with **attractors**
+("truck-stops": a depot whose market ticks at set times, a salvage event with a closing
+window, a convoy worth escorting) that make independent alarms naturally pool — players meet
+*at the truck-stop, on purpose*, with no coordinating. If direct antagonism is ever added it
+arrives as **conditional / "ambush" alarms** ("wake me when another ship enters this SOI")
+plus *targeted* no-skip pressure near a credible threat — a surgical exception, never a
+global real-time lock. (Out of scope now; [06](06-open-questions.md) Q4.)
+
+### The away-game — the offline / "I don't want to play through this" case
+The away-game is **not** the time machine; the shared clock above is. It is the narrower,
+pull-direction tool for two situations: you log off, or you simply don't want to sit through
+a wait. In both you delegate to a **routine** and the world advances without you; on return,
+analytic propagation + routine resolution computes what happened in one shot
+([05-roadmap.md](05-roadmap.md) M5). Three consequences make routines **load-bearing, not a
+late bonus:**
+
+- **A skip is only meaningful if you've delegated what your ship does meanwhile.** "Wake me
+  at day 700" with no plan is just pointless coasting. Setting an alarm and setting a routine
+  are two halves of one act — which is why the routine layer is entangled with the time
+  model, not separable from it ([03](03-architecture.md) Keystone 3).
+- **A routine that resolves during a skip must be deterministic** — rule-based standing
+  orders ("circularize at apoapsis", "abort if fuel < X"), *not* live LLM reasoning — or the
+  skip wouldn't replay identically across machines (Part A determinism). The ship AI may
+  *author* a routine, but the routine runs with no further LLM calls. This is Keystone 2: the
+  LLM is quarantined to conversation; the deterministic layer owns anything that touches the
+  sim.
+- **Offline ships must be safe by construction.** Since offline forces don't-care, the world
+  can skip past a logged-off player; for that to be humane, their ship defaults to a stable
+  safe-hold (no risky maneuvers) unless a routine explicitly owns the risk. The time model
+  depends on this invariant.
+
+### The AI across a skip *(least-designed corner — flagged, not settled)*
+Because the ship AI is real-time too, it needs two modes: **live-conversational** (you're
+present — it can hold LIVE while it acts and converse at 1×) and **headless standing-orders**
+(during a skip — it resolves at event boundaries via a deterministic routine and does *not*
+try to converse across compressed time). How it hands off between them, and how much
+unsupervised authority it carries, is the next thing to pin down.
