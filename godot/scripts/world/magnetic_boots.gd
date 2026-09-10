@@ -7,6 +7,8 @@ const WALK_SPEED_MPS: float = 1.3
 const MAX_FORCE_N: float = 1200.0
 const MAX_TORQUE_NM: float = 1000.0
 const FOOT_HEIGHT_M: float = 0.92
+const TURN_TORQUE_NM: float = 250.0
+const TURN_ENERGY_J_PER_RAD: float = 500.0
 
 var status: String = "BOOTS OFF | B latch near a steel deck"
 var player: Player
@@ -15,8 +17,7 @@ var _anchor: Vector3
 var _normal: Vector3
 var _heading: Vector3
 var _walking: Vector2 = Vector2.ZERO
-var _last_basis: Basis = Basis.IDENTITY
-var _last_deck_basis: Basis = Basis.IDENTITY
+var _turn_remaining_rad: float = 0.0
 var _height: float = FOOT_HEIGHT_M
 
 
@@ -39,6 +40,12 @@ func target_body() -> PhysicsBody3D:
 ## Set desired lateral/forward walking; diagonal steps share one speed budget.
 func set_walk_input(direction: Vector2) -> void:
 	_walking = direction.limit_length(1.0) if direction.is_finite() else Vector2.ZERO
+
+
+## Cancel walking and outstanding turn input when a panel or focus takes control.
+func cancel_input() -> void:
+	_walking = Vector2.ZERO
+	_turn_remaining_rad = 0.0
 
 
 ## Engage only at actual nearby foot contact, with suitable material and low relative speed.
@@ -75,8 +82,7 @@ func try_latch() -> bool:
 	_normal = body.global_basis.transposed() * normal
 	_height = height
 	_heading = body.global_basis.transposed() * (-player.global_basis.z).slide(normal).normalized()
-	_last_basis = player.global_basis
-	_last_deck_basis = _target.global_basis
+	_turn_remaining_rad = 0.0
 	player.surface_motion_active = true
 	player.set_motion_input(Vector3.ZERO, 0.0)
 	status = "BOOTS LATCHED | WASD walk | B release"
@@ -87,6 +93,7 @@ func try_latch() -> bool:
 func release() -> void:
 	_target = null
 	_walking = Vector2.ZERO
+	_turn_remaining_rad = 0.0
 	if is_instance_valid(player):
 		player.surface_motion_active = false
 	status = "BOOTS OFF | B latch near a steel deck"
@@ -97,12 +104,11 @@ func _physics_process(delta: float) -> void:
 		if is_instance_valid(player):
 			player.surface_motion_active = false
 		return
-	# Keep the gaze fixed while the torso turns beneath it, until the neck centres.
-	var camera_direction: Vector3 = _target.global_basis * _last_deck_basis.transposed() * _last_basis * (Basis(Vector3.UP, player.head_angles_rad.x) * Vector3.FORWARD)
-	var local_direction: Vector3 = player.global_basis.transposed() * camera_direction
-	player.head_angles_rad.x = clampf(atan2(-local_direction.x, -local_direction.z), -Player.HEAD_YAW_LIMIT_RAD, Player.HEAD_YAW_LIMIT_RAD)
-	_last_basis = player.global_basis
-	_last_deck_basis = _target.global_basis
+	var look: Vector2 = player.take_surface_look()
+	if player.is_freelooking() or player.is_braking() or player.is_wheel_braking() or player.is_wheel_dumping():
+		_turn_remaining_rad = 0.0
+	else:
+		_turn_remaining_rad += look.x
 	var normal: Vector3 = (_target.global_basis * _normal).normalized()
 	var anchor: Vector3 = _target.to_global(_anchor)
 	var offset: Vector3 = player.global_position - anchor
@@ -112,20 +118,20 @@ func _physics_process(delta: float) -> void:
 		status = "BOOTS RELEASED | Lost deck contact"
 		return
 	var relative: Vector3 = player.linear_velocity - _point_velocity(_target, player.global_position)
-	var camera: Camera3D = player.get_node("Camera3D") as Camera3D
-	var forward: Vector3 = (-camera.global_basis.z).slide(normal).normalized()
+	var forward: Vector3 = (-player.global_basis.z).slide(normal).normalized()
 	var right: Vector3 = forward.cross(normal)
 	var walking: Vector3 = (right * _walking.x + forward * _walking.y) * WALK_SPEED_MPS
 	var powered: bool = walking.length_squared() > 0.0001
-	var turn: float = signf(player.head_angles_rad.x) * maxf(absf(player.head_angles_rad.x) - 0.21, 0.0)
-	powered = powered or absf(turn) > 0.001
+	var turn_step: float = _turn_remaining_rad
+	powered = powered or absf(turn_step) > 0.000001
 	var fraction: float = 1.0
 	if powered:
 		# Powered steps have a conservative rated draw above the maximum mechanical output.
-		var request: float = delta * (1800.0 * _walking.length() + 500.0 * minf(absf(turn), 1.0))
+		var request: float = delta * 1800.0 * _walking.length() + TURN_ENERGY_J_PER_RAD * absf(turn_step)
 		fraction = player.suit.consume_energy(request) / request
 		_anchor += _target.global_basis.transposed() * walking * delta * fraction
-		_heading = Basis(_normal, turn * delta * 2.0 * fraction) * _heading
+		_heading = Basis(_normal, turn_step * fraction) * _heading
+		_turn_remaining_rad -= turn_step * fraction
 	anchor = _target.to_global(_anchor)
 	var error: Vector3 = anchor + normal * _height - player.global_position
 	if error.slide(normal).length() > 0.45:
@@ -140,6 +146,10 @@ func _physics_process(delta: float) -> void:
 	if difference.w < 0.0:
 		difference = -difference
 	var torque: Vector3 = difference.get_axis() * difference.get_angle() * 900.0 - (player.angular_velocity - target_omega) * 180.0
+	# Foot pivots have finite motor torque. A large requested turn must not
+	# instantly overload adhesion before the body has had time to rotate.
+	var yaw_torque: float = torque.dot(normal)
+	torque += normal * (clampf(yaw_torque, -TURN_TORQUE_NM, TURN_TORQUE_NM) - yaw_torque)
 	# Apply forces at one shared point, including the balancing ankle moment.
 	var point: Vector3 = player.global_position - normal * _height
 	torque -= (point - player.to_global(player.center_of_mass)).cross(force)

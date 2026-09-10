@@ -41,6 +41,7 @@ func test_grab_cut_carry_and_release_antenna_into_cargo() -> void:
 		return
 	var direction: Vector3 = player.global_basis.transposed() * (marker.global_position - camera.global_position).normalized()
 	var head_aim: Vector2 = Vector2(atan2(-direction.x, -direction.z), asin(direction.y))
+	player.set_freelooking(true)
 	player.queue_mouse_look(-head_aim / player.mouse_sensitivity)
 	player.salvage_tools.select_tool(SalvageTools.Tool.CUTTER)
 	var energy_before: float = player.suit.battery_energy_j

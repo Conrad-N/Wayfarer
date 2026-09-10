@@ -54,6 +54,7 @@ func test_wheel_brake_priorities_and_input_release() -> void:
 	var player: Player = _player()
 	player.set_wheel_braking(true)
 	player.set_motion_input(Vector3.FORWARD, 1.0)
+	player.set_freelooking(true)
 	player.queue_mouse_look(Vector2(0.8 / player.mouse_sensitivity, 0.0))
 	await _steps(12)
 	check(player.linear_velocity.length() > 0.1, "separate WASD request still fires translation jets")

@@ -79,7 +79,7 @@ grow_horizontal = 2
 grow_vertical = 0
 mouse_filter = 2
 theme_override_font_sizes/font_size = 18
-text = "WASD thrust | Space / Ctrl up / down | Q / E roll | Mouse look | X wheel brake (spin only) | Alt RCS brake\n1 Grapple: left attach / right release / R-T reel | 2 Cutter: hold left on a gold joint\n3 Hands: left grab / right release | G grip | Shift + mouse steer held load | 4 Scanner: hold left while still | F12 screenshot\nB magnetic boots | WASD walk on deck | F seat / terminal | Tab tablet | Hold C dump wheels\nC transfers wheel momentum into you and anything held. Alt uses jets; X stores spin in wheels."
+text = "WASD thrust | Space / Ctrl up / down | Q / E roll | Mouse turn | Hold Z free look | X wheel brake | Alt RCS brake\n1 Grapple: left attach / right release / R-T reel | 2 Cutter: hold left on a gold joint\n3 Hands: left grab / right release | G grip | Shift + mouse steer held load | 4 Scanner: hold left while still | F12 screenshot\nB magnetic boots | WASD walk on deck | F seat / terminal | Tab tablet | Hold C dump wheels\nRelease Z to centre your view. C transfers wheel momentum into you and anything held."
 
 [node name="GrappleStatus" type="Label" parent="HUD"]
 offset_left = 16.0

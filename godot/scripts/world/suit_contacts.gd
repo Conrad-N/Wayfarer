@@ -34,7 +34,7 @@ func _physics_process(_delta: float) -> void:
 	if not active:
 		_grab_requested = false
 		_boots_requested = false
-		boots.set_walk_input(Vector2.ZERO)
+		boots.cancel_input()
 		return
 	if _grab_requested:
 		if grip.is_attached():

@@ -243,3 +243,24 @@ decide something the docs did not cover.
   Local bodies use their complete physical inertia tensors and retain Jolt's
   finite-step orientation accuracy. Tests cover saturated rotors with motors off,
   as well as hand, boot and harness transfer followed by independent compensation.
+
+- 2026-09-10 — Conrad replaces automatic head-look/body-follow with direct mouse
+  requests for physical body turns. The camera stays centred unless Z is held;
+  free head motion remains ±60° yaw / ±50° pitch and snaps to centre on release.
+  Fast swipes retain their requested turn. Remove the
+  artificial 0.8 rad/s turn-rate cap; finite inertia, motor torque, battery
+  and wheel capacity determine the response. Hand grips still require Shift to
+  steer the load; the pilot harness restrains the torso. Boots use normal mouse
+  yaw for powered deck turns,
+  while free look leaves their heading unchanged.
+- 2026-09-10 — Conrad raises suit wheel motor torque from 8 N·m to 50 N·m for
+  faster physical turns. The same rating applies to mouse steering, Q/E roll,
+  wheel braking and unloading; ±100 N·m·s per-axis storage remains unchanged.
+  Conrad also requests a visual bump indicator driven by actual suit contacts,
+  so collisions are easier to recognize during movement.
+- 2026-09-10 — Boot pivots consume normal mouse yaw independently of head aim,
+  with a finite 250 N·m foot motor and a conservative 500 J/rad command budget.
+  Large turn requests reach the physical controller without an imposed speed
+  cap or an instant adhesion overload. Walking follows the torso during free look.
+  The bump HUD flashes amber below the crosshair for 0.6 seconds after a contact
+  impulse increase of at least 5 N·s; steady pressure and gentle touching stay quiet.

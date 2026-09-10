@@ -166,11 +166,15 @@ The fully supplied suit is 100 kg, including 8 kg of propellant, with 720,000 J
 rotation with up to 600 N / 60 N·m of jets, spending impulse / 2,000 m/s of
 propellant (torque uses a 0.5 m effective lever arm). Empty tanks preserve motion.
 
-Mouse movement turns the head freely within ±60° yaw and ±50° pitch. Beyond a
-12° offset the body follows through electrically powered reaction wheels;
-Q/E roll uses the same wheels. They provide 8 N·m and store up to ±100 N·m·s
-on each axis. The wearable module follows Conrad's design note: 0.0239 kg·m²
-rotor inertia, about 40,000 rpm at capacity, and a 15 kg assembly included in the
+Normal mouse movement requests a suit-body turn through electrically powered
+reaction wheels. The camera stays centred on the torso, and a fast swipe keeps
+its full requested turn while the body accelerates and brakes within its torque
+and momentum limits. There is no artificial turn-speed cap. Hold Z to move only
+the head within ±60° yaw and ±50° pitch; releasing it snaps
+the head back to centre. Q/E roll uses the same wheels. They provide up to
+50 N·m and store up to ±100 N·m·s on each axis. The wearable module follows Conrad's design
+note: 0.0239 kg·m² rotor inertia, about 40,000 rpm at capacity, and a 15 kg
+assembly included in the
 existing fully supplied 100 kg suit. Each full wheel stores about 209 kJ.
 Motors pay electrical/mechanical losses; saturation prevents further momentum
 storage. Slowing rotors recovers electrical energy with losses, without deleting
@@ -194,16 +198,19 @@ the inelastic catch can dissipate kinetic energy. The combined rotational
 inertia slows the shared spin. Holding Alt acts on both bodies through the suit's
 finite jets. Large loads can exceed the grip or exhaust the suit's fuel.
 
-The grip follows the selected part through cutting. Look around freely to aim the
-cutter while holding; Shift + mouse deliberately steers the combined load using
-reaction wheels, and Q/E rolls it. The carried part retains its collisions and
+The grip follows the selected part through cutting. Hold Z to aim the cutter
+while holding; Shift + mouse deliberately steers the combined
+load using reaction wheels, and Q/E rolls it. The carried part retains its collisions and
 must fit through the cargo door. Release it inside the bay before clamps secure it.
 The grapple remains the longer-range tether; the tractor beam has been removed.
 
 B latches magnetic boots when aligned soles are in contact with a designated steel
-deck at low relative speed. WASD then walks relative to the viewed surface and
-mouse yaw turns the torso through the feet. Engagement costs 50 J; steps/turns
-spend battery, with equal reaction on the deck. A switchable magnetic latch holds
+deck at low relative speed. WASD then walks along the deck in the torso's forward/right directions and
+normal mouse yaw turns the torso through the feet. Free look moves the head
+without steering the feet and supplies vertical aiming while latched. Engagement
+costs 50 J; steps/turns spend battery, with equal reaction on the deck. Foot pivots
+have 250 N·m of motor torque and budget 500 J per commanded radian; they retain
+the complete turn request without a fixed speed cap. A switchable magnetic latch holds
 passively without idle draw; B mechanically releases even with an empty battery.
 Holding force and torque are limited; losing deck contact or an excessive load
 releases the soles. Boots supply no artificial gravity or remote attraction.

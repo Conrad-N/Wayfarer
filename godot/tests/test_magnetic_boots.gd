@@ -105,6 +105,49 @@ func test_spinning_deck_passive_hold_spends_no_power() -> void:
 	f.root.free()
 
 
+## Head-only look cannot turn the feet or change forward walking direction.
+func test_modifier_freelook_does_not_steer_boots() -> void:
+	var f: Dictionary = _fixture()
+	var player: Player = f.player
+	var boots: MagneticBoots = f.boots
+	await _frames(3)
+	check(boots.try_latch(), "feet engage for freelook")
+	var energy: float = player.suit.battery_energy_j
+	player.set_freelooking(true)
+	player.queue_mouse_look(Vector2(-0.8 / player.mouse_sensitivity, -0.3 / player.mouse_sensitivity))
+	await _frames(30)
+	check_near(player.head_angles_rad.x, 0.8, 0.001, "modifier turns head on deck")
+	check(player.angular_velocity.length() < 0.001, "looking aside leaves feet still")
+	check_near(player.suit.battery_energy_j, energy, 0.001, "head look uses no boot motor energy")
+	boots.set_walk_input(Vector2(0, 1))
+	await _frames(40)
+	check(absf(player.position.x) < 0.03 and player.position.z < -0.2, "walking follows torso while head looks sideways")
+	player.set_freelooking(false)
+	check_eq(player.head_angles_rad, Vector2.ZERO, "modifier release immediately centres view on deck")
+	f.root.free()
+
+
+## Normal mouse turns the restrained body physically without losing a fast half turn.
+func test_normal_mouse_pivots_boots_with_finite_torque() -> void:
+	var f: Dictionary = _fixture()
+	var player: Player = f.player
+	var deck: RigidBody3D = f.deck
+	var boots: MagneticBoots = f.boots
+	await _frames(3)
+	check(boots.try_latch(), "feet engage for physical turn")
+	var energy: float = player.suit.battery_energy_j
+	player.queue_mouse_look(Vector2(-PI / player.mouse_sensitivity, 0))
+	await _frames(180)
+	check(boots.is_attached(), "requested half turn does not instantly overload feet")
+	var facing: Vector3 = deck.global_basis.transposed() * -player.global_basis.z
+	check(facing.dot(Vector3.BACK) > 0.98, "body completes full requested half turn on deck")
+	check_eq(player.head_angles_rad, Vector2.ZERO, "normal look leaves eyes centred")
+	check(player.suit.battery_energy_j < energy - 1000.0, "foot pivot spends motor energy")
+	check_eq(player.suit.propellant_kg, 8.0, "pivot uses no jets")
+	check(player.attitude.momentum_body.length() < 0.001, "foot pivots do not secretly engage suit wheels")
+	f.root.free()
+
+
 func _fixture() -> Dictionary:
 	var holder: Node3D = Node3D.new()
 	(Engine.get_main_loop() as SceneTree).root.add_child(holder)

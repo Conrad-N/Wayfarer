@@ -129,6 +129,7 @@ func test_stationary_brake_allows_mouse_look() -> void:
 	var player: Player = _spawn_player(Vector3.ZERO)
 	player.set_braking(true)
 	await _physics_steps(3)
+	player.set_freelooking(true)
 	player.queue_mouse_look(Vector2(0.0, -PI / player.mouse_sensitivity))
 	await _physics_steps(SAMPLE_STEPS)
 	_check_vector(player.linear_velocity, Vector3.ZERO, 0.00001, "braking at rest creates no drift")

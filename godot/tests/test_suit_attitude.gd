@@ -128,6 +128,7 @@ func test_supported_modes_suppress_suit_actuators() -> void:
 		else:
 			player.surface_motion_active = true
 		player.set_motion_input(Vector3.FORWARD, 1.0)
+		player.set_freelooking(true)
 		player.queue_mouse_look(Vector2(0.6 / player.mouse_sensitivity, 0.0))
 		await _steps(12)
 		check_near(player.linear_velocity.length(), 0.0, 1e-5, mode + " suppresses translation jets")
@@ -142,6 +143,7 @@ func test_supported_modes_suppress_suit_actuators() -> void:
 func test_grip_head_look_does_not_fight_attachment() -> void:
 	var player: Player = _spawn_player()
 	player.body_follow_enabled = false
+	player.set_freelooking(true)
 	player.queue_mouse_look(Vector2(0.8 / player.mouse_sensitivity, 0.0))
 	await _steps(12)
 	check_near(player.angular_velocity.length(), 0.0, 1e-5, "head aim does not torque held cargo")

@@ -92,6 +92,7 @@ func test_coasting_and_stationary_brake_use_no_resources() -> void:
 	coast.angular_velocity = Vector3.BACK * 0.2
 	stationary.set_motion_input(Vector3.FORWARD, 1.0)
 	stationary.set_braking(true)
+	stationary.set_freelooking(true)
 	stationary.queue_mouse_look(Vector2(0.0, -PI / stationary.mouse_sensitivity))
 	await _physics_steps(SAMPLE_STEPS)
 	for player: Player in [coast, stationary]:
@@ -140,6 +141,7 @@ func test_empty_tank_preserves_motion_with_controls_and_brake() -> void:
 	await _physics_steps(SAMPLE_STEPS)
 	_check_vector(player.linear_velocity, velocity, 0.00001, "empty brake preserves drift")
 	_check_vector(player.angular_velocity, spin, 0.00001, "empty brake preserves spin")
+	player.set_freelooking(true)
 	player.queue_mouse_look(Vector2(0.0, -PI / player.mouse_sensitivity))
 	await _physics_steps(3)
 	check_near(player.head_angles_rad.y, Player.HEAD_PITCH_LIMIT_RAD, 1e-5, "empty tank still allows bounded head aiming")

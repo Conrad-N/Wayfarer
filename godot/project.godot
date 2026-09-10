@@ -151,6 +151,11 @@ wheel_dump={
 "events": [Object(InputEventKey,"physical_keycode":67)]
 }
 
+freelook={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"physical_keycode":90)]
+}
+
 [physics]
 
 3d/physics_engine="Jolt Physics"

@@ -133,7 +133,9 @@ This supersedes the M3 automatic terminal handhold. F opens an aimed nearby
 terminal without changing suit motion. The pilot seat has actual restraints:
 F snaps a slow pilot within 1.5 m into the seated pose facing NAV and centres
 the head/camera; while seated F opens an aimed terminal,
-or unstraps when looking away. Closing a screen leaves the harness fastened.
+or unstraps when looking away with Z held. Use that modifier
+to aim at other terminals while restrained. Closing a screen leaves the harness
+fastened.
 The Tab tablet works in either state. A loose suit is affected by ship maneuvers;
 warp and event warp require the seat and remain unavailable near objects.
 
@@ -144,10 +146,15 @@ wheels. Hold C to unload wheel momentum into the suit and whatever is physically
 attached. A free suit spins; a carrier may counteract its resulting rotation if
 its own attitude control is active. The HUD shows unloading, attachment status,
 resources and wheel saturation. Unload suit wheels before using orbital warp.
-Shift
-plus mouse steers a hand-held load; normal mouse motion is free head look while
-holding it. Escape and focus loss cancel active motors and tools, retaining
-passive hand/boot/seat attachments.
+Normal mouse motion requests a physical body turn; the camera remains centred
+on the torso. Hold Z for head-only aiming, then release it
+to snap back to centre. The head is limited to ±60° yaw / ±50° pitch; body turns
+retain the full mouse request and have no artificial speed cap. Shift plus mouse
+steers a hand-held load; free look does not steer it. Latched boots turn through
+the feet with normal mouse yaw; free look leaves their heading unchanged.
+Escape and focus loss cancel active motors and tools, retaining passive
+hand/boot/seat attachments. A visual bump indicator gives feedback when the
+suit physically contacts its surroundings.
 
 SHIP shows wheel storage, signed momentum on all three ship axes and capacity,
 plus a WHEELS toggle independent of RCS. NAV → FLIGHT shows storage and controller

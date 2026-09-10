@@ -1,11 +1,11 @@
 ## Physical EVA suit: propellant-fed translation/braking, bounded electric reaction
-## wheels for body rotation, and a freely moving head within anatomical limits.
+## wheels for body rotation, and modifier-held free head look.
 class_name Player
 extends RigidBody3D
 
 @export var input_enabled: bool = true
 @export var thrust_force_n: float = 180.0
-@export var roll_torque_nm: float = 8.0
+@export var roll_torque_nm: float = 50.0
 @export var mouse_sensitivity: float = 0.0025
 @export_range(0.0, 2000.0, 1.0) var brake_force_n: float = 600.0
 @export_range(0.0, 200.0, 1.0) var brake_torque_nm: float = 60.0
@@ -15,7 +15,6 @@ extends RigidBody3D
 
 const HEAD_YAW_LIMIT_RAD: float = PI / 3.0
 const HEAD_PITCH_LIMIT_RAD: float = PI * 5.0 / 18.0
-const BODY_FOLLOW_THRESHOLD_RAD: float = 0.21
 
 var suit: SuitResources = SuitResources.new()
 var attitude: SuitAttitude = SuitAttitude.new()
@@ -24,7 +23,10 @@ var brake_reference: Callable
 var surface_motion_active: bool = false
 var body_follow_enabled: bool = true
 var _body_follow: bool = false
-var _gaze_world: Vector3 = Vector3.FORWARD
+var _look_remaining: Vector2 = Vector2.ZERO
+var _look_previous_basis: Basis = Basis.IDENTITY
+var _surface_look: Vector2 = Vector2.ZERO
+var _freelooking: bool = false
 @onready var grapple: Grapple = $Grapple
 var salvage_tools: SalvageTools
 var _capture_click_held: bool = false
@@ -48,7 +50,8 @@ func _process(_delta: float) -> void:
 	if not input_enabled:
 		return
 	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
-		_body_follow = false
+		centre_head()
+		set_freelooking(false)
 		set_motion_input(Vector3.ZERO, 0.0)
 		set_braking(false)
 		set_wheel_braking(false)
@@ -66,6 +69,7 @@ func _process(_delta: float) -> void:
 		salvage_tools.set_triggers(Input.is_action_pressed("tool_primary") and not _capture_click_held, Input.is_action_pressed("tool_secondary") and not _secondary_blocked)
 	else:
 		grapple.set_reel_input(Input.get_axis("grapple_reel_out", "grapple_reel_in"))
+	set_freelooking(Input.is_action_pressed("freelook"))
 	set_braking(Input.is_action_pressed("brake"))
 	set_wheel_braking(Input.is_action_pressed("wheel_brake"))
 	set_wheel_dumping(Input.is_action_pressed("wheel_dump"))
@@ -87,6 +91,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				_secondary_blocked = Input.is_action_pressed("tool_secondary")
 				get_viewport().set_input_as_handled()
 				return
+	if event.is_action("freelook"):
+		set_freelooking(event.is_pressed() and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED)
+		get_viewport().set_input_as_handled()
+		return
 	if event.is_action_pressed("ui_cancel"):
 		_release_mouse()
 		get_viewport().set_input_as_handled()
@@ -120,8 +128,9 @@ func _exit_tree() -> void:
 
 func _physics_process(delta: float) -> void:
 	if not body_follow_enabled:
-		_body_follow = false
+		_cancel_body_look()
 	_update_head()
+	_update_body_look()
 	if freeze:
 		_body_follow = false
 		return
@@ -153,42 +162,90 @@ func _physics_process(delta: float) -> void:
 		_body_follow = false
 		motor_torque = _wheel_brake_torque(delta, inverse_inertia)
 	elif _body_follow:
-		var desired_rate: Vector3 = Vector3(head_angles_rad.y, head_angles_rad.x, 0.0) * 2.0
-		desired_rate = desired_rate.limit_length(0.8)
-		if inverse_inertia.determinant() > 0.0:
-			var acceleration: Vector3 = Vector3(desired_rate.x - omega_body.x, desired_rate.y - omega_body.y, 0.0) * 5.0
-			motor_torque += global_basis.transposed() * (inverse_inertia.inverse() * (global_basis * acceleration))
-		if head_angles_rad.length() < 0.01 and Vector2(omega_body.x, omega_body.y).length() < 0.01:
-			_body_follow = false
+		motor_torque += _body_look_torque(omega_body, inverse_inertia)
 	var delivered: Vector3 = attitude.drive(motor_torque, omega_body, roll_torque_nm, delta, suit, global_basis.transposed() * inverse_inertia * global_basis)
 	apply_torque(global_basis * delivered)
 
 
 func _update_head() -> void:
-	var requested_look: bool = _pending_look != Vector2.ZERO
-	if _body_follow and not freeze and not _braking and not _wheel_braking and not _wheel_dumping:
-		var direction: Vector3 = global_basis.transposed() * _gaze_world
-		head_angles_rad = Vector2(atan2(-direction.x, -direction.z), asin(clampf(direction.y, -1.0, 1.0)))
-	if _pending_look != Vector2.ZERO:
+	if _freelooking:
 		head_angles_rad -= _pending_look * mouse_sensitivity
-		_pending_look = Vector2.ZERO
-	head_angles_rad.x = clampf(head_angles_rad.x, -HEAD_YAW_LIMIT_RAD, HEAD_YAW_LIMIT_RAD)
-	head_angles_rad.y = clampf(head_angles_rad.y, -HEAD_PITCH_LIMIT_RAD, HEAD_PITCH_LIMIT_RAD)
+		head_angles_rad.x = clampf(head_angles_rad.x, -HEAD_YAW_LIMIT_RAD, HEAD_YAW_LIMIT_RAD)
+		head_angles_rad.y = clampf(head_angles_rad.y, -HEAD_PITCH_LIMIT_RAD, HEAD_PITCH_LIMIT_RAD)
+	else:
+		head_angles_rad = Vector2.ZERO
+	_pending_look = Vector2.ZERO
 	var camera: Camera3D = $Camera3D
 	camera.basis = Basis(Vector3.UP, head_angles_rad.x) * Basis(Vector3.RIGHT, head_angles_rad.y)
-	_gaze_world = -camera.global_basis.z
-	if requested_look and body_follow_enabled and head_angles_rad.length() > BODY_FOLLOW_THRESHOLD_RAD and not freeze and not _braking and not _wheel_braking and not _wheel_dumping:
-		_body_follow = true
+
+
+func _update_body_look() -> void:
+	if not _body_follow:
+		return
+	# Measure actual rotation instead of assuming a motor command succeeded. The
+	# unwrapped remainder retains a complete fast swipe, even beyond half a turn.
+	var rotation_step: Quaternion = (_look_previous_basis.transposed() * global_basis).get_rotation_quaternion()
+	if rotation_step.w < 0.0:
+		rotation_step = -rotation_step
+	# atan2 retains tiny physical turns that acos(w) and get_axis lose near zero.
+	var imaginary: Vector3 = Vector3(rotation_step.x, rotation_step.y, rotation_step.z)
+	var sine_half: float = imaginary.length()
+	var turned: Vector3 = imaginary * (2.0 * atan2(sine_half, rotation_step.w) / sine_half) if sine_half > 1e-10 else imaginary * 2.0
+	_look_remaining -= Vector2(turned.y, turned.x)
+	_look_previous_basis = global_basis
+
+
+func _body_look_torque(omega_body: Vector3, inverse_inertia: Basis) -> Vector3:
+	if inverse_inertia.determinant() <= 0.0:
+		return Vector3.ZERO
+	var inverse_body: Basis = global_basis.transposed() * inverse_inertia * global_basis
+	var error: Vector3 = Vector3(_look_remaining.y, _look_remaining.x, 0.0)
+	var desired_rate: Vector3 = Vector3.ZERO
+	for axis: int in 2:
+		var acceleration: float = maxf(inverse_body[axis][axis] * roll_torque_nm, 0.0)
+		# Begin slowing while there is still room to stop with the same finite
+		# motor torque. There is no fixed turning-speed limit or anatomical clamp.
+		desired_rate[axis] = signf(error[axis]) * minf(absf(error[axis]) * 4.0, sqrt(1.6 * acceleration * absf(error[axis])))
+	var correction: Vector3 = Vector3(desired_rate.x - omega_body.x, desired_rate.y - omega_body.y, 0.0) * 8.0
+	if _look_remaining.length() < 0.0002 and Vector2(omega_body.x, omega_body.y).length() < 0.0003:
+		_cancel_body_look()
+		return Vector3.ZERO
+	return inverse_body.inverse() * correction
+
+
+func _cancel_body_look() -> void:
+	_body_follow = false
+	_look_remaining = Vector2.ZERO
 
 
 ## Centre the view after an explicit seated-pose transition, clearing pending steering.
 func centre_head() -> void:
 	head_angles_rad = Vector2.ZERO
 	_pending_look = Vector2.ZERO
-	_body_follow = false
+	_surface_look = Vector2.ZERO
+	_cancel_body_look()
 	var camera: Camera3D = $Camera3D
 	camera.basis = Basis.IDENTITY
-	_gaze_world = -camera.global_basis.z
+
+
+## Hold head-only aiming; transitions discard neck movement and queued body steering.
+func set_freelooking(enabled: bool) -> void:
+	if _freelooking == enabled:
+		return
+	_freelooking = enabled
+	centre_head()
+
+
+## Report whether mouse movement currently aims only the head.
+func is_freelooking() -> bool:
+	return _freelooking
+
+
+## Consume normal mouse yaw/pitch radians for powered walking on a latched surface.
+func take_surface_look() -> Vector2:
+	var result: Vector2 = _surface_look
+	_surface_look = Vector2.ZERO
+	return result
 
 
 ## Supply local right/up/back thrust and signed roll; diagonals share one thrust budget.
@@ -197,10 +254,20 @@ func set_motion_input(translation: Vector3, roll: float) -> void:
 	_roll_input = clampf(roll, -1.0, 1.0) if is_finite(roll) else 0.0
 
 
-## Accumulate free head-look pixels; larger offsets request powered body follow.
+## Route mouse pixels at event time to free head aim or a complete powered body turn.
 func queue_mouse_look(relative: Vector2) -> void:
-	if relative.is_finite():
+	if not relative.is_finite():
+		return
+	if _freelooking:
 		_pending_look += relative
+	elif surface_motion_active:
+		_surface_look -= relative * mouse_sensitivity
+	elif not freeze and not bool(get_meta("seated", false)) and body_follow_enabled and not _braking and not _wheel_braking and not _wheel_dumping:
+		if not _body_follow:
+			_look_previous_basis = global_basis
+			_look_remaining = Vector2.ZERO
+		_body_follow = true
+		_look_remaining -= relative * mouse_sensitivity
 
 
 ## Hold suit RCS braking in the local scene's frame; it takes priority over thrust and roll.
@@ -319,8 +386,8 @@ func _release_mouse() -> void:
 	set_braking(false)
 	set_wheel_braking(false)
 	set_wheel_dumping(false)
-	_pending_look = Vector2.ZERO
-	_body_follow = false
+	set_freelooking(false)
+	centre_head()
 	if is_instance_valid(grapple):
 		grapple.cancel_input()
 	if is_instance_valid(salvage_tools):

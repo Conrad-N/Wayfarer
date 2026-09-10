@@ -140,6 +140,7 @@ func test_roll_torque_sign_and_body_axis() -> void:
 func test_mouse_head_look_is_bounded_and_consumed_once() -> void:
 	var player: Player = _spawn_player(Vector3.ZERO)
 	await _physics_steps(3)
+	player.set_freelooking(true)
 	player.queue_mouse_look(Vector2(0.1 / player.mouse_sensitivity, -0.05 / player.mouse_sensitivity))
 	await _physics_steps(3)
 	_check_basis(player.basis, Basis.IDENTITY, "head motion does not teleport the body")
@@ -170,7 +171,7 @@ func test_mouse_body_follow_uses_power_and_local_axes() -> void:
 	check(player.suit.battery_energy_j < SuitResources.BATTERY_CAPACITY_J, "body-follow costs electricity")
 	check_eq(player.suit.propellant_kg, SuitResources.PROPELLANT_CAPACITY_KG, "body-follow uses no propellant")
 	await _physics_steps(Engine.physics_ticks_per_second * 5)
-	check(absf(player.head_angles_rad.x) < 0.03, "body catches up to gaze")
+	check(player.basis.z.distance_to((orientation * Basis(Vector3.UP, -0.5)).z) < 0.03, "body reaches the requested mouse heading")
 	check(player.angular_velocity.length() < 0.03, "wheel counter-torque settles body follow")
 	player.free()
 

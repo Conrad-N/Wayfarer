@@ -38,6 +38,10 @@ func _ready() -> void:
 	_player.add_child(tools)
 	tools.configure(_player, _wreck, _hazards)
 	_player.salvage_tools = tools
+	var impacts: SuitImpacts = SuitImpacts.new()
+	impacts.name = "SuitImpacts"
+	impacts.configure(_player)
+	_player.add_child(impacts)
 	_build_contacts()
 	_build_ship()
 	if not salvage_practice:
@@ -77,6 +81,8 @@ func _process(delta: float) -> void:
 	_screenshot_notice_seconds = maxf(0.0, _screenshot_notice_seconds - delta)
 	_screenshot_status.visible = _screenshot_notice_seconds > 0.0
 	var capture_hint: String = "Esc releases mouse" if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED else "Click to fly"
+	if _player.is_freelooking():
+		capture_hint = "FREE LOOK / release Z to centre"
 	var brake_hint: String = "RCS BRAKE" if _player.is_braking() else ("WHEEL BRAKE" if _player.is_wheel_braking() else "FREE FLIGHT")
 	if _player.is_wheel_dumping() and not _player.is_braking():
 		brake_hint = "WHEEL DUMP / REACTION TORQUE"

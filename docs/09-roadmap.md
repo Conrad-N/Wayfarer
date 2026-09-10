@@ -305,6 +305,23 @@ ship compensation, regeneration, saturation, full-capacity passive precession,
 and orbital/local handoffs. Fullscreen native C input and SHIP/NAV displays were
 exercised and inspected; captures are under ignored `godot/build/screens/`.
 
+Mouse controls revision (2026-09-10, complete): normal mouse movement
+requests a physical body turn with the camera centred on the torso. Holding
+Z permits head-only aiming; releasing it snaps back to centre.
+Fast swipes retain the full requested turn and the artificial turn-rate cap is
+removed. Suit wheel torque increases to 50 N·m at Conrad's request. Boots separate
+powered yaw turns from free look, and restrained or hand-held use retains its
+physical control restrictions. A visual bump indicator reports actual suit
+contact with surrounding bodies.
+
+Verification: `./check.sh` passes **2,864 checks, zero failures**; main scene boots
+headless without errors. Tests include full 180°/270° turns, modifier release,
+boot pivots and walking during head look, physical bump detection and decay,
+and existing salvage/orbital acceptance. Fullscreen native mouse/Z input completed
+a half turn with a peak of 4.72 rad/s, recentred the view on release, and displayed
+the fading BUMP label after a real wall collision. Captures are under ignored
+`godot/build/screens/look-*.png`.
+
 ## M5 — Loop
 
 Goal: the whole job, once.
