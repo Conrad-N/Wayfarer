@@ -101,6 +101,10 @@ grapple_reel_out={
 "deadzone": 0.2,
 "events": [Object(InputEventKey,"physical_keycode":84)]
 }
+debug_screenshot={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"physical_keycode":4194343)]
+}
 
 [physics]
 

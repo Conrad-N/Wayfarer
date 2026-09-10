@@ -1,8 +1,9 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="2_player"]
 [ext_resource type="PackedScene" path="res://scenes/debris_field.tscn" id="3_debris"]
+[ext_resource type="Script" path="res://scripts/world/debug_screenshot.gd" id="4_screenshot"]
 
 [sub_resource type="Environment" id="Environment_room"]
 background_mode = 1
@@ -14,6 +15,9 @@ reflected_light_source = 1
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
+
+[node name="DebugScreenshot" type="Node" parent="."]
+script = ExtResource("4_screenshot")
 
 [node name="Player" parent="." instance=ExtResource("2_player")]
 position = Vector3(0, 0, 8)
@@ -70,7 +74,7 @@ grow_horizontal = 2
 grow_vertical = 0
 mouse_filter = 2
 theme_override_font_sizes/font_size = 20
-text = "WASD thrust  |  Space / Ctrl up / down  |  Q / E roll  |  Mouse look  |  Hold Alt to brake\nLeft click attaches grapple  |  Right click releases  |  Hold R / T to reel in / out\nAim at a crate or wall. The lighter end moves more. Reeling uses battery."
+text = "WASD thrust  |  Space / Ctrl up / down  |  Q / E roll  |  Mouse look  |  Hold Alt to brake\nLeft click attaches grapple  |  Right click releases  |  Hold R / T to reel in / out\nAim at a crate or wall. The lighter end moves more. Reeling uses battery.  |  F12 screenshot"
 
 [node name="GrappleStatus" type="Label" parent="HUD"]
 offset_left = 16.0
@@ -80,6 +84,16 @@ offset_bottom = 218.0
 mouse_filter = 2
 theme_override_colors/font_color = Color(0.4, 0.85, 0.95, 1)
 theme_override_font_sizes/font_size = 20
+
+[node name="ScreenshotStatus" type="Label" parent="HUD"]
+visible = false
+offset_left = 16.0
+offset_top = 224.0
+offset_right = 1500.0
+offset_bottom = 278.0
+mouse_filter = 2
+theme_override_font_sizes/font_size = 18
+autowrap_mode = 2
 
 [node name="Reticle" type="Label" parent="HUD"]
 anchors_preset = 8

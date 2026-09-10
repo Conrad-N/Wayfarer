@@ -23,7 +23,7 @@ upside down without meaning to and have to think to fix it.
 - [x] A test scene: a big box room with a dozen rigid bodies of different masses
       (use `hull_segment_a` and primitives). Bumping into things transfers momentum.
 - [x] Grapple tool: raycast, tether visual, reel in/out, pulls the lighter body.
-- [ ] Debug screenshot key F12 saves to `godot/build/screens/`.
+- [x] Debug screenshot key F12 saves to `godot/build/screens/`.
 - [x] Headless tests: thrust produces expected acceleration for a given mass; brake
       converges; grapple reels the lighter body.
 
@@ -40,8 +40,8 @@ control text, and rotated views were inspected in screenshots under
 At this stage the debris room was still pending; the full five-minute
 movement-feel milestone remains unfinished.
 
-Brake progress (2026-09-10): hold X to counter drift and spin with limited suit
-thrust and torque; release to coast. Mouse look remains available. Eight new Jolt
+Brake progress (2026-09-10): hold X (subsequently changed to Alt) to counter drift
+and spin with limited suit thrust and torque; release to coast. Mouse look remains available. Eight new Jolt
 tests cover convergence, gradual stopping without reversal, force/torque limits,
 mass response, release, control priority, mouse look, and the X binding.
 `./check.sh` passes 100 checks and the main scene boots headless. A windowed exercise
@@ -82,6 +82,25 @@ brake with the new Alt binding. It verified a 20 kg crate, a 1,000 kg crate, a w
 and battery depletion. The cable, controls, and status/warnings were inspected in
 `godot/build/screens/m1-grapple-*.png` (ignored). F12 capture and the final movement
 feel review remain before M1 is complete.
+
+Screenshot progress (2026-09-10): F12 saves a completed game frame with its HUD to
+`godot/build/screens/`, creates the folder if needed, and briefly reports success
+or failure. Unique Windows-safe names preserve earlier captures; key repeats and
+overlapping requests do not produce extra images. Two headless tests cover the
+binding and immediate refusal without rendering. `./check.sh` passes 336 checks;
+the main scene boots headless. Windowed checks exercised actual F12 input,
+1280×720 PNG output, repeated presses, released mouse capture, folder creation,
+an invalid destination, recovery, and notice expiry. Saved images and both notices
+were visually inspected (`wayfarer_*.png` and `m1-screenshot-*.png`, ignored).
+
+M1 implementation review (2026-09-10): all checklist items are implemented. A
+306-second continuous scripted windowed exercise mixed thrust, coast, roll, mouse
+look, braking, and grapple reel/release without resetting the scene or supplies.
+All 16 cycles kept finite motion and the suit inside the room; 5.05 kg propellant
+and 186.1 Wh remained. F12 captures showed freely rotated views and readable HUD
+controls. This verifies stability, not the subjective "fun and disorienting"
+criterion, which remains a player playtesting judgment. Next implementation work
+is the M2 ship graph.
 
 ## M2 — Cut
 

@@ -6,9 +6,15 @@ extends Node3D
 @onready var _supplies: Label = $HUD/Supplies
 @onready var _supply_warning: Label = $HUD/SupplyWarning
 @onready var _grapple_status: Label = $HUD/GrappleStatus
+@onready var _screenshot_status: Label = $HUD/ScreenshotStatus
+@onready var _screenshot: DebugScreenshot = $DebugScreenshot
+
+var _screenshot_notice_seconds: float = 0.0
 
 
 func _ready() -> void:
+	_screenshot.capture_started.connect(_on_capture_started)
+	_screenshot.capture_finished.connect(_on_capture_finished)
 	var wall: Color = Color(0.12, 0.16, 0.20)
 	var deck: Color = Color(0.22, 0.26, 0.29)
 	var amber: Color = Color(0.85, 0.48, 0.12)
@@ -28,7 +34,9 @@ func _ready() -> void:
 	print("Wayfarer M1: debris, suit RCS, and grapple. Escape releases mouse.")
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_screenshot_notice_seconds = maxf(0.0, _screenshot_notice_seconds - delta)
+	_screenshot_status.visible = _screenshot_notice_seconds > 0.0
 	var capture_hint: String = "Esc releases mouse" if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED else "Click to fly"
 	var brake_hint: String = "RCS BRAKE" if _player.is_braking() else "FREE FLIGHT"
 	if _player.suit.propellant_kg <= 0.0:
@@ -54,6 +62,19 @@ func _process(_delta: float) -> void:
 	_grapple_status.text = "GRAPPLE / " + _player.grapple.status
 	if _player.grapple.is_attached():
 		_grapple_status.text += "  |  CABLE %.1f m" % _player.grapple.cable_length_m
+
+
+func _on_capture_started() -> void:
+	# Keep the previous capture notice out of the next saved frame.
+	_screenshot_notice_seconds = 0.0
+	_screenshot_status.visible = false
+
+
+func _on_capture_finished(path: String, error: Error) -> void:
+	_screenshot_status.text = "Saved screenshot: " + path.get_file() if error == OK else "Screenshot failed: " + error_string(error)
+	_screenshot_status.modulate = Color(0.4, 0.85, 0.95) if error == OK else Color(1, 0.35, 0.25)
+	_screenshot_notice_seconds = 4.0
+	_screenshot_status.visible = true
 
 
 func _add_box(label: String, size: Vector3, at: Vector3, colour: Color) -> void:

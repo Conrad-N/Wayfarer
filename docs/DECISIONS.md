@@ -78,3 +78,9 @@ decide something the docs did not cover.
 - 2026-09-10 — M1 draws the tether as a straight line and releases it when another
   body blocks the line, the target disappears, or separation exceeds 30 m. Rope
   wrapping and sag are deferred; the prototype cannot pull through obstacles.
+- 2026-09-10 — F12 captures a completed viewport frame including the HUD into
+  `godot/build/screens/`. Filenames use Windows-safe timestamps and a unique suffix;
+  existing images are preserved. Held-key repeats and overlapping requests are
+  ignored. A four-second notice confirms success or failure, and is hidden before
+  the next capture. Headless capture reports unavailable immediately; this debug
+  feature remains a scene node rather than an autoload.
