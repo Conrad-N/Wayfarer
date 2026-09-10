@@ -52,7 +52,7 @@ func _physics_process(delta: float) -> void:
 		return
 	_sync_mass()
 	_sync_attitude_authority()
-	if reference_id.is_empty() and not is_aboard():
+	if reference_id.is_empty() and (not is_aboard() or _needs_inertial_interior()):
 		_begin_open_space_eva()
 	if not bool(ship.api.get_telemetry().power_available):
 		session.world.set_executor(false)
@@ -88,7 +88,7 @@ func _physics_process(delta: float) -> void:
 			if is_instance_valid(_station):
 				nodes.append(_station)
 			frame.recentre(nodes, player.global_position)
-	if reference_id == EVA_REFERENCE_ID and ship_is_local and is_aboard() and not player.grapple.is_attached():
+	if reference_id == EVA_REFERENCE_ID and ship_is_local and is_aboard() and not player.grapple.is_attached() and not _needs_inertial_interior():
 		_leave_local_ship()
 		_leave_encounter()
 	_publish_elapsed += delta
@@ -104,7 +104,10 @@ func _process(_delta: float) -> void:
 
 func _sync_mass() -> void:
 	var data: Dictionary = ship.api.get_telemetry()
-	session.world.sync_mass(float(session.world.ship.propellant_kg), float(data.cargo_mass_kg), float(data.dry_mass_kg) + float(data.propellant_kg))
+	# Flight budgets include the transported suit. The physical hull keeps its own mass;
+	# a local joint/collision supplies the suit's inertia instead of counting it twice.
+	var occupant_mass: float = player.mass if is_aboard() else 0.0
+	session.world.sync_mass(float(session.world.ship.propellant_kg), float(data.cargo_mass_kg), float(data.dry_mass_kg) + float(data.propellant_kg) + occupant_mass)
 
 
 func _advance_local(delta: float) -> void:
@@ -175,7 +178,7 @@ func _advance_orbit(delta: float) -> void:
 	var aboard: bool = is_aboard()
 	var relative_pose: Transform3D = ship.global_transform.affine_inverse() * player.global_transform
 	var old_basis: Basis = ship.global_basis
-	var limit: float = requested_warp if aboard and reference_id.is_empty() else 1.0
+	var limit: float = requested_warp if aboard and _seated() and reference_id.is_empty() else 1.0
 	if limit > 10.0 and (world.throttle > 0.0 or not world.powered_state.is_empty() or world.attitude_mode not in ["manual", "kill"] or SimVector.length(world.angular_vel) > 1e-9):
 		limit = 10.0
 	var sim_delta: float = delta * limit
@@ -218,7 +221,10 @@ func _enter_encounter(id: String) -> void:
 	ship.global_position = frame.to_local_position(root_state.position) - ship.global_basis * ship.center_of_mass
 	if aboard:
 		player.global_transform = ship.global_transform * player_pose
-		player.linear_velocity += frame.to_local_velocity(root_state.velocity)
+		var carrier_spin: Vector3 = ship.global_basis * LocalOrbitFrame.GODOT_TO_SIM_BODY.transposed() * LocalOrbitFrame.native(session.world.angular_vel)
+		var lever: Vector3 = player.global_position - ship.to_global(ship.center_of_mass)
+		player.linear_velocity += frame.to_local_velocity(root_state.velocity) + carrier_spin.cross(lever)
+		player.angular_velocity += carrier_spin
 	hazards.configure(wreck)
 	if str(session.objects[id].kind) == "derelict":
 		EncounterStore.restore(session, id, frame, wreck, hazards)
@@ -249,11 +255,14 @@ func _leave_local_ship() -> void:
 	session.world.orientation = LocalOrbitFrame.orbital_orientation(ship.global_basis)
 	session.world.angular_vel = LocalOrbitFrame.scalar(LocalOrbitFrame.GODOT_TO_SIM_BODY * (ship.global_basis.transposed() * ship.angular_velocity))
 	if is_aboard():
-		player.linear_velocity -= ship.linear_velocity
+		player.linear_velocity -= ship.linear_velocity + ship.angular_velocity.cross(player.global_position - ship.to_global(ship.center_of_mass))
+		player.angular_velocity -= ship.angular_velocity
 	ship_is_local = false
 	ship.freeze = true
-	ship.collision_layer = 0
-	ship.collision_mask = 0
+	ship.linear_velocity = Vector3.ZERO
+	ship.angular_velocity = Vector3.ZERO
+	ship.collision_layer = 1 if is_aboard() else 0
+	ship.collision_mask = ship.collision_layer
 	_approaching = false
 	_rcs_direction = Vector3.ZERO
 
@@ -313,8 +322,8 @@ func _command(command: String, args: Dictionary) -> Dictionary:
 			var value: float = args.get("rate", NAN)
 			if not is_finite(value) or value not in [1.0, 10.0, 100.0, 1000.0]:
 				return _result(false, "SELECT 1, 10, 100 OR 1000× WARP")
-			if value > 1.0 and (not reference_id.is_empty() or not is_aboard()):
-				return _result(false, "WARP LIMITED TO 1× NEAR OBJECTS OR DURING EVA")
+			if value > 1.0 and (not reference_id.is_empty() or not is_aboard() or not _seated()):
+				return _result(false, "STRAP INTO THE PILOT SEAT TO WARP; 1× NEAR OBJECTS")
 			requested_warp = value
 			if value > 1.0 and not world.executor_on:
 				world.set_attitude_mode("kill")
@@ -367,8 +376,8 @@ func _command(command: String, args: Dictionary) -> Dictionary:
 			_approaching = false
 			_rcs_direction = Vector3.ZERO
 		"next_event":
-			if not reference_id.is_empty() or not is_aboard():
-				return _result(false, "EVENT WARP UNAVAILABLE NEAR OBJECTS OR DURING EVA")
+			if not reference_id.is_empty() or not is_aboard() or not _seated():
+				return _result(false, "STRAP INTO THE PILOT SEAT FOR EVENT WARP; UNAVAILABLE NEAR OBJECTS")
 			if world.nodes.is_empty():
 				return _result(false, "NO MANEUVER EVENT QUEUED")
 			requested_warp = 1000.0
@@ -565,3 +574,17 @@ func _make_station() -> void:
 	sign.position = Vector3(0, 6, 0)
 	sign.pixel_size = 0.02
 	_station.add_child(sign)
+
+
+func _seated() -> bool:
+	return bool(player.get_meta("seated", false))
+
+
+func _needs_inertial_interior() -> bool:
+	var grip: PhysicalGrip = player.get_node_or_null("PhysicalGrip") as PhysicalGrip
+	var boots: MagneticBoots = player.get_node_or_null("MagneticBoots") as MagneticBoots
+	if (grip != null and grip.is_attached()) or (boots != null and boots.is_attached()) or player.grapple.is_attached():
+		return true
+	# Even coasting collisions and walking must exchange momentum with a live hull.
+	# Only the strapped pilot permits analytic transit; free suits always use Jolt.
+	return not _seated()

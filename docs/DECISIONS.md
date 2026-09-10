@@ -171,3 +171,40 @@ decide something the docs did not cover.
   Godot's regular fullscreen window mode, preserving the desktop display mode;
   the existing GNOME launcher inherits this setting. The main scene reapplies it
   after window creation for desktops that ignore the initial hint.
+
+- 2026-09-10 — Conrad approved a physical interaction revision before M5: remove
+  the tractor beam, add hand grips, suit reaction wheels, magnetic boots and a
+  pilot seat. The grapple remains the long-range hauling tool. Slot 3 is hands;
+  G works alongside the cutter. No dependency or asset download was needed.
+- 2026-09-10 — Hands use a live fixed Jolt constraint at the caught pose, retaining
+  collisions and following stable part identity through splits. Catching conserves
+  momentum and may dissipate kinetic energy. Initial tuning is 2 m reach, 3 m/s
+  maximum catch speed, and monitored 2,500 N / 350 N·m load thresholds. These are
+  grip release thresholds, not a claim that every solver impulse is capped.
+  Cargo clamps require releasing the grip before attaching the part to the hull.
+- 2026-09-10 — The suit has three 8 N·m reaction-wheel motors with 20 N·m·s
+  storage per axis and 0.15 kg·m² rotor inertia. They spend battery for motor
+  losses and positive work; passive rotor/body gyroscopic reactions conserve
+  angular momentum. Free head look is ±60° yaw / ±50° pitch, with powered body
+  follow beyond 12°. While hand-gripping, Shift explicitly enables body steering.
+  Q/E uses wheel torque. Alt spends propellant on combined-body braking and wheel
+  unloading; X, requested by Conrad during implementation, brakes spin using
+  wheels alone and leaves drift unchanged. Full wheels leave residual rotation.
+- 2026-09-10 — Switchable magnetic soles engage only aligned, slow feet at steel
+  deck contact. A 50 J pulse latches; idle holding needs no continuous electricity,
+  stepping/turning uses battery (rated up to 1,800 W walking plus 500 W turning),
+  and mechanical release works without power. Foot forces and torque react on
+  the deck; 1,200 N / 1,000 N·m limits or lost contact release the latch. Carrier
+  rotation carries the idle head and suit without commanding powered counter-turns.
+- 2026-09-10 — The NAV-side pilot seat uses the same physical constraint with
+  harness load thresholds of 200 kN / 50 kN·m. F straps in locally without a pose
+  snap; aimed terminals can be used while seated and closing them retains the
+  harness. Terminal use alone no longer freezes or transports the player. Free
+  suits, handholds and boots use a live local coast frame even in open-space
+  coasting, while seated transit allows analytic propagation and warp. Frame
+  transitions preserve seat spin and tangential velocity, hull collisions remain
+  active aboard, and flight budgets include the transported suit's mass.
+- 2026-09-10 — Explicit rigid-body gyroscopic correction is applied to the suit
+  and wreck fragments because the engine's default constant angular velocity
+  otherwise drifts in world angular momentum for off-axis rotation. This supports
+  the spinning-wreck catch acceptance rather than relying on single-axis tests.

@@ -13,10 +13,11 @@ One reusable scene, `WorldScreen`:
 - A `SubViewport` renders a `Control` scene (an "app") at a deliberately low
   resolution (640 x 400) for a chunky in-fiction look.
 - A `ViewportTexture` is applied to the screen mesh's material (unshaded, emissive).
-- Walking up and pressing interact "docks" the player to the terminal: the camera
-  eases to face the screen, the mouse is released, and mouse and keyboard events are
+- Walking up and pressing interact opens terminal input: the mouse is released,
+  and mouse and keyboard events are
   forwarded to the viewport (`SubViewport.push_input`) mapped through the mesh UV
-  under the cursor's ray. Escape or interact again undocks.
+  under the cursor's ray. Escape or interact again closes input. The seat, hand grips or boots provide
+  physical support; the terminal itself does not restrain you.
 - The 3D world keeps rendering the whole time. You can see the wreck through the
   window while you plan.
 
@@ -72,7 +73,7 @@ Retro-industrial. Monospace text, amber on dark for primary readouts, cyan for
 targets and plans, red only for warnings. Low-resolution screens with visible pixels.
 No skeuomorphic chrome; flat panels with thick borders.
 
-## M3 controls (2026-09-10)
+## Historical M3 controls (superseded by physical controls below)
 
 F grips an aimed terminal within 2.5 m when relative speed is below 0.5 m/s.
 The view eases to the screen over 0.35 seconds; the handhold follows the ship.
@@ -117,10 +118,28 @@ Both ship terminals and the tablet run these same apps through ShipApi. PLAN
 replaces its M3 placeholder; later COMMS, market, repairs and the optional AI are
 still outside M4.
 
-To fly the starter trip: grip the NAV terminal with F, select PLAN, leave Kestrel
+To fly the starter trip: move into the pilot seat facing NAV and press F to strap
+in. Aim at NAV and press F again (or use Tab), select PLAN, leave Kestrel
 and 160 minutes selected, then CALCULATE PREVIEW and EXECUTE BURNS. Switch to
 NAV → FLIGHT and use COAST TO NEXT EVENT. The executor points, burns and coasts
 through all five nodes, returning to 1× near the wreck. After the final match,
 NAV → APPROACH / RCS provides the short final approach and station holding.
 The Tab tablet offers the same controls. Open the airlock from SHIP for EVA;
-the existing scanner, cutter, grapple and tractor work on the arrived wreck.
+the scanner, cutter, grapple and physical grips work on the arrived wreck.
+
+## Physical controls update (2026-09-10)
+
+This supersedes the M3 automatic terminal handhold. F opens an aimed nearby
+terminal without changing suit motion. The pilot seat has actual restraints:
+F straps in from its immediate space; while seated F opens an aimed terminal,
+or unstraps when looking away. Closing a screen leaves the harness fastened.
+The Tab tablet works in either state. A loose suit is affected by ship maneuvers;
+warp and event warp require the seat and remain unavailable near objects.
+
+G grips/releases surfaces with any tool selected; 3 selects hands instead of the
+removed tractor. B toggles magnetic soles at steel deck contact. X brakes spin
+using battery-powered wheels only; Alt uses jets to brake drift/spin and unload
+wheels. The HUD shows attachment status, resources and wheel saturation. Shift
+plus mouse steers a hand-held load; normal mouse motion is free head look while
+holding it. Escape and focus loss cancel active motors and tools, retaining
+passive hand/boot/seat attachments.

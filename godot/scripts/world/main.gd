@@ -19,6 +19,8 @@ extends Node3D
 var _ship: PlayerShip
 var _cargo: CargoHold
 var _interaction: ShipInteraction
+var _grip: PhysicalGrip
+var _boots: MagneticBoots
 var _flight: OrbitalFlight
 
 var _screenshot_notice_seconds: float = 0.0
@@ -36,6 +38,7 @@ func _ready() -> void:
 	_player.add_child(tools)
 	tools.configure(_player, _wreck, _hazards)
 	_player.salvage_tools = tools
+	_build_contacts()
 	_build_ship()
 	if not salvage_practice:
 		_flight = OrbitalFlight.new()
@@ -74,8 +77,8 @@ func _process(delta: float) -> void:
 	_screenshot_notice_seconds = maxf(0.0, _screenshot_notice_seconds - delta)
 	_screenshot_status.visible = _screenshot_notice_seconds > 0.0
 	var capture_hint: String = "Esc releases mouse" if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED else "Click to fly"
-	var brake_hint: String = "RCS BRAKE" if _player.is_braking() else "FREE FLIGHT"
-	if _player.suit.propellant_kg <= 0.0:
+	var brake_hint: String = "RCS BRAKE" if _player.is_braking() else ("WHEEL BRAKE" if _player.is_wheel_braking() else "FREE FLIGHT")
+	if _player.suit.propellant_kg <= 0.0 and not _player.is_wheel_braking():
 		brake_hint = "RCS EMPTY"
 	_readout.text = "WAYFARER / SALVAGE YARD\n%.2f m/s  |  %.1f deg/s  |  %s  |  %s" % [
 		_player.linear_velocity.length(), rad_to_deg(_player.angular_velocity.length()),
@@ -87,11 +90,11 @@ func _process(delta: float) -> void:
 	]
 	var warnings: PackedStringArray = []
 	if _player.suit.propellant_kg <= 0.0:
-		warnings.append("PROPELLANT EMPTY: thrust and brake unavailable")
+		warnings.append("PROPELLANT EMPTY: RCS thrust and Alt brake unavailable")
 	elif _player.suit.propellant_kg <= SuitResources.PROPELLANT_CAPACITY_KG * 0.1:
 		warnings.append("LOW PROPELLANT")
 	if _player.suit.battery_energy_j <= 0.0:
-		warnings.append("BATTERY EMPTY: no tool power")
+		warnings.append("BATTERY EMPTY: tools, body steering and powered steps unavailable")
 	elif _player.suit.battery_energy_j <= SuitResources.BATTERY_CAPACITY_J * 0.1:
 		warnings.append("LOW BATTERY")
 	_supply_warning.text = "  |  ".join(warnings)
@@ -99,7 +102,14 @@ func _process(delta: float) -> void:
 	if _player.grapple.is_attached():
 		_grapple_status.text += "  |  CABLE %.1f m" % _player.grapple.cable_length_m
 	_tool_status.text = _player.salvage_tools.status
+	_grapple_status.text += "\n" + _grip.status + " | " + _boots.status
+	_supplies.text += " | WHEELS %.0f%%" % (_player.attitude.utilization() * 100.0)
+	if _player.attitude.utilization() >= 0.98:
+		_supply_warning.text += " | WHEELS SATURATED: Alt uses jets to unload"
 	_target_status.text = _interaction.hint + "\n" + _player.salvage_tools.target_readout
+	var in_ship: Vector3 = _ship.to_local(_player.global_position)
+	if in_ship.z < -1.8 and in_ship.z > -12.0 and absf(in_ship.x) < 4.0 and absf(in_ship.y) < 3.0:
+		_target_status.text += "\nCARGO / " + str(_ship.api.get_telemetry().last_message)
 	for label: String in ["Readout", "Supplies", "SupplyWarning", "GrappleStatus", "ToolStatus", "SalvageStatus", "Reticle", "Controls"]:
 		($HUD.get_node(label) as CanvasItem).visible = not _interaction.is_open()
 	_target_status.position.y = get_viewport().get_visible_rect().size.y - 40.0 if _interaction.is_open() else 338.0
@@ -109,7 +119,7 @@ func _process(delta: float) -> void:
 	if not salvage_practice:
 		var flight: Dictionary = _ship.api.get_telemetry().flight
 		if bool(flight.get("available", false)):
-			_readout.text = "WAYFARER / %s\nSUIT %.2f m/s | %s | %s" % [str(flight.reference_name), _player.linear_velocity.length(), brake_hint, capture_hint]
+			_readout.text = "WAYFARER / %s\nSUIT %.2f m/s | %.1f deg/s | %s | %s" % [str(flight.reference_name), _player.linear_velocity.length(), rad_to_deg(_player.angular_velocity.length()), brake_hint, capture_hint]
 			if _wreck.bodies.is_empty():
 				_salvage_status.text = "%s / %.1f km | %.1f m/s relative | %.0f× time" % [str(flight.target.name), float(flight.target.range_m) / 1000.0, float(flight.target.relative_speed_mps), float(flight.warp)]
 
@@ -174,3 +184,19 @@ func _build_ship() -> void:
 
 func _refresh_navigation_target() -> void:
 	_ship.set_navigation_target(_wreck.bodies[0] if not _wreck.bodies.is_empty() else null)
+
+
+func _build_contacts() -> void:
+	_grip = PhysicalGrip.new()
+	_grip.name = "PhysicalGrip"
+	_player.add_child(_grip)
+	_grip.configure(_player, _player.get_node("Camera3D") as Camera3D)
+	_player.brake_reference = _grip.brake_state
+	_boots = MagneticBoots.new()
+	_boots.name = "MagneticBoots"
+	_player.add_child(_boots)
+	_boots.configure(_player)
+	var contacts: SuitContacts = SuitContacts.new()
+	contacts.name = "SuitContacts"
+	_player.add_child(contacts)
+	contacts.configure(_player, _grip, _boots)

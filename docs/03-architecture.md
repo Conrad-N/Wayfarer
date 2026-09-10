@@ -127,7 +127,11 @@ burn for free. Reboarding returns to orbital transit. Cradle and Lune are drawn
 in a procedural sky using their apparent directions and angular sizes; nearby
 geometry keeps a normal camera depth range.
 
-The terminal handhold temporarily excludes collisions between the held suit and
-its carrier ship. Otherwise a frozen suit behaves like an immovable obstacle
-during the first local physics step and incorrectly removes ship momentum.
-Releasing the handhold restores normal collisions and inherits ship motion.
+The pre-M5 physical interaction update replaces the old frozen terminal handhold
+with a live seat constraint. Terminal use alone does not restrain the suit.
+Unrestrained suits activate a local coast frame even away from other objects,
+so Jolt handles freefall, forces and collisions during both coasts and burns.
+Hands and boots likewise require the local inertial frame. Restrained transit can use analytic flight;
+warp requires the pilot seat. Local constraints retain relative anchors through
+recentring and body replacement. Flight mass budgets include the transported suit;
+the physical ship body excludes it because its live suit body supplies that mass.

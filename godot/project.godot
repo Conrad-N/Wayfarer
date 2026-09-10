@@ -127,6 +127,25 @@ tool_slot_4={
 "events": [Object(InputEventKey,"physical_keycode":52)]
 }
 
+physical_grip={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"physical_keycode":71)]
+}
+magnetic_boots={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"physical_keycode":66)]
+}
+
+steer_held={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"physical_keycode":4194325)]
+}
+
+wheel_brake={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"physical_keycode":88)]
+}
+
 [physics]
 
 3d/physics_engine="Jolt Physics"

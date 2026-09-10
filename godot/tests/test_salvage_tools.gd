@@ -2,89 +2,6 @@
 extends TestCase
 
 
-## The nearest movable target receives a beam impulse and the suit receives its reaction.
-func test_tractor_pull_push_and_camera_reaction() -> void:
-	for push: bool in [false, true]:
-		var fixture: Dictionary = _fixture(ShipGraph.new())
-		var player: Player = fixture.player
-		var tools: SalvageTools = fixture.tools
-		var near: RigidBody3D = _box(fixture.root, Vector3(0.0, 0.55, -5.0), 20.0)
-		var far: RigidBody3D = _box(fixture.root, Vector3(0.0, 0.55, -9.0), 1000.0)
-		await _frames(3)
-		tools.select_tool(SalvageTools.Tool.TRACTOR)
-		tools.set_triggers(not push, push)
-		var dt: float = 1.0 / float(Engine.physics_ticks_per_second)
-		tools._physics_process(dt)
-		await _frames(3)
-		var expected: Vector3 = Vector3.FORWARD * (250.0 if push else -250.0) * dt
-		_check_vector(near.mass * near.linear_velocity, expected, 0.0001, "nearest target receives rated beam impulse")
-		_check_vector(player.mass * player.linear_velocity, -expected, 0.0001, "suit receives equal opposite beam impulse")
-		_check_vector(near.mass * near.linear_velocity + player.mass * player.linear_velocity, Vector3.ZERO, 0.0001, "tractor conserves total linear momentum")
-		_check_vector(far.linear_velocity, Vector3.ZERO, 0.000001, "farther object receives no force through first target")
-		check(absf(player.angular_velocity.x) > 0.001, "camera-height reaction also rotates the suit")
-		_check_vector(_angular_momentum(player) + _angular_momentum(near), Vector3.ZERO, 0.0002, "beam and camera reaction conserve total angular momentum")
-		check_near(player.suit.battery_energy_j, 720000.0 - dt * 900.0, 0.000001, "tractor draws 900 W while powered")
-		check_eq(player.suit.propellant_kg, 8.0, "tractor reaction spends no RCS propellant")
-		tools.cancel_input()
-		var coast: Vector3 = near.linear_velocity
-		tools._physics_process(dt)
-		await _frames(2)
-		_check_vector(near.linear_velocity, coast, 0.000001, "released tractor leaves target coasting")
-		fixture.root.free()
-
-
-## A fractional last charge buys only its fraction of impulse and cannot reverse debt.
-func test_tractor_partial_battery_and_empty_coasting() -> void:
-	var fixture: Dictionary = _fixture(ShipGraph.new())
-	var player: Player = fixture.player
-	var tools: SalvageTools = fixture.tools
-	var target: RigidBody3D = _box(fixture.root, Vector3(0.0, 0.55, -5.0), 20.0)
-	await _frames(3)
-	player.suit.battery_energy_j = 4.5
-	tools.select_tool(SalvageTools.Tool.TRACTOR)
-	tools.set_triggers(true, false)
-	var dt: float = 1.0 / float(Engine.physics_ticks_per_second)
-	tools._physics_process(dt)
-	await _frames(3)
-	var impulse: Vector3 = Vector3.BACK * (250.0 * 4.5 / 900.0)
-	_check_vector(target.mass * target.linear_velocity, impulse, 0.00001, "last battery fraction scales target impulse")
-	_check_vector(player.mass * player.linear_velocity, -impulse, 0.00001, "last fraction scales reaction equally")
-	check_eq(player.suit.battery_energy_j, 0.0, "last charge is consumed exactly")
-	var coast: Vector3 = target.linear_velocity
-	tools._physics_process(dt)
-	await _frames(2)
-	_check_vector(target.linear_velocity, coast, 0.000001, "empty held tractor cannot accelerate")
-	check_eq(player.suit.propellant_kg, 8.0, "empty tool never falls back to suit propellant")
-	fixture.root.free()
-
-
-## Rays stop at the first solid surface, reject fixed targets, and end after 15 metres.
-func test_tractor_range_and_fixed_occlusion() -> void:
-	var fixture: Dictionary = _fixture(ShipGraph.new())
-	var player: Player = fixture.player
-	var tools: SalvageTools = fixture.tools
-	var target: RigidBody3D = _box(fixture.root, Vector3(0.0, 0.55, -16.0), 20.0)
-	await _frames(3)
-	tools.select_tool(SalvageTools.Tool.TRACTOR)
-	tools.set_triggers(true, false)
-	tools._physics_process(1.0 / 60.0)
-	check_eq(player.suit.battery_energy_j, 720000.0, "surface beyond 15 m cannot spend power")
-	target.position.z = -5.0
-	target.freeze = true
-	await _frames(2)
-	tools._physics_process(1.0 / 60.0)
-	check_eq(player.suit.battery_energy_j, 720000.0, "frozen target cannot spend power")
-	target.freeze = false
-	var blocker: StaticBody3D = _wall(fixture.root, Vector3(0.0, 0.55, -2.0))
-	await _frames(2)
-	tools._physics_process(1.0 / 60.0)
-	await _frames(2)
-	check_eq(player.suit.battery_energy_j, 720000.0, "solid wall blocks beam to movable target")
-	_check_vector(target.linear_velocity, Vector3.ZERO, 0.000001, "target behind wall remains still")
-	blocker.free()
-	fixture.root.free()
-
-
 ## A stationary two-second pulse reveals only parts within 20 metres and then stops drawing.
 func test_scanner_time_range_reveal_and_completion_budget() -> void:
 	var graph: ShipGraph = ShipGraph.new()
@@ -144,11 +61,11 @@ func test_scanner_motion_release_and_switch_cancel() -> void:
 	check_eq(tools.scan_progress, 0.0, "release cancels pulse")
 	tools.set_triggers(true, false)
 	tools._physics_process(0.5)
-	tools.select_tool(SalvageTools.Tool.TRACTOR)
+	tools.select_tool(SalvageTools.Tool.HANDS)
 	check_eq(tools.scan_progress, 0.0, "tool switch cancels pulse")
 	energy = player.suit.battery_energy_j
 	tools._physics_process(0.1)
-	check_eq(player.suit.battery_energy_j, energy, "switch does not carry held trigger into tractor")
+	check_eq(player.suit.battery_energy_j, energy, "switch does not carry held trigger into hands")
 	fixture.root.free()
 
 

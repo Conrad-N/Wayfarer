@@ -1,8 +1,8 @@
-## Powered cutter, reaction tractor, and stationary scanner on the EVA suit.
+## Cutter, physical hand grip, and stationary scanner on the EVA suit.
 class_name SalvageTools
 extends Node3D
 
-enum Tool { GRAPPLE, CUTTER, TRACTOR, SCANNER }
+enum Tool { GRAPPLE, CUTTER, HANDS, SCANNER }
 
 var selected: Tool = Tool.GRAPPLE
 var status: String = "Grapple ready"
@@ -12,6 +12,7 @@ var target_readout: String = ""
 var _overheated: bool = false
 var _primary: bool = false
 var _secondary: bool = false
+var _hand_request: int = 0
 var _player: Player
 var _camera: Camera3D
 var _wreck: SalvageWreck
@@ -37,11 +38,16 @@ func select_tool(tool: Tool) -> void:
 	cancel_input()
 	if is_instance_valid(_player):
 		_player.grapple.cancel_input()
-	status = ["Grapple ready", "Aim at a gold cut point", "Aim at loose material", "Hold still to scan"][selected]
+	status = ["Grapple ready", "Aim at a gold cut point", "HANDS | G grab / release within reach", "Hold still to scan"][selected]
 
 
-## Supply held primary/secondary controls; tractor primary pulls, secondary pushes.
+## Supply held tool controls; hands use a press edge to grab or release.
 func set_triggers(primary: bool, secondary: bool) -> void:
+	if selected == Tool.HANDS:
+		if secondary and not _secondary:
+			_hand_request = -1
+		elif primary and not _primary:
+			_hand_request = 1
 	_primary = primary
 	_secondary = secondary
 
@@ -50,6 +56,7 @@ func set_triggers(primary: bool, secondary: bool) -> void:
 func cancel_input() -> void:
 	_primary = false
 	_secondary = false
+	_hand_request = 0
 	scan_progress = 0.0
 	_beam_visible = false
 
@@ -72,6 +79,14 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if _hand_request != 0 and is_instance_valid(_player):
+		var grip: PhysicalGrip = _player.get_node_or_null("PhysicalGrip") as PhysicalGrip
+		if grip != null:
+			if _hand_request < 0:
+				grip.release()
+			elif not _player.surface_motion_active and not bool(_player.get_meta("seated", false)):
+				grip.try_grab()
+		_hand_request = 0
 	if not is_instance_valid(_player) or not is_instance_valid(_wreck):
 		return
 	_inspect_target()
@@ -83,8 +98,8 @@ func _physics_process(delta: float) -> void:
 	match selected:
 		Tool.CUTTER:
 			_cutter(delta)
-		Tool.TRACTOR:
-			_tractor(delta)
+		Tool.HANDS:
+			status = "HANDS | Left grab / right release | G works with any tool"
 		Tool.SCANNER:
 			_scanner(delta)
 	if selected == Tool.CUTTER and _primary and not _overheated and not _beam_visible:
@@ -167,28 +182,6 @@ func _cutter(delta: float) -> void:
 	status = "CUTTER | %s %.0f%% | %.0f%% heat" % [edge.trim_prefix("Joint_"), float(_wreck.cut_progress.get(edge, 0.0)) * 100.0, heat * 100.0]
 	if heat >= 1.0:
 		_overheated = true
-
-
-func _tractor(delta: float) -> void:
-	if not _primary and not _secondary:
-		status = "TRACTOR | Left pulls, right pushes | 15 m"
-		return
-	var hit: Dictionary = _ray(15.0)
-	var target: RigidBody3D = hit.get("collider") as RigidBody3D
-	if target == null or target.freeze:
-		status = "TRACTOR | No movable target within 15 m"
-		return
-	var seconds: float = _player.suit.consume_energy(delta * 900.0) / 900.0
-	if seconds <= 0.0:
-		status = "TRACTOR | Battery empty"
-		return
-	var direction: Vector3 = -_camera.global_basis.z
-	var force: Vector3 = direction * (250.0 if _secondary else -250.0) * seconds / delta
-	target.apply_force(force, (hit.position as Vector3) - target.global_position)
-	_player.apply_force(-force, _camera.global_position - _player.global_position)
-	_beam_end = hit.position
-	_beam_visible = true
-	status = "TRACTOR | PUSH" if _secondary else "TRACTOR | PULL"
 
 
 func _scanner(delta: float) -> void:

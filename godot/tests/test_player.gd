@@ -136,39 +136,42 @@ func test_roll_torque_sign_and_body_axis() -> void:
 	right.free()
 
 
-## Mouse pitch passes both poles and is consumed once, with the camera following the suit.
-func test_mouse_pitch_is_unclamped_and_consumed_once() -> void:
+## Small head movement is free and cannot rotate the physical suit.
+func test_mouse_head_look_is_bounded_and_consumed_once() -> void:
 	var player: Player = _spawn_player(Vector3.ZERO)
 	await _physics_steps(3)
-	player.queue_mouse_look(Vector2(0.0, -PI / player.mouse_sensitivity))
+	player.queue_mouse_look(Vector2(0.1 / player.mouse_sensitivity, -0.05 / player.mouse_sensitivity))
 	await _physics_steps(3)
-	_check_basis(player.basis, Basis(Vector3.RIGHT, PI), "mouse pitch can turn upside down")
-	var camera: Camera3D = _find_type(player, "Camera3D") as Camera3D
-	check(camera != null, "camera exists")
-	if camera != null:
-		_check_basis(camera.global_basis, player.global_basis, "camera follows body orientation")
+	_check_basis(player.basis, Basis.IDENTITY, "head motion does not teleport the body")
+	var camera: Camera3D = player.get_node("Camera3D") as Camera3D
+	_check_basis(camera.basis, Basis(Vector3.UP, -0.1) * Basis(Vector3.RIGHT, 0.05), "camera moves within helmet")
+	check_eq(player.suit.battery_energy_j, SuitResources.BATTERY_CAPACITY_J, "small head movement costs no motor energy")
 	await _physics_steps(3)
-	_check_basis(player.basis, Basis(Vector3.RIGHT, PI), "mouse delta is not replayed")
-	player.queue_mouse_look(Vector2(0.0, -PI / player.mouse_sensitivity))
+	check_near(player.head_angles_rad.x, -0.1, 1e-5, "mouse delta consumed once")
+	player.suit.battery_energy_j = 0.0
+	player.queue_mouse_look(Vector2(1e6, -1e6))
 	await _physics_steps(3)
-	_check_basis(player.basis, Basis.IDENTITY, "pitch can complete a full rotation")
+	check_near(player.head_angles_rad.x, -Player.HEAD_YAW_LIMIT_RAD, 1e-5, "yaw limited without power")
+	check_near(player.head_angles_rad.y, Player.HEAD_PITCH_LIMIT_RAD, 1e-5, "pitch limited without power")
+	_check_basis(player.basis, Basis.IDENTITY, "unpowered head cannot rotate suit")
 	player.free()
 
 
-## Mouse yaw and pitch use the suit's axes after rolling, with no world-up correction.
-func test_mouse_look_after_roll_uses_local_axes() -> void:
+## Large mouse movement requests motor torque in the rolled suit's axes.
+func test_mouse_body_follow_uses_power_and_local_axes() -> void:
 	var orientation: Basis = Basis(Vector3.BACK, PI * 0.5)
 	var player: Player = _spawn_player(Vector3.ZERO, orientation)
 	await _physics_steps(3)
-	player.queue_mouse_look(Vector2(0.25 / player.mouse_sensitivity, 0.0))
-	player.queue_mouse_look(Vector2(0.25 / player.mouse_sensitivity, 0.0))
+	player.queue_mouse_look(Vector2(0.5 / player.mouse_sensitivity, 0.0))
 	await _physics_steps(3)
-	var expected: Basis = orientation * Basis(Vector3.UP, -0.5)
-	_check_basis(player.basis, expected, "accumulated yaw turns around rolled body up")
-	player.queue_mouse_look(Vector2(0.0, 0.4 / player.mouse_sensitivity))
-	await _physics_steps(3)
-	expected = expected * Basis(Vector3.RIGHT, -0.4)
-	_check_basis(player.basis, expected, "pitch turns around current body right")
+	check(player.basis.z.distance_to(orientation.z) < 0.03, "mouse cannot instantly turn rigid body")
+	await _physics_steps(SAMPLE_STEPS)
+	check(player.angular_velocity.dot(orientation.y) < -0.01, "body-follow yaw uses rolled local up")
+	check(player.suit.battery_energy_j < SuitResources.BATTERY_CAPACITY_J, "body-follow costs electricity")
+	check_eq(player.suit.propellant_kg, SuitResources.PROPELLANT_CAPACITY_KG, "body-follow uses no propellant")
+	await _physics_steps(Engine.physics_ticks_per_second * 5)
+	check(absf(player.head_angles_rad.x) < 0.03, "body catches up to gaze")
+	check(player.angular_velocity.length() < 0.03, "wheel counter-torque settles body follow")
 	player.free()
 
 

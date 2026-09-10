@@ -88,14 +88,14 @@ approaches to the drive section; there are accessible routes to every joint.
 
 ## Tools
 
-All tools are on the suit and draw suit battery. They are beams, not hands: point,
-hold, done. Simple and gamified on purpose.
+Powered tools draw suit battery. Physical grips and magnetic soles provide contact
+with wrecks and ship interiors; hauling obeys the combined mass and inertia.
 
 | tool | what it does | limits |
 |---|---|---|
 | Cutter | Sever a cut point you are aiming at within range. Progress bar; time scales with material thickness and cutter power. | Range 8 m. Heat: overuse forces a cooldown. Cutting near a hazard triggers it. |
 | Grapple | Tether to a surface or object. Reel in to pull yourself to it, or pull it to you if it is lighter than you. | One tether at a time. Max length 30 m. |
-| Tractor beam | Push or pull an object along your aim line. Force is fixed, so heavy parts barely move. | Range 15 m. Reaction force pushes you back (Newton's third law is a mechanic). |
+| Hands | Hold a nearby surface, remain attached while cutting, and carry the freed part with suit thrust. | Reach 2 m, finite catch and holding loads; release preserves motion. |
 | Scanner | Reveal part kinds, values, masses, and hazard markers within range. | Range 20 m. Takes a few seconds; you must hold still. |
 
 Later tools (not first version): free-cut plating, a deployable tow rig, a demolition charge.
@@ -118,16 +118,13 @@ rope sag and wrapping are not simulated.
 
 M2 tool tuning and controls:
 
-- Keys 1/2/3/4 select grapple/cutter/tractor/scanner. Capture clicks, Escape,
+- Keys 1/2/3/4 select grapple/cutter/hands/scanner. Capture clicks, Escape,
   focus loss, and switching tools cannot carry a held trigger into a new action.
 - Cutter: hold left click on a visible gold marker within 8 m. Both sides of a
   joint are selectable. Cutting time is thickness / 4 mm/s, with a 0.6 multiplier
   for aluminium and a 0.4 s minimum. It draws 1,200 W while cutting. Heat grows
   by 0.24 per powered second; idle cooling removes 0.18 per second. At full heat
   it must cool below 0.25 before cutting resumes. Progress stays on the joint.
-- Tractor: 250 N along the aiming ray within 15 m, left pulls and right pushes,
-  drawing 900 W. The equal opposing force acts at the suit camera/tool position;
-  recoil and off-centre target hits can cause rotation. Intervening surfaces block it.
 - Scanner: 150 W for a two-second scan, revealing parts within 20 m. Suit speed
   must be at most 0.2 m/s, spin at most 0.1 rad/s, and aim steady. Motion or release
   resets incomplete progress. A completed held scan spends no further energy.
@@ -135,7 +132,7 @@ M2 tool tuning and controls:
   its kind, mass, condition, value, and hazard information on the HUD.
 
 Powered work scales to the final fraction of battery energy available. Empty
-batteries stop cutter, tractor, and scanner without modifying existing velocities.
+batteries stop cutter and scanner without modifying existing velocities.
 
 ## Hazards
 
@@ -161,17 +158,42 @@ escaping exhaust carries the unabsorbed momentum. Pressure/power hazards remain 
 
 ## Suit
 
-Oxygen (minutes), propellant (for suit RCS movement), battery (for tools). All refill
-at the ship. Suit RCS is weak: use the grapple to move far.
+Oxygen (minutes), propellant (for suit jets), battery (for powered tools, reaction
+wheels and boot steps). Oxygen and refilling remain later work.
 
-M1 movement tuning: the 100 kg fully supplied suit includes 8 kg of propellant.
-Translation, roll jets, and braking draw from that tank in proportion to their
-applied impulse; expelled propellant reduces the body mass. Empty tanks leave
-the suit coasting with no thrust or braking. Mouse aiming remains available.
-The tool battery starts with 720,000 J (displayed as 200 Wh); RCS and coasting do
-not draw tool power. The debug HUD shows both stores and warns at 10% remaining
-or empty. All four M2 tools draw from this battery; oxygen and refilling at the ship
-come in later items.
+The fully supplied suit is 100 kg, including 8 kg of propellant, with 720,000 J
+(200 Wh) of battery energy. Translation uses up to 180 N. Alt brakes drift and
+rotation with up to 600 N / 60 N·m of jets, spending impulse / 2,000 m/s of
+propellant (torque uses a 0.5 m effective lever arm). Empty tanks preserve motion.
+
+Mouse movement turns the head freely within ±60° yaw and ±50° pitch. Beyond a
+12° offset the body follows through electrically powered reaction wheels;
+Q/E roll uses the same wheels. They provide 8 N·m and store up to 20 N·m·s on
+each axis. Motors pay electrical/mechanical losses; saturation prevents further
+momentum storage. X brakes rotation with wheels only, leaving drift and fuel
+alone. Alt also unloads stored wheel momentum using opposed propellant jets.
+There is no unlimited or free body rotation.
+
+G toggles a hand grip with any tool selected; slot 3 also offers left-click grab
+and right-click release. A grip is a live six-axis physical constraint, with no
+pose or velocity reset. Catching a spinning wreck conserves angular momentum;
+the inelastic catch can dissipate kinetic energy. The combined rotational
+inertia slows the shared spin. Holding Alt acts on both bodies through the suit's
+finite jets. Large loads can exceed the grip or exhaust the suit's fuel.
+
+The grip follows the selected part through cutting. Look around freely to aim the
+cutter while holding; Shift + mouse deliberately steers the combined load using
+reaction wheels, and Q/E rolls it. The carried part retains its collisions and
+must fit through the cargo door. Release it inside the bay before clamps secure it.
+The grapple remains the longer-range tether; the tractor beam has been removed.
+
+B latches magnetic boots when aligned soles are in contact with a designated steel
+deck at low relative speed. WASD then walks relative to the viewed surface and
+mouse yaw turns the torso through the feet. Engagement costs 50 J; steps/turns
+spend battery, with equal reaction on the deck. A switchable magnetic latch holds
+passively without idle draw; B mechanically releases even with an empty battery.
+Holding force and torque are limited; losing deck contact or an excessive load
+releases the soles. Boots supply no artificial gravity or remote attraction.
 
 ## Extraction: the core trade-off
 

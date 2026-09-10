@@ -33,7 +33,7 @@ Nothing saves you but planning, execution, and the insurance you remembered to b
 
 | Game | Take | Leave |
 |---|---|---|
-| Hardspace: Shipbreaker | 6DOF zero-g movement where you end up upside down without meaning to. Beam tools (cutter, grapple, tractor). Quick, gamified teardown. Hazards that punish careless cuts. Simple readable graphics. | The fixed shipyard. The corporate story. The rigid shift timer. |
+| Hardspace: Shipbreaker | 6DOF zero-g movement where you end up upside down without meaning to. Cutter, grapple, and physical handling. Quick, gamified teardown. Hazards that punish careless cuts. Simple readable graphics. | The fixed shipyard. The corporate story. The rigid shift timer. |
 | Ostranauts | Salvage as a living. Ship maintenance with real systems. Stations with different prices. Contracts. Debt and insurance. | Skill stats. Top-down view. Crew management. |
 | The previous Wayfarer prototype | Real orbital mechanics, maneuver planning, time warp. The idea of one ship API that panels and an AI both use. | Multiplayer. Shared world time. Panels as web pages. |
 

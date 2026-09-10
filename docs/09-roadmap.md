@@ -253,6 +253,43 @@ navball, plan, burn, arrival, RCS and planetary-sky screenshots under ignored
 contracts and disk saves remain M5; the existing local practice scene is retained
 through the main scene's `salvage_practice` property.
 
+## Physical interaction update — before M5
+
+Conrad requested this revision after playing M4, before the economy loop.
+
+- [x] Replace tractor beam with physical grip; carry an antenna through the cargo door.
+- [x] Catch a spinning wreck with conserved momentum; suit braking slows both bodies.
+- [x] Bounded electrical suit rotation, free head look, wheel-only X brake and Alt jet brake.
+- [x] Physical pilot seat; unrestrained maneuvers retain freefall and collisions.
+- [x] Magnetic boots with powered walking, passive latch and finite holding force.
+
+Physical update completed (2026-09-10): the tractor is replaced with a contact
+handhold that survives cutting and transfers suit forces to its load. Bounded
+reaction wheels power mouse body steering, Q/E roll and X spin-only braking;
+Alt uses propellant to brake the combined load and unload wheel storage. Free
+head look remains available. The pilot seat is a live harness, and terminal use
+alone supplies no restraint. Unstrapped suits remain in physical freefall during
+coasts and burns. Magnetic boots use finite deck forces, powered stepping and a
+passive switchable latch.
+
+Acceptance exercises used the real imported 18 kg antenna, cutter, suit thrust,
+2.2 m cargo aperture and clamps: hold before cutting, detach, carry over four
+metres, brake, release, and secure. A separate native G/Alt input exercise caught
+the complete 1,579 kg spinning wreck and stopped both suit and wreck using about
+0.29 kg of propellant. Wheel-only tests stop a manageable held load and leave
+residual spin when a larger load fills the wheels; a windowed X exercise worked
+with an empty propellant tank. Boots walked and turned through actual B/W/mouse
+input, while the seat's F-key flow reached real terminal controls.
+
+Coverage includes momentum/energy behavior, powered limits, split identity,
+obstructed carry, grip overload, held cargo admission, passive rotating boots,
+seat/unstrap/frame transitions and the existing complete orbital transfer. Wreck
+and suit free rotation include gyroscopic correction. Inspected fullscreen hand,
+cargo, seat, boot and wheel-brake captures under ignored `godot/build/screens/`.
+Final verification: `./check.sh` passes **2,660 checks, zero failures**, with no
+script errors or node-leak warnings. The main scene boots headless cleanly.
+M5 remains the next milestone.
+
 ## M5 — Loop
 
 Goal: the whole job, once.

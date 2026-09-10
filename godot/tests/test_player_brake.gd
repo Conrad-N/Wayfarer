@@ -133,7 +133,8 @@ func test_stationary_brake_allows_mouse_look() -> void:
 	await _physics_steps(SAMPLE_STEPS)
 	_check_vector(player.linear_velocity, Vector3.ZERO, 0.00001, "braking at rest creates no drift")
 	_check_vector(player.angular_velocity, Vector3.ZERO, 0.00001, "braking at rest creates no spin")
-	_check_vector(player.basis.y, Vector3.DOWN, 0.0001, "mouse can turn suit upside down while braking")
+	_check_vector(player.basis.y, Vector3.UP, 0.0001, "head aiming does not bypass brake with body teleport")
+	check_near(player.head_angles_rad.y, Player.HEAD_PITCH_LIMIT_RAD, 0.0001, "head look remains available within limits")
 	player.free()
 
 
@@ -144,7 +145,8 @@ func test_brake_uses_physical_alt_key() -> void:
 	event.pressed = true
 	check(InputMap.event_is_action(event, "brake"), "physical Alt activates brake")
 	event.physical_keycode = KEY_X
-	check(not InputMap.event_is_action(event, "brake"), "X no longer activates brake")
+	check(not InputMap.event_is_action(event, "brake"), "X does not activate RCS brake")
+	check(InputMap.event_is_action(event, "wheel_brake"), "physical X activates rotation-only wheel brake")
 
 
 func _spawn_player(at: Vector3, orientation: Basis = Basis.IDENTITY) -> Player:

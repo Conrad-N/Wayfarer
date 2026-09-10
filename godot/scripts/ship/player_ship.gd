@@ -2,6 +2,7 @@
 class_name PlayerShip
 extends RigidBody3D
 
+const SEAT_POSITION: Vector3 = Vector3(-0.85, 0.0, 1.0)
 const CARGO_BOUNDS: AABB = AABB(Vector3(-1.8, -1.4, -7.0), Vector3(3.6, 2.8, 5.0))
 const DAMAGE_THRESHOLD_J: float = 2000.0
 const SECTION_DAMAGE_ENERGY_J: float = 300000.0
@@ -95,7 +96,8 @@ func _build_interior() -> void:
 	var shell: Color = Color(0.32, 0.40, 0.47)
 	var trim: Color = Color(0.12, 0.19, 0.24)
 	# The shell is six independent slabs, never a convex box across the rooms.
-	_add_box("Floor", Vector3(4.4, 0.3, 13.2), Vector3(0, -1.55, -0.6), "hull", shell, true)
+	var deck: CollisionShape3D = _add_box("Floor", Vector3(4.4, 0.3, 13.2), Vector3(0, -1.55, -0.6), "hull", shell, true)
+	deck.set_meta("magnetic_surface", true)
 	_add_box("Ceiling", Vector3(4.4, 0.3, 13.2), Vector3(0, 1.55, -0.6), "power", shell, true)
 	_add_box("PortWall", Vector3(0.3, 2.8, 13.2), Vector3(-2.05, 0, -0.6), "rcs", shell, true)
 	_add_box("StarboardWall", Vector3(0.3, 2.8, 13.2), Vector3(2.05, 0, -0.6), "power", shell, true)
@@ -110,6 +112,7 @@ func _build_interior() -> void:
 	volume.set_meta("volume_m3", CARGO_BOUNDS.get_volume())
 	_mount("NavTerminalMount", Vector3(-1.89, 0.35, 1.0), PI / 2.0)
 	_mount("ShipTerminalMount", Vector3(1.89, 0.35, 1.0), -PI / 2.0)
+	_build_pilot_seat()
 	_sign("CARGO / 2.2 m CLEARANCE", Vector3(0, 1.32, -7.28), PI)
 	_sign("HAB", Vector3(0, 1.3, -2.18), PI)
 	_sign("AIRLOCK", Vector3(0, 1.3, 3.32), PI)
@@ -124,6 +127,25 @@ func _build_interior() -> void:
 		light.light_color = Color(0.65, 0.85, 1.0)
 		add_child(light)
 		_lights.append(light)
+
+
+func _build_pilot_seat() -> void:
+	# The seat faces the port NAV screen and leaves the centre passage clear.
+	var upholstery: Color = Color(0.13, 0.23, 0.27)
+	var frame_color: Color = Color(0.45, 0.51, 0.53)
+	_add_box("SeatPedestal", Vector3(0.34, 0.35, 0.4), Vector3(-0.85, -1.22, 1.0), "hull", frame_color)
+	_add_box("SeatCushion", Vector3(0.68, 0.16, 0.72), Vector3(-0.85, -1.0, 1.0), "hull", upholstery)
+	_add_box("SeatBack", Vector3(0.13, 1.25, 0.72), Vector3(-0.4, -0.38, 1.0), "hull", upholstery)
+	for side: float in [-1.0, 1.0]:
+		_add_box("SeatArm" + str(side), Vector3(0.65, 0.1, 0.08), Vector3(-0.85, -0.55, 1.0 + side * 0.42), "hull", frame_color)
+		_add_box("SeatHarness" + str(side), Vector3(0.025, 0.8, 0.065), Vector3(-0.52, -0.17, 1.0 + side * 0.21), "hull", Color(0.93, 0.58, 0.13))
+	for child: Node in get_children():
+		if child is CollisionShape3D and str(child.name).begins_with("Seat"):
+			child.set_meta("pilot_seat", true)
+	var area: Area3D = _area("PilotSeat", Vector3(0.9, 1.7, 1.0), SEAT_POSITION)
+	area.collision_layer = 4
+	area.set_meta("pilot_seat", true)
+	_sign("PILOT / F STRAP IN", Vector3(-0.31, 0.56, 1.0), PI / 2.0)
 
 
 func _frame(label: String, z: float, width: float, system: String, color: Color) -> void:

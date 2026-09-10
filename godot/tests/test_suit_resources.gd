@@ -61,8 +61,8 @@ func test_assignments_keep_stores_finite_and_bounded() -> void:
 	check_eq(suit.battery_energy_j, 900.0, "valid partial energy value survives")
 
 
-## Translation and roll both spend propellant; expelled fuel reduces body mass.
-func test_translation_and_roll_spend_propellant_and_mass() -> void:
+## Translation uses propellant and roll uses electricity; only expelled fuel reduces mass.
+func test_translation_and_roll_use_separate_resources() -> void:
 	var translation: Player = _spawn_player(Vector3.ZERO)
 	var roll: Player = _spawn_player(Vector3(10.0, 0.0, 0.0))
 	translation.set_motion_input(Vector3.FORWARD, 0.0)
@@ -76,11 +76,10 @@ func test_translation_and_roll_spend_propellant_and_mass() -> void:
 	var roll_spent: float = roll_before - roll.suit.propellant_kg
 	check_close(translation_spent, translation.thrust_force_n * _sample_seconds() / translation.exhaust_velocity_mps,
 		0.00001, "translation expels propellant for its impulse")
-	check_close(roll_spent, roll.roll_torque_nm * _sample_seconds() / (roll.thruster_lever_arm_m * roll.exhaust_velocity_mps),
-		0.00001, "roll jets expel propellant for their angular impulse")
+	check_eq(roll_spent, 0.0, "reaction-wheel roll uses no propellant")
 	check_near(mass_before - translation.mass, translation_spent, 0.0001, "expelled propellant leaves the body mass")
 	check_eq(translation.suit.battery_energy_j, 720000.0, "translation leaves tool battery unchanged")
-	check_eq(roll.suit.battery_energy_j, 720000.0, "roll leaves tool battery unchanged")
+	check(roll.suit.battery_energy_j < 720000.0, "roll draws suit battery")
 	translation.free()
 	roll.free()
 
@@ -121,7 +120,7 @@ func test_braking_drift_and_spin_spends_propellant() -> void:
 	spin.free()
 
 
-## Empty tanks disable all jets while preserving existing motion and mouse aiming.
+## Empty tanks disable jets, while powered wheels still steer and bounded head look remains free.
 func test_empty_tank_preserves_motion_with_controls_and_brake() -> void:
 	var player: Player = _spawn_player(Vector3.ZERO)
 	player.suit.propellant_kg = 0.0
@@ -133,42 +132,41 @@ func test_empty_tank_preserves_motion_with_controls_and_brake() -> void:
 	var spin: Vector3 = player.angular_velocity
 	await _physics_steps(SAMPLE_STEPS)
 	_check_vector(player.linear_velocity, velocity, 0.00001, "empty thrust preserves drift")
-	_check_vector(player.angular_velocity, spin, 0.00001, "empty roll preserves spin")
+	check(player.angular_velocity.length() > spin.length(), "powered roll still works without propellant")
+	spin = player.angular_velocity
 	player.set_braking(true)
+	await _physics_steps(3)
+	spin = player.angular_velocity
 	await _physics_steps(SAMPLE_STEPS)
 	_check_vector(player.linear_velocity, velocity, 0.00001, "empty brake preserves drift")
 	_check_vector(player.angular_velocity, spin, 0.00001, "empty brake preserves spin")
-	var forward_before: Vector3 = player.basis.z
 	player.queue_mouse_look(Vector2(0.0, -PI / player.mouse_sensitivity))
 	await _physics_steps(3)
-	check(player.basis.z.dot(forward_before) < -0.99, "empty tank still allows mouse aiming")
+	check_near(player.head_angles_rad.y, Player.HEAD_PITCH_LIMIT_RAD, 1e-5, "empty tank still allows bounded head aiming")
 	check_eq(player.suit.propellant_kg, 0.0, "empty tank never refills itself")
 	player.free()
 
 
 ## A final fraction of a tick provides only the impulse that its propellant can pay for.
-func test_fractional_final_supply_scales_thrust_and_roll() -> void:
+func test_fractional_final_supply_scales_thrust() -> void:
 	var player: Player = _spawn_player(Vector3.ZERO)
 	await _physics_steps(3)
 	var supply: float = 0.00001
 	var initial_mass: float = player.mass
-	var inverse_inertia: Basis = player.get_inverse_inertia_tensor()
-	var total_jet_force: float = player.thrust_force_n + player.roll_torque_nm / player.thruster_lever_arm_m
+	var total_jet_force: float = player.thrust_force_n
 	var force_time: float = supply * player.exhaust_velocity_mps / total_jet_force
 	player.suit.propellant_kg = supply
-	player.set_motion_input(Vector3.FORWARD, 1.0)
+	player.set_motion_input(Vector3.FORWARD, 0.0)
 	await _physics_steps(5)
 	var expected_velocity: Vector3 = Vector3.FORWARD * player.thrust_force_n * force_time / initial_mass
-	var expected_spin: Vector3 = inverse_inertia * Vector3.BACK * player.roll_torque_nm * force_time
 	_check_vector(player.linear_velocity, expected_velocity, 0.000001, "final fuel scales translation impulse")
-	_check_vector(player.angular_velocity, expected_spin, 0.000001, "final fuel scales roll impulse by the same fraction")
 	check_eq(player.suit.propellant_kg, 0.0, "final supply consumed exactly")
 	check_near(initial_mass - player.mass, supply, 0.00001, "final mass loss matches consumed supply")
 	var velocity: Vector3 = player.linear_velocity
 	var spin: Vector3 = player.angular_velocity
 	await _physics_steps(SAMPLE_STEPS)
 	_check_vector(player.linear_velocity, velocity, 0.000001, "held thrust stops accelerating after cutoff")
-	_check_vector(player.angular_velocity, spin, 0.000001, "held roll stops accelerating after cutoff")
+	_check_vector(player.angular_velocity, spin, 0.000001, "translation creates no spin")
 	player.free()
 
 
@@ -209,7 +207,7 @@ func test_empty_battery_leaves_rcs_available() -> void:
 	player.set_motion_input(Vector3.FORWARD, 1.0)
 	await _physics_steps(SAMPLE_STEPS)
 	check(player.linear_velocity.length() > 0.1, "empty battery still permits translation")
-	check(player.angular_velocity.length() > 0.01, "empty battery still permits roll")
+	check(player.angular_velocity.length() < 0.00001, "empty battery disables reaction-wheel roll")
 	check(player.suit.propellant_kg < 8.0, "RCS spends its own propellant")
 	check_eq(player.suit.battery_energy_j, 0.0, "empty tool battery stays empty")
 	player.free()

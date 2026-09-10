@@ -17,5 +17,5 @@ it here.
 - **Q6 Name.** Wayfarer is a working title.
 - **Q7 Player ship building.** Should the player be able to refit their own ship from
   salvaged parts using the same graph? Probably yes, later. Not before M6.
-- **Q8 Suit movement inside the ship.** Same 6DOF controller, or a magnetic-boots
-  mode for walking? Try 6DOF first in M3; add boots if terminals are annoying to use.
+- **Q8 resolved (2026-09-10).** Conrad approved magnetic boots, physical grips,
+  a restrained pilot seat, and bounded suit reaction wheels before M5. See DECISIONS.

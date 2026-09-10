@@ -40,14 +40,14 @@ local scene loads silently and the wreck becomes a physical thing.
 
 ## Salvage
 
-You leave through the airlock with a suit, a cutter, a grapple, a tractor beam, and
+You leave through the airlock with a suit, a cutter, a grapple, hand grips, magnetic boots, and
 a scanner. The suit has oxygen, propellant, and battery. The wreck is an unknown
 shape made of known parts. You:
 - scan to learn part values, masses, and where hazards are,
 - decide an order: what to cut first so the rest becomes reachable,
 - cut at cut points; the wreck splits into free-floating bodies, momentum conserved,
-- move parts to your ship with the tractor beam and grapple. Heavy parts barely
-  move; you move instead,
+- carry parts with a physical grip and suit thrust, or haul them with the grapple.
+  Added mass slows your acceleration and makes turning harder,
 - fit parts through your cargo door, or cut them smaller and lose value, or tow
   them outside and accept a heavier, slower ship,
 - watch your own ship: a loose tank drifting into it is your problem.
@@ -76,7 +76,7 @@ permadeath or a costly bailout is open question Q3.
 
 ## Progression without stats
 
-- **Tools:** stronger cutters, stronger tractor beams, longer grapples, better scanners.
+- **Tools:** stronger cutters, longer grapples, better scanners.
 - **Ship:** bigger cargo door, more propellant, more power, more spares, a tow rig.
 - **Knowledge:** you learn ship classes, where their reactors sit, what leaks.
 - **Reputation:** stations open better contracts to people who deliver.

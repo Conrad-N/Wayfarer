@@ -1,4 +1,4 @@
-## Terminal docking and handheld input share the same physical screen apps.
+## Physical pilot restraints and freely drifting terminal/tablet input.
 class_name ShipInteraction
 extends Node
 
@@ -8,10 +8,8 @@ var tablet: WorldScreen
 var active_screen: WorldScreen
 var hint: String = "Tab tablet | F use terminal"
 var _camera: Camera3D
-var _docked: bool = false
-var _dock_elapsed: float = 0.0
-var _start_local: Transform3D
-var _carrier_collision_exception_added: bool = false
+var _seat_restraint: PhysicalGrip
+
 
 
 ## Connect the suit to its ship; the tablet uses the same ShipApi as both terminals.
@@ -19,6 +17,14 @@ func configure(suit_player: Player, owner_ship: PlayerShip) -> void:
 	player = suit_player
 	ship = owner_ship
 	_camera = player.get_node("Camera3D") as Camera3D
+	_seat_restraint = PhysicalGrip.new()
+	_seat_restraint.name = "SeatRestraint"
+	add_child(_seat_restraint)
+	_seat_restraint.configure(player, _camera)
+	_seat_restraint.max_reach_m = 2.5
+	_seat_restraint.max_catch_speed_mps = 0.5
+	_seat_restraint.max_grip_force_n = 200000.0
+	_seat_restraint.max_grip_torque_nm = 50000.0
 	tablet = preload("res://ui/world_screen.tscn").instantiate() as WorldScreen
 	tablet.name = "Tablet"
 	tablet.configure(ship.api, "SHIP", false)
@@ -42,44 +48,58 @@ func open_tablet() -> void:
 	tablet.visible = true
 
 
-## Grip a nearby terminal only at a safe relative approach speed.
-func open_terminal(screen: WorldScreen) -> bool:
-	if not is_instance_valid(screen) or not screen.is_available() or is_open():
+## Strap into the physical seat only from its immediate, slow approach space.
+func strap_in() -> bool:
+	if is_seated() or not is_instance_valid(ship):
 		return false
-	var offset: Vector3 = player.global_position - ship.to_global(ship.center_of_mass)
-	var carrier_velocity: Vector3 = ship.linear_velocity + ship.angular_velocity.cross(offset)
-	if _camera.global_position.distance_to(screen.global_position) > 2.5 or (player.linear_velocity - carrier_velocity).length() > 0.5:
-		hint = "Approach within 2.5 m and brake before using the terminal"
+	var seat_position: Vector3 = ship.to_global(PlayerShip.SEAT_POSITION)
+	var carrier_velocity: Vector3 = ship.linear_velocity + ship.angular_velocity.cross(player.global_position - ship.to_global(ship.center_of_mass))
+	if player.global_position.distance_to(seat_position) > 0.85 or (player.linear_velocity - carrier_velocity).length() > 0.5:
+		hint = "Move into the pilot seat and match its motion before strapping in"
 		return false
-	# The handhold transfers the small relative impulse to the ship on engagement.
-	ship.apply_impulse((player.linear_velocity - carrier_velocity) * player.mass, player.global_position - ship.global_position)
-	_begin_input(screen)
-	_docked = true
-	_dock_elapsed = 0.0
-	_start_local = ship.global_transform.affine_inverse() * player.global_transform
-	# A held suit follows the carrier, so its frozen collider must not obstruct
-	# the same hull when a physics step translates or rotates that hull.
-	_carrier_collision_exception_added = not player.get_collision_exceptions().has(ship)
-	if _carrier_collision_exception_added:
-		player.add_collision_exception_with(ship)
-	player.freeze = true
+	if not _seat_restraint.grab_body(ship, seat_position):
+		return false
+	for child_name: String in ["PhysicalGrip", "MagneticBoots"]:
+		var attachment: Node = player.get_node_or_null(child_name)
+		if attachment != null and attachment.has_method("release"):
+			attachment.call("release")
 	player.grapple.detach()
+	player._release_mouse()
+	player.set_meta("seated", true)
+	if DisplayServer.get_name() != "headless":
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	return true
 
 
-## Release the cursor; leaving a terminal inherits ship motion at the handhold.
+## Whether the harness currently connects the suit to the pilot seat.
+func is_seated() -> bool:
+	return is_instance_valid(_seat_restraint) and _seat_restraint.is_attached()
+
+
+## Unbuckle without changing the actual momentum solved by the seat constraint.
+func unstrap() -> void:
+	if is_instance_valid(_seat_restraint):
+		_seat_restraint.release()
+	if is_instance_valid(player):
+		player.set_meta("seated", false)
+
+
+## Use a nearby terminal without providing an implicit physical restraint.
+func open_terminal(screen: WorldScreen) -> bool:
+	if not is_instance_valid(screen) or not screen.is_available() or is_open():
+		return false
+	if _camera.global_position.distance_to(screen.global_position) > 2.5:
+		hint = "Approach within 2.5 m to use the terminal"
+		return false
+	_begin_input(screen)
+	return true
+
+
+## Release screen input; the suit's restraint and physical motion remain unchanged.
 func close_screen() -> void:
 	if not is_open():
 		return
 	active_screen.panel.cancel_input()
-	if _docked:
-		player.freeze = false
-		player.linear_velocity = ship.linear_velocity + ship.angular_velocity.cross(player.global_position - ship.to_global(ship.center_of_mass))
-		player.angular_velocity = ship.angular_velocity
-		if _carrier_collision_exception_added and is_instance_valid(ship):
-			player.remove_collision_exception_with(ship)
-		_carrier_collision_exception_added = false
-	_docked = false
 	tablet.visible = false
 	active_screen = null
 	player.input_enabled = true
@@ -95,22 +115,19 @@ func _begin_input(screen: WorldScreen) -> void:
 	active_screen = screen
 
 
-func _physics_process(delta: float) -> void:
+func _physics_process(_delta: float) -> void:
 	if not is_instance_valid(player):
 		return
-	if _docked:
-		_dock_elapsed = minf(1.0, _dock_elapsed + delta / 0.35)
-		var destination: Transform3D = active_screen.global_transform
-		destination.origin += destination.basis.z * 1.0 - destination.basis * _camera.position
-		var target_local: Transform3D = ship.global_transform.affine_inverse() * destination
-		player.global_transform = ship.global_transform * _start_local.interpolate_with(target_local, smoothstep(0.0, 1.0, _dock_elapsed))
+	player.set_meta("seated", is_seated())
 	if is_open():
-		hint = "Esc / Tab return to flight" if not _docked else "Esc / F leave terminal | Tab tablet"
+		hint = "Esc / F close screen | Tab tablet" + (" | HARNESS SECURED" if is_seated() else " | UNRESTRAINED")
 		if not active_screen.is_available():
 			close_screen()
+	elif is_seated():
+		hint = "HARNESS SECURED | F use terminal" if _aimed_screen() != null else "HARNESS SECURED | F unstrap | Tab flight controls"
 	else:
 		var target: WorldScreen = _aimed_screen()
-		hint = "F use %s terminal | Tab tablet" % target.panel.current_app if target != null else "Tab tablet | F use terminal"
+		hint = "F strap into pilot seat | Tab tablet" if _aimed_seat() else ("F use %s terminal | Tab tablet" % target.panel.current_app if target != null else "Tab tablet | F use terminal / pilot seat")
 
 
 func _input(event: InputEvent) -> void:
@@ -124,7 +141,7 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if is_open():
-		if event.is_action_pressed("ui_cancel") or (event.is_action_pressed("interact") and not event.is_echo() and _docked):
+		if event.is_action_pressed("ui_cancel") or (event.is_action_pressed("interact") and not event.is_echo()):
 			close_screen()
 		elif event is InputEventMouse:
 			var mouse: InputEventMouse = event as InputEventMouse
@@ -139,8 +156,35 @@ func _input(event: InputEvent) -> void:
 		if not event.is_action_pressed("debug_screenshot"):
 			get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("interact") and not event.is_echo():
-		open_terminal(_aimed_screen())
+		if is_seated():
+			var screen: WorldScreen = _aimed_screen()
+			if screen != null:
+				open_terminal(screen)
+			else:
+				unstrap()
+		elif _aimed_seat():
+			strap_in()
+		else:
+			open_terminal(_aimed_screen())
 		get_viewport().set_input_as_handled()
+
+
+func _aimed_seat() -> bool:
+	# Within the seat, the pilot can face NAV while reaching for the harness.
+	if player.global_position.distance_to(ship.to_global(PlayerShip.SEAT_POSITION)) <= 0.65:
+		return true
+	var origin: Vector3 = _camera.global_position
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(origin, origin - _camera.global_basis.z * 2.5, 5, [player.get_rid()])
+	query.collide_with_areas = true
+	var hit: Dictionary = player.get_world_3d().direct_space_state.intersect_ray(query)
+	if hit.is_empty():
+		return false
+	if (hit.collider as Node).get_meta("pilot_seat", false):
+		return true
+	if hit.collider == ship:
+		var shape: Object = ship.shape_owner_get_owner(ship.shape_find_owner(int(hit.shape)))
+		return shape != null and bool(shape.get_meta("pilot_seat", false))
+	return false
 
 
 func _aimed_screen() -> WorldScreen:

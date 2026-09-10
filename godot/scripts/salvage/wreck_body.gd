@@ -69,6 +69,13 @@ func _process(_delta: float) -> void:
 
 func _physics_process(delta: float) -> void:
 	_contact_grace = maxf(0.0, _contact_grace - delta)
+	if freeze:
+		return
+	# Jolt's default angular integration omits gyroscopic reaction. An irregular
+	# wreck must precess as its principal axes rotate to preserve world momentum.
+	var omega_body: Vector3 = global_basis.transposed() * angular_velocity
+	var momentum: Vector3 = global_basis * (inertia * omega_body)
+	apply_torque(-angular_velocity.cross(momentum))
 
 
 func _add_part(part: ShipPart) -> void:

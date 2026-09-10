@@ -9,7 +9,7 @@ func test_backend_resources_and_command_validation() -> void:
 	var api: ShipApi = fixture.ship.api
 	var world: OrbitalWorld = fixture.session.world
 	check(bool(api.get_telemetry().flight.available), "flight backend bound")
-	check_near(world.current_mass(), 32040.0, 1e-9, "main fuel and RCS counted independently")
+	check_near(world.current_mass(), 32140.0, 1e-9, "main fuel, RCS and transported suit counted independently")
 	check(not api.set_throttle(NAN), "invalid throttle rejected")
 	check(not api.set_warp(1000000.0), "unsupported warp rejected")
 	check(not api.set_attitude_mode("teleport"), "unknown attitude rejected")
@@ -18,8 +18,8 @@ func test_backend_resources_and_command_validation() -> void:
 	check(api.register_cargo("test-plate", Vector3.ONE, 125.0, 1.0), "cargo ledger accepts fitting part")
 	api.consume_propellant(10.0)
 	flight._sync_mass()
-	check_near(world.structural_mass_kg(), 8155.0, 1e-9, "RCS and cargo are inert mass for main drive")
-	check_near(world.current_mass(), 32155.0, 1e-9, "all actual masses agree")
+	check_near(world.structural_mass_kg(), 8255.0, 1e-9, "RCS and cargo are inert mass for main drive")
+	check_near(world.current_mass(), 32255.0, 1e-9, "all actual masses agree")
 	var rcs_before: float = api.get_telemetry().propellant_kg
 	check(api.set_throttle(0.5), "manual main engine command accepted")
 	check_eq(api.get_telemetry().flight.burn_status, "MAIN THRUST", "manual thrust is not labelled coasting")
@@ -203,8 +203,11 @@ func test_guided_transfer_arrives_through_live_jolt() -> void:
 	var interaction: ShipInteraction = ShipInteraction.new()
 	fixture.root.add_child(interaction)
 	interaction.configure(fixture.player, fixture.ship)
-	check(interaction.open_terminal(terminal), "pilot grips real NAV terminal")
-	check(fixture.player.get_collision_exceptions().has(fixture.ship), "held suit cannot act as an infinite-mass hull obstruction")
+	fixture.player.global_transform = fixture.ship.global_transform * Transform3D(Basis(Vector3.UP, PI / 2.0), PlayerShip.SEAT_POSITION)
+	await _frames(3)
+	check(interaction.strap_in(), "pilot straps into physical seat")
+	check(interaction.open_terminal(terminal), "pilot uses real NAV terminal from seat")
+	check(interaction.is_seated() and not fixture.player.freeze, "seat carries a live finite-mass suit")
 	check(api.plan_intercept(9600.0), "160-minute guided transfer previews")
 	check(api.execute_plan(), "reviewed transfer commits")
 	check_eq(world.nodes.size(), 5, "departure, three trims and arrival match queued")
@@ -246,6 +249,7 @@ func test_guided_transfer_arrives_through_live_jolt() -> void:
 	check(float(api.get_telemetry().main_propellant_kg) < 24000.0, "journey paid actual engine propellant")
 	check_near(api.get_telemetry().propellant_kg, 40.0, 0.001, "main-drive journey preserves RCS reserve")
 	interaction.close_screen()
+	interaction.unstrap()
 	check(not fixture.player.get_collision_exceptions().has(fixture.ship), "releasing handhold restores suit/hull collisions")
 	check(not fixture.player.freeze, "released suit returns to physical flight")
 	fixture.root.free()
@@ -302,6 +306,7 @@ func _fixture() -> Dictionary:
 	var player: Player = (load("res://scenes/player.tscn") as PackedScene).instantiate() as Player
 	player.input_enabled = false
 	player.freeze = true
+	player.set_meta("seated", true) # Isolated orbital fixtures model a restrained pilot.
 	player.collision_layer = 0
 	player.collision_mask = 0
 	holder.add_child(player)

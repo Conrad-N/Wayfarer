@@ -89,6 +89,9 @@ func _physics_process(_delta: float) -> void:
 		if leaking:
 			ship.api.set_cargo_message("Wait for the active leak to stop before securing cargo")
 			continue
+		if int(body.get_meta("physical_grip_count", 0)) > 0:
+			ship.api.set_cargo_message("Release your grip to secure cargo")
+			continue
 		_secure(body, bounds)
 
 

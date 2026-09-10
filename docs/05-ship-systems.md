@@ -110,3 +110,12 @@ NAV's local controls provide six translation directions. Approach uses at most
 the finite RCS store at a 2,000 m/s exhaust velocity. It requires relative speed
 below 10 m/s and a finished maneuver sequence. Closing the screen or losing focus
 releases held translation. Changing target or cutting off cancels approach.
+
+## Physical pilot support (2026-09-10)
+
+A seat beside NAV has a mechanical harness. Its live constraint transfers ship
+forces to the suit; release preserves motion. Terminal and tablet use alone
+provide no restraint. The steel deck accepts switchable magnetic soles for
+walking; wall panels and arbitrary salvage do not automatically count as magnetic.
+Suit wheels now model electrical draw and saturation; the ship's inherited
+ideal attitude wheels remain the separate M4 system described above.

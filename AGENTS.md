@@ -76,7 +76,7 @@ godot/               the Godot project (open this folder in the editor)
   scripts/sim/       orbital layer: 64-bit scalar math, no nodes, no Vector3. Pure and testable.
   scripts/world/     scene management, the orbital<->local handoff, floating origin.
   scripts/ship/      the player's ship: systems, ShipApi, damage.
-  scripts/salvage/   parts, cut points, hazards, tools (cutter, grapple, tractor).
+  scripts/salvage/   parts, cut points, hazards, tools (cutter, grapple, scanner).
   ui/                terminals, tablet, calculators. Control scenes rendered to in-world screens.
   assets/models/     .glb from tools/blender. Committed.
   tests/             headless test suites + runner.
