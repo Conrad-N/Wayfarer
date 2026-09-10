@@ -102,7 +102,7 @@ controls. This verifies stability, not the subjective "fun and disorienting"
 criterion, which remains a player playtesting judgment. Next implementation work
 is the M2 ship graph. Conrad accepted M1 as complete on 2026-09-10.
 
-## M2 — Cut
+## M2 — Cut ✅
 
 Goal: take a wreck apart.
 
@@ -110,14 +110,45 @@ Goal: take a wreck apart.
 - [x] Part kit v1: 12 parts across hull, cap, tank, engine, radiator, mast, plating.
       Add `-convcol` collision and `volume_m3`, `thickness_mm` metadata. Update the
       import test.
-- [ ] Spawn a hand-written `ShipGraph` of 8 parts as one compound `RigidBody3D`.
-- [ ] Cutter tool with cut points and progress; splitting into new rigid bodies with
+- [x] Spawn a hand-written `ShipGraph` of 8 parts as one compound `RigidBody3D`.
+- [x] Cutter tool with cut points and progress; splitting into new rigid bodies with
       conserved momentum. Tests on the maths.
-- [ ] Tractor beam with reaction force. Scanner with reveal.
-- [ ] One hazard: coolant spray. Then fuel vent.
-- [ ] Part value and condition; a debug tally of "salvaged value".
+- [x] Tractor beam with reaction force. Scanner with reveal.
+- [x] One hazard: coolant spray. Then fuel vent.
+- [x] Part value and condition; a debug tally of "salvaged value".
 
 Done when: you can strip a spinning 8-part wreck in an order that matters.
+
+M2 completed (2026-09-10): the main scene is now the eight-part practice wreck.
+The twelve-model generated kit covers all seven kinds with convex import shapes,
+sockets, exposed cut points, volatile markers, volume, and thickness metadata.
+The graph handles parallel mounts and loops; imported shapes form one compound
+body per connected component. Repeated splits preserve pose and both kinds of
+momentum using consistent principal mass frames and inherited tangential velocity.
+Body replacement occurs at the next physics boundary so a cut cannot discard an
+already queued vent force.
+
+Keys 1/2/3/4 select grapple/cutter/tractor/scanner. Cutting has thickness-dependent
+progress, a battery budget, and heat/cooldown. Tractor push/pull includes suit
+recoil and torque. A stationary scan reveals names, hazards, and aimed-part
+mass/condition/value. Fuel and coolant have finite, visible plumes that recoil,
+push the first body in their path, follow split parts, and reduce condition.
+Selecting the hull-side cut endpoint avoids the volatile line; removing the shield
+changes access. Hard impacts also reduce condition using incoming contact velocity.
+Individually freed parts contribute their remaining value to the debug tally.
+
+Verification: `./check.sh` passes 1,317 checks, including graph validity, the full
+import pipeline, assembly gaps/non-overlap/cut access, inertia and repeated live
+splits, queued vent force conservation, tool limits/resources/heat/reveal, finite
+hazards, and real wall/dynamic/sibling collision damage. The main scene boots
+headless. A windowed scripted exercise used actual tool-key and trigger handling
+with controlled camera poses while the wreck remained dynamic: scan, safe cut,
+both unsafe volatile cuts, all seven joints stripped to eight separate pieces,
+tractor and grapple selection, and live value changes. The final run recovered
+about 2,519 cr of debug value after hazardous handling. Inspected the kit gallery,
+assembly, markers, cutter, plumes, compact labels, target details, and final tally
+in ignored `godot/build/screens/m2-*.png`. No cargo sale, ship systems, or additional
+hazard types are implied; those remain later milestones.
 
 ## M3 — Ship
 

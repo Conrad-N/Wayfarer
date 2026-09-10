@@ -1,9 +1,10 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/player.tscn" id="2_player"]
-[ext_resource type="PackedScene" path="res://scenes/debris_field.tscn" id="3_debris"]
+[ext_resource type="Script" path="res://scripts/salvage/salvage_wreck.gd" id="3_wreck"]
 [ext_resource type="Script" path="res://scripts/world/debug_screenshot.gd" id="4_screenshot"]
+[ext_resource type="Script" path="res://scripts/salvage/salvage_hazards.gd" id="5_hazards"]
 
 [sub_resource type="Environment" id="Environment_room"]
 background_mode = 1
@@ -22,7 +23,11 @@ script = ExtResource("4_screenshot")
 [node name="Player" parent="." instance=ExtResource("2_player")]
 position = Vector3(0, 0, 8)
 
-[node name="Debris" parent="." instance=ExtResource("3_debris")]
+[node name="Wreck" type="Node3D" parent="."]
+script = ExtResource("3_wreck")
+
+[node name="Hazards" type="Node3D" parent="."]
+script = ExtResource("5_hazards")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 4, 0)
@@ -67,14 +72,14 @@ anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 16.0
-offset_top = -96.0
+offset_top = -132.0
 offset_right = -16.0
 offset_bottom = -16.0
 grow_horizontal = 2
 grow_vertical = 0
 mouse_filter = 2
-theme_override_font_sizes/font_size = 20
-text = "WASD thrust  |  Space / Ctrl up / down  |  Q / E roll  |  Mouse look  |  Hold Alt to brake\nLeft click attaches grapple  |  Right click releases  |  Hold R / T to reel in / out\nAim at a crate or wall. The lighter end moves more. Reeling uses battery.  |  F12 screenshot"
+theme_override_font_sizes/font_size = 18
+text = "WASD thrust | Space / Ctrl up / down | Q / E roll | Mouse look | Hold Alt to brake\n1 Grapple: left attach / right release / R-T reel | 2 Cutter: hold left on a gold joint\n3 Tractor: left pull / right push | 4 Scanner: hold left while still | F12 screenshot\nScan first. Cut the hull side of a joint to avoid opening a fuel or coolant line.\nFree individual parts to add their remaining value to the salvage tally. Esc releases mouse."
 
 [node name="GrappleStatus" type="Label" parent="HUD"]
 offset_left = 16.0
@@ -94,6 +99,33 @@ offset_bottom = 278.0
 mouse_filter = 2
 theme_override_font_sizes/font_size = 18
 autowrap_mode = 2
+
+[node name="ToolStatus" type="Label" parent="HUD"]
+offset_left = 16.0
+offset_top = 270.0
+offset_right = 1500.0
+offset_bottom = 300.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(1, 0.72, 0.3, 1)
+theme_override_font_sizes/font_size = 20
+
+[node name="SalvageStatus" type="Label" parent="HUD"]
+offset_left = 16.0
+offset_top = 304.0
+offset_right = 1500.0
+offset_bottom = 334.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.4, 0.85, 0.95, 1)
+theme_override_font_sizes/font_size = 18
+
+[node name="TargetStatus" type="Label" parent="HUD"]
+offset_left = 16.0
+offset_top = 338.0
+offset_right = 1500.0
+offset_bottom = 368.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.4, 0.85, 0.95, 1)
+theme_override_font_sizes/font_size = 18
 
 [node name="Reticle" type="Label" parent="HUD"]
 anchors_preset = 8

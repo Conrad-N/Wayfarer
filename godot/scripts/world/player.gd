@@ -15,6 +15,9 @@ extends RigidBody3D
 
 var suit: SuitResources = SuitResources.new()
 @onready var grapple: Grapple = $Grapple
+var salvage_tools: SalvageTools
+var _capture_click_held: bool = false
+var _secondary_blocked: bool = false
 
 var _translation_input: Vector3 = Vector3.ZERO
 var _roll_input: float = 0.0
@@ -35,8 +38,18 @@ func _process(_delta: float) -> void:
 		set_motion_input(Vector3.ZERO, 0.0)
 		set_braking(false)
 		grapple.cancel_input()
+		if is_instance_valid(salvage_tools):
+			salvage_tools.cancel_input()
 		return
-	grapple.set_reel_input(Input.get_axis("grapple_reel_out", "grapple_reel_in"))
+	if not Input.is_action_pressed("tool_primary"):
+		_capture_click_held = false
+	if not Input.is_action_pressed("tool_secondary"):
+		_secondary_blocked = false
+	if is_instance_valid(salvage_tools) and salvage_tools.selected != SalvageTools.Tool.GRAPPLE:
+		grapple.cancel_input()
+		salvage_tools.set_triggers(Input.is_action_pressed("tool_primary") and not _capture_click_held, Input.is_action_pressed("tool_secondary") and not _secondary_blocked)
+	else:
+		grapple.set_reel_input(Input.get_axis("grapple_reel_out", "grapple_reel_in"))
 	set_braking(Input.is_action_pressed("brake"))
 	set_motion_input(Vector3(
 		Input.get_axis("move_left", "move_right"),
@@ -48,6 +61,14 @@ func _process(_delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not input_enabled:
 		return
+	if is_instance_valid(salvage_tools):
+		for slot: int in range(4):
+			if event.is_action_pressed("tool_slot_%d" % (slot + 1)):
+				salvage_tools.select_tool(slot as SalvageTools.Tool)
+				_capture_click_held = Input.is_action_pressed("tool_primary")
+				_secondary_blocked = Input.is_action_pressed("tool_secondary")
+				get_viewport().set_input_as_handled()
+				return
 	if event.is_action_pressed("ui_cancel"):
 		_release_mouse()
 		get_viewport().set_input_as_handled()
@@ -55,11 +76,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		var button: InputEventMouseButton = event as InputEventMouseButton
 		if button.pressed and button.button_index == MOUSE_BUTTON_LEFT and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			_capture_click_held = true
 			get_viewport().set_input_as_handled()
-		elif Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and event.is_action_pressed("tool_primary"):
+		elif Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and _grapple_selected() and event.is_action_pressed("tool_primary"):
 			grapple.request_attach()
 			get_viewport().set_input_as_handled()
-		elif Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and event.is_action_pressed("tool_secondary"):
+		elif Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and _grapple_selected() and event.is_action_pressed("tool_secondary"):
 			grapple.detach()
 			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
@@ -166,3 +188,9 @@ func _release_mouse() -> void:
 	_pending_look = Vector2.ZERO
 	if is_instance_valid(grapple):
 		grapple.cancel_input()
+	if is_instance_valid(salvage_tools):
+		salvage_tools.cancel_input()
+
+
+func _grapple_selected() -> bool:
+	return not is_instance_valid(salvage_tools) or salvage_tools.selected == SalvageTools.Tool.GRAPPLE

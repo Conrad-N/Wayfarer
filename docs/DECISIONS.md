@@ -94,3 +94,32 @@ decide something the docs did not cover.
   and thickness is explicit cutter tuning. New cut markers sit on the skin near
   their sockets; size suffixes are removed when resolving CUT names. The original
   large hull remains compatible with the M1 collision playground.
+- 2026-09-10 — M2 uses each model's bounding box as its homogeneous mass envelope,
+  while collisions use the imported convex shape. The full assembly inertia is
+  diagonalized and set explicitly on each component body, so the same mass model
+  preserves linear/angular momentum and energy through an isolated split. Bodies
+  are replaced at the next physics boundary before new forces, preserving queued
+  vent impulses. A tether on a replaced body releases and can be attached again.
+- 2026-09-10 — The practice wreck has two small hulls, nose, engine, fuel tank,
+  radiator, antenna, and shield, with 0.12 m socket gaps and initial spin. Both ends
+  of every joint have selectable gold cut points; cutting the volatile part's end
+  opens its line, while cutting the hull end avoids that leak. This makes approach
+  and cut order matter without implementing the later power-shutdown panels.
+- 2026-09-10 — Tools use keys 1–4 for grapple/cutter/tractor/scanner. Cutter tuning
+  is 4 mm/s (aluminium time ×0.6), 1,200 W, heat +0.24/s, cooling −0.18/s, and a
+  0.25 restart threshold after overheating. Tractor is 250 N/900 W, with reaction
+  at the suit tool position. Scanner is two stationary seconds at 150 W; completed
+  scans stop drawing power. Every tool scales its last work tick to battery left.
+- 2026-09-10 — Coolant is a 400 N, four-second pulse; fuel is 1,000 N for six
+  seconds. Each part/kind has one reservoir. Plumes follow the outlet and push the
+  first other body in a four-metre ray, with recoil on the source. The short M2 pulse
+  keeps rated wet mass constant; exhaust carries unabsorbed momentum. This is
+  initial hazard tuning, with no pressure/power behavior yet.
+- 2026-09-10 — Ruptures cost 0.15 coolant / 0.25 fuel condition. Impacts above
+  2,000 J use reduced mass and incoming contact velocity to damage the component,
+  capped at half condition per collision. A 0.2 s sibling grace period excludes
+  freshly created split contacts. The debug salvage tally counts current value of
+  individually freed parts only, without paying credits or implying delivery.
+- 2026-09-10 — Scanned names and hazard markers keep a fixed screen size to avoid
+  enormous labels near the camera. Detailed kind, mass, condition, and value are
+  shown for the aimed scanned part on the debug HUD, keeping cut points visible.
