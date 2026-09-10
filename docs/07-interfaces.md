@@ -118,8 +118,8 @@ Both ship terminals and the tablet run these same apps through ShipApi. PLAN
 replaces its M3 placeholder; later COMMS, market, repairs and the optional AI are
 still outside M4.
 
-To fly the starter trip: move into the pilot seat facing NAV and press F to strap
-in. Aim at NAV and press F again (or use Tab), select PLAN, leave Kestrel
+To fly the starter trip: approach the pilot seat and press F to strap in. This
+centres your seated view toward NAV; press F again (or use Tab), select PLAN, leave Kestrel
 and 160 minutes selected, then CALCULATE PREVIEW and EXECUTE BURNS. Switch to
 NAV → FLIGHT and use COAST TO NEXT EVENT. The executor points, burns and coasts
 through all five nodes, returning to 1× near the wreck. After the final match,
@@ -131,7 +131,8 @@ the scanner, cutter, grapple and physical grips work on the arrived wreck.
 
 This supersedes the M3 automatic terminal handhold. F opens an aimed nearby
 terminal without changing suit motion. The pilot seat has actual restraints:
-F straps in from its immediate space; while seated F opens an aimed terminal,
+F snaps a slow pilot within 1.5 m into the seated pose facing NAV and centres
+the head/camera; while seated F opens an aimed terminal,
 or unstraps when looking away. Closing a screen leaves the harness fastened.
 The Tab tablet works in either state. A loose suit is affected by ship maneuvers;
 warp and event warp require the seat and remain unavailable near objects.

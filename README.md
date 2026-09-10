@@ -56,7 +56,8 @@ part scripts. Setup details in [AGENTS.md](AGENTS.md).
 
 ## Try a salvage job
 
-Move into the pilot seat facing NAV and press F to strap in. Aim at NAV and press
+Approach the pilot seat and press F to strap in. You snap into its seated pose
+facing NAV; press
 F again, or open Tab. In PLAN, preview the default Kestrel / 160-minute transfer,
 execute it, then use NAV → FLIGHT → COAST TO NEXT EVENT. Warp requires the seat;
 unrestrained suits remain subject to ship acceleration and collisions. Arrival

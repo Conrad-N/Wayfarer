@@ -171,6 +171,16 @@ func _update_head() -> void:
 		_body_follow = true
 
 
+## Centre the view after an explicit seated-pose transition, clearing pending steering.
+func centre_head() -> void:
+	head_angles_rad = Vector2.ZERO
+	_pending_look = Vector2.ZERO
+	_body_follow = false
+	var camera: Camera3D = $Camera3D
+	camera.basis = Basis.IDENTITY
+	_gaze_world = -camera.global_basis.z
+
+
 ## Supply local right/up/back thrust and signed roll; diagonals share one thrust budget.
 func set_motion_input(translation: Vector3, roll: float) -> void:
 	_translation_input = translation.limit_length(1.0) if translation.is_finite() else Vector3.ZERO

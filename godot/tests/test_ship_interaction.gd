@@ -48,7 +48,7 @@ func test_terminal_requires_reach_but_does_not_restrain() -> void:
 
 
 ## The harness cannot capture a distant pilot or stop an unsafe approach for free.
-func test_seat_requires_near_slow_approach_without_snapping_pose() -> void:
+func test_seat_requires_near_slow_approach_and_snaps_to_forward_pose() -> void:
 	var fixture: Dictionary = _fixture()
 	var player: Player = fixture.player
 	var interaction: ShipInteraction = fixture.interaction
@@ -58,13 +58,24 @@ func test_seat_requires_near_slow_approach_without_snapping_pose() -> void:
 	player.linear_velocity = Vector3.RIGHT
 	check(not interaction.strap_in(), "fast approach rejected")
 	player.linear_velocity = Vector3.ZERO
-	var pose: Transform3D = player.global_transform
-	check(interaction.strap_in(), "near still pilot straps in")
+	player.position += Vector3(0.5, 0.15, 0.1)
+	player.basis = Basis(Vector3.FORWARD, 1.2) * Basis(Vector3.UP, -0.7)
+	player.head_angles_rad = Vector2(0.8, -0.4)
+	player.queue_mouse_look(Vector2(100, 100))
+	var camera: Camera3D = player.get_node("Camera3D") as Camera3D
+	var standing_position: Vector3 = camera.position
+	check(interaction.strap_in(), "near still pilot straps in from an offset tilted approach")
 	check(interaction.is_seated() and bool(player.get_meta("seated", false)), "restraint published")
 	check(not player.freeze, "seat is a physical constraint, not a frozen suit")
-	check(player.global_transform.is_equal_approx(pose), "engagement does not teleport pilot")
+	check(player.transform.is_equal_approx(Transform3D(Basis(Vector3.UP, PI / 2.0), PlayerShip.SEAT_POSITION)), "engagement snaps into the forward-facing seat pose")
+	check_eq(player.head_angles_rad, Vector2.ZERO, "engagement centres free head look")
+	check_near(camera.position.y, 0.35, 0.0001, "seated eye height faces centre of NAV")
+	await _frames(4)
+	check(player.head_angles_rad.length() < 0.001, "queued approach mouse movement cannot undo seated view")
+	check(interaction.is_seated(), "new seated pose remains physically restrained")
 	interaction.unstrap()
 	check(not interaction.is_seated() and not bool(player.get_meta("seated", true)), "release clears restraint")
+	check(camera.position.is_equal_approx(standing_position), "unstrap restores normal EVA eye height")
 	(fixture.root as Node).free()
 
 

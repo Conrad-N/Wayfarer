@@ -8,6 +8,7 @@ var tablet: WorldScreen
 var active_screen: WorldScreen
 var hint: String = "Tab tablet | F use terminal"
 var _camera: Camera3D
+var _standing_camera_position: Vector3
 var _seat_restraint: PhysicalGrip
 
 
@@ -48,17 +49,24 @@ func open_tablet() -> void:
 	tablet.visible = true
 
 
-## Strap into the physical seat only from its immediate, slow approach space.
+## Snap a nearby, slow pilot into the forward-facing seated pose and fasten the harness.
 func strap_in() -> bool:
 	if is_seated() or not is_instance_valid(ship):
 		return false
 	var seat_position: Vector3 = ship.to_global(PlayerShip.SEAT_POSITION)
 	var carrier_velocity: Vector3 = ship.linear_velocity + ship.angular_velocity.cross(player.global_position - ship.to_global(ship.center_of_mass))
-	if player.global_position.distance_to(seat_position) > 0.85 or (player.linear_velocity - carrier_velocity).length() > 0.5:
-		hint = "Move into the pilot seat and match its motion before strapping in"
+	if player.global_position.distance_to(seat_position) > 1.5 or (player.linear_velocity - carrier_velocity).length() > 0.5:
+		hint = "Approach the pilot seat and slow down before strapping in"
 		return false
+	# The requested seating shortcut changes pose once; the live harness owns motion afterward.
+	var approach_pose: Transform3D = player.global_transform
+	player.global_transform = ship.global_transform * Transform3D(Basis(Vector3.UP, PI / 2.0), PlayerShip.SEAT_POSITION)
 	if not _seat_restraint.grab_body(ship, seat_position):
+		player.global_transform = approach_pose
 		return false
+	_standing_camera_position = _camera.position
+	_camera.position = Vector3(0, 0.35, 0)
+	player.centre_head()
 	for child_name: String in ["PhysicalGrip", "MagneticBoots"]:
 		var attachment: Node = player.get_node_or_null(child_name)
 		if attachment != null and attachment.has_method("release"):
@@ -78,6 +86,8 @@ func is_seated() -> bool:
 
 ## Unbuckle without changing the actual momentum solved by the seat constraint.
 func unstrap() -> void:
+	if is_seated():
+		_camera.position = _standing_camera_position
 	if is_instance_valid(_seat_restraint):
 		_seat_restraint.release()
 	if is_instance_valid(player):

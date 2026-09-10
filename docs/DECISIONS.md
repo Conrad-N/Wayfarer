@@ -208,3 +208,10 @@ decide something the docs did not cover.
   and wreck fragments because the engine's default constant angular velocity
   otherwise drifts in world angular momentum for off-axis rotation. This supports
   the spinning-wreck catch acceptance rather than relying on single-axis tests.
+- 2026-09-10 — Conrad requested automatic seat alignment after playtesting. F
+  now snaps a slow pilot within 1.5 m into the chair's fixed pose facing NAV,
+  centres head look, and uses a seated eye height of 0.35 m. This explicitly
+  supersedes the earlier no-snap boarding choice. The physical harness still
+  carries the pilot afterward; unstrapping restores normal eye height and leaves
+  solved motion intact. Wheel storage remains the original provisional 20 N·m·s
+  per axis; Conrad's low-capacity feedback is recorded pending further tuning.
