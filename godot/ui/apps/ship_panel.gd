@@ -22,6 +22,8 @@ var _nav_page: String = "scope"
 var _flight_readout: Label
 var _scope_readout: Label
 var _rcs_readout: Label
+var _wheel_readout: Label
+var _flight_wheels: Label
 var _scope: OrbitDisplay
 var _navball: OrbitDisplay
 var _target: OptionButton
@@ -134,8 +136,8 @@ func _build() -> void:
 	_button(self, "nav_tab", "NAV", Rect2(380, 8, 74, 34))
 	_button(self, "plan_tab", "PLAN", Rect2(462, 8, 78, 34))
 	_button(self, "ship_tab", "SHIP", Rect2(548, 8, 76, 34))
-	_readout = _label(self, Vector2(16, 56), Vector2(608, 112), 17, AMBER)
-	_detail = _label(self, Vector2(16, 176), Vector2(608, 84), 14, CYAN)
+	_readout = _label(self, Vector2(16, 56), Vector2(608, 96), 17, AMBER)
+	_detail = _label(self, Vector2(16, 158), Vector2(608, 58), 12, CYAN)
 	_nav = Control.new()
 	_nav.name = "NavControls"
 	add_child(_nav)
@@ -146,9 +148,11 @@ func _build() -> void:
 	add_child(_ship)
 	_button(_ship, "power", "POWER", Rect2(16, 268, 192, 34))
 	_button(_ship, "rcs", "RCS", Rect2(224, 268, 192, 34))
-	_button(_ship, "cargo", "CARGO DOOR", Rect2(432, 268, 192, 34))
-	_button(_ship, "inner", "INNER AIRLOCK", Rect2(16, 310, 296, 34))
-	_button(_ship, "outer", "OUTER AIRLOCK", Rect2(328, 310, 296, 34))
+	_wheel_readout = _label(_ship, Vector2(16, 222), Vector2(608, 38), 12, AMBER)
+	_button(_ship, "reaction_wheel", "WHEELS", Rect2(432, 268, 192, 34))
+	_button(_ship, "cargo", "CARGO DOOR", Rect2(432, 310, 192, 34))
+	_button(_ship, "inner", "INNER AIRLOCK", Rect2(16, 310, 192, 34))
+	_button(_ship, "outer", "OUTER AIRLOCK", Rect2(224, 310, 192, 34))
 	_message = _label(self, Vector2(16, 352), Vector2(608, 44), 13, AMBER)
 	_message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
@@ -177,6 +181,7 @@ func _refresh_nav(data: Dictionary) -> void:
 	_attitude.disabled = not available
 	_warp.disabled = not available
 	_rcs_readout.text = "%s\nRANGE %s   REL SPD %.2f m/s\nRCS %.2f kg / %s" % [str(target.get("name", "WRECK")), _distance(range_m), relative_speed, float(data.get("propellant_kg", 0.0)), "LOCAL CONTROL" if bool(flight.get("local", true)) else "ORBITAL FLIGHT"]
+	_flight_wheels.text = _wheel_status(data)
 	_buttons["nav_brake"].text = "RELEASE HOLD" if bool(data.get("braking", false)) else "HOLD STATION"
 	for action: String in ["throttle_cutoff", "next_event", "approach"]:
 		_buttons[action].disabled = not available
@@ -230,19 +235,43 @@ func _refresh_ship(data: Dictionary) -> void:
 	var row: PackedStringArray = []
 	for id: String in systems:
 		var system: Dictionary = systems[id]
-		row.append("%-7s %3.0f%% %-3s" % [id.to_upper(), float(system.get("health", 0.0)) * 100.0, "ON" if bool(system.get("enabled", false)) else "OFF"])
+		var caption: String = "WHEELS" if id == "reaction_wheel" else id.to_upper()
+		row.append("%-7s %3.0f%% %-3s" % [caption, float(system.get("health", 0.0)) * 100.0, "ON" if bool(system.get("enabled", false)) else "OFF"])
 		if row.size() == 3:
 			lines.append("  ".join(row))
 			row.clear()
 	if not row.is_empty():
 		lines.append("  ".join(row))
-	_detail.text = "SYSTEM HEALTH\n" + "\n".join(lines)
+	_detail.text = "\n".join(lines)
 	_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var wheel: Dictionary = (data.get("flight", {}) as Dictionary).get("reaction_wheel", {})
+	var momentum: Dictionary = wheel.get("momentum_nms", {})
+	_wheel_readout.text = _wheel_status(data)
+	if not wheel.is_empty():
+		_wheel_readout.text += "\nH [%+.0f, %+.0f, %+.0f] / ±%.0f N·m·s per axis" % [float(momentum.get("x", 0.0)), float(momentum.get("y", 0.0)), float(momentum.get("z", 0.0)), float(wheel.get("capacity_nms", 0.0))]
+	_buttons["reaction_wheel"].text = "WHEELS: " + _system_state(systems, "reaction_wheel")
+	_buttons["reaction_wheel"].disabled = not systems.has("reaction_wheel")
 	_buttons["power"].text = "POWER: " + _system_state(systems, "power")
 	_buttons["rcs"].text = "RCS: " + _system_state(systems, "rcs")
 	_buttons["cargo"].text = "CLOSE CARGO" if bool(data.get("cargo_door_open", false)) else "OPEN CARGO"
 	_buttons["inner"].text = "CLOSE INNER" if bool(data.get("airlock_inner_open", false)) else "OPEN INNER"
 	_buttons["outer"].text = "CLOSE OUTER" if bool(data.get("airlock_outer_open", false)) else "OPEN OUTER"
+
+
+func _wheel_status(data: Dictionary) -> String:
+	var flight: Dictionary = data.get("flight", {})
+	var wheel: Dictionary = flight.get("reaction_wheel", {})
+	if wheel.is_empty():
+		return "REACTION WHEELS / TELEMETRY UNAVAILABLE"
+	var system: Dictionary = (data.get("systems", {}) as Dictionary).get("reaction_wheel", {})
+	var status: String = "AUTO OFF" if str(flight.get("attitude_mode", "manual")) == "manual" else "AUTO ON"
+	if not bool(system.get("enabled", false)) or float(system.get("health", 0.0)) <= 0.0:
+		status = "UNAVAILABLE"
+	elif not bool(data.get("power_available", false)):
+		status = "NO POWER"
+	elif float(wheel.get("utilization", 0.0)) >= 0.98:
+		status = "SATURATED"
+	return "WHEEL STORAGE %.0f%% / %s" % [float(wheel.get("utilization", 0.0)) * 100.0, status]
 
 
 func _system_state(systems: Dictionary, id: String) -> String:
@@ -304,7 +333,7 @@ func _command(action: String) -> void:
 			api.set_cargo_door(not bool(data.get("cargo_door_open", false)))
 		"inner", "outer":
 			api.set_airlock_door(action, not bool(data.get("airlock_" + action + "_open", false)))
-		"power", "rcs":
+		"power", "rcs", "reaction_wheel":
 			var systems: Dictionary = data.get("systems", {})
 			var system: Dictionary = systems.get(action, {})
 			api.set_system_enabled(action, not bool(system.get("enabled", false)))
@@ -351,7 +380,7 @@ func _build_nav() -> void:
 	_attitude.position = Vector2(132, 230)
 	_attitude.size = Vector2(208, 36)
 	for mode: String in ATTITUDES:
-		_attitude.add_item("STOP ROTATION" if mode == "kill" else mode.replace("_", " ").to_upper())
+		_attitude.add_item("AUTO OFF" if mode == "manual" else ("STOP ROTATION" if mode == "kill" else mode.replace("_", " ").to_upper()))
 	_attitude.item_selected.connect(_attitude_selected)
 	flight_page.add_child(_attitude)
 	_label(flight_page, Vector2(360, 234), Vector2(72, 30), 14, CYAN).text = "WARP"
@@ -362,6 +391,7 @@ func _build_nav() -> void:
 		_warp.add_item("×%.0f" % rate)
 	_warp.item_selected.connect(_warp_selected)
 	flight_page.add_child(_warp)
+	_flight_wheels = _label(flight_page, Vector2(16, 276), Vector2(608, 26), 12, CYAN)
 	_button(flight_page, "next_event", "COAST TO NEXT EVENT", Rect2(16, 310, 608, 34))
 	var rcs_page: Control = _nav_pages.rcs
 	_rcs_readout = _label(rcs_page, Vector2(16, 100), Vector2(608, 74), 15, AMBER)

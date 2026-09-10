@@ -290,6 +290,21 @@ Final verification: `./check.sh` passes **2,660 checks, zero failures**, with no
 script errors or node-leak warnings. The main scene boots headless cleanly.
 M5 remains the next milestone.
 
+Wheel revision (2026-09-10, complete): the suit gains Conrad's
+±100 N·m·s per-axis capacity and regenerative wheel motors. Hold C unloads into
+the suit body; physical contact carries torque to a held wreck or ship. The ship
+has its own finite wheel module, battery accounting, independent system toggle,
+and shared NAV/SHIP telemetry. Automatic ship compensation responds to hull
+motion; no momentum passes directly between wheel stores. A discrete wheel part
+and ship unloading against a station or jets remain future work.
+
+Verification: `./check.sh` passes **2,801 checks, zero failures**, with no script
+errors or node-leak warnings; the main scene boots headless. Tests cover free
+unloading, heavier carried bodies, hands/boots/harness torque transfer, independent
+ship compensation, regeneration, saturation, full-capacity passive precession,
+and orbital/local handoffs. Fullscreen native C input and SHIP/NAV displays were
+exercised and inspected; captures are under ignored `godot/build/screens/`.
+
 ## M5 — Loop
 
 Goal: the whole job, once.

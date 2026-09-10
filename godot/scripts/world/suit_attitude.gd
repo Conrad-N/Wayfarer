@@ -1,11 +1,12 @@
 ## Three bounded reaction wheels. Motors exchange angular momentum with the suit;
-## battery energy pays positive mechanical work and motor losses, never refills.
+## Motors pay mechanical work and losses, recovering energy when rotors slow.
 class_name SuitAttitude
 extends RefCounted
 
-const MOMENTUM_LIMIT_NMS: float = 20.0
-const ROTOR_INERTIA_KGM2: float = 0.15
+const MOMENTUM_LIMIT_NMS: float = 100.0
+const ROTOR_INERTIA_KGM2: float = 0.0239
 const MOTOR_LOSS_J_PER_NMS: float = 30.0
+const REGEN_EFFICIENCY: float = 0.8
 
 var momentum_body: Vector3 = Vector3.ZERO
 
@@ -13,7 +14,7 @@ var momentum_body: Vector3 = Vector3.ZERO
 ## Apply a requested body torque through the motor and return the torque delivered.
 ## A positive body impulse stores an equal negative impulse in the wheel rotors.
 func drive(requested_torque: Vector3, omega_body: Vector3, max_torque_nm: float,
-		delta: float, suit: SuitResources) -> Vector3:
+		delta: float, suit: SuitResources, inverse_inertia_body: Basis = Basis.IDENTITY) -> Vector3:
 	if delta <= 0.0 or not is_finite(delta) or not requested_torque.is_finite() or not omega_body.is_finite():
 		return Vector3.ZERO
 	var impulse: Vector3 = requested_torque.limit_length(maxf(max_torque_nm, 0.0)) * delta
@@ -22,15 +23,38 @@ func drive(requested_torque: Vector3, omega_body: Vector3, max_torque_nm: float,
 	impulse = momentum_body - next_momentum
 	if impulse.length_squared() < 1e-20:
 		return Vector3.ZERO
-	var rotor_work: float = maxf((next_momentum.length_squared() - momentum_body.length_squared()) / (2.0 * ROTOR_INERTIA_KGM2), 0.0)
-	# Conservative non-regenerative drive: absorb braking work as heat. Include a
-	# body-acceleration margin so a motor cannot produce unpaid kinetic energy at rest.
-	var body_work: float = absf(impulse.dot(omega_body)) + impulse.length_squared()
-	var cost: float = rotor_work + body_work + impulse.length() * MOTOR_LOSS_J_PER_NMS
-	var fraction: float = suit.consume_energy(cost) / cost
-	impulse *= fraction
+	if suit.battery_energy_j <= 0.0:
+		return Vector3.ZERO
+	var cost: float = _energy_cost(impulse, omega_body, inverse_inertia_body)
+	if cost > suit.battery_energy_j:
+		# Work is quadratic in delivered impulse. Solve the affordable fraction;
+		# scaling a full-tick energy bill linearly can mint energy during regen.
+		var low: float = 0.0
+		var high: float = 1.0
+		for iteration: int in 40:
+			var middle: float = (low + high) * 0.5
+			if _energy_cost(impulse * middle, omega_body, inverse_inertia_body) <= suit.battery_energy_j:
+				low = middle
+			else:
+				high = middle
+		impulse *= low
+		cost = suit.battery_energy_j
+	if cost >= 0.0:
+		suit.consume_energy(cost)
+	else:
+		suit.charge_energy(-cost)
 	momentum_body -= impulse
 	return impulse / delta
+
+
+func _energy_cost(impulse: Vector3, omega_body: Vector3, inverse_inertia_body: Basis) -> float:
+	var next: Vector3 = momentum_body - impulse
+	var rotor_work: float = (next.length_squared() - momentum_body.length_squared()) / (2.0 * ROTOR_INERTIA_KGM2)
+	# Conservatively pay positive body work and the free-body acceleration energy.
+	# A constrained body moves less; this overestimate becomes heat, never extra charge.
+	var body_work: float = maxf(impulse.dot(omega_body), 0.0) + 0.5 * impulse.dot(inverse_inertia_body * impulse)
+	var mechanical_work: float = rotor_work + body_work
+	return (mechanical_work if mechanical_work >= 0.0 else mechanical_work * REGEN_EFFICIENCY) + impulse.length() * MOTOR_LOSS_J_PER_NMS
 
 
 ## Gyroscopic reaction of body-fixed wheel axes, even with the motors unpowered.

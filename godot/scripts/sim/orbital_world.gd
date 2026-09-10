@@ -20,6 +20,7 @@ var orientation: Dictionary = {"w": 1.0, "x": 0.0, "y": 0.0, "z": 0.0}
 var angular_vel: SimVector = SimVector.new()
 var attitude_mode: String = "manual"
 var manual_torque: SimVector = SimVector.new()
+var reaction_wheel: ShipReactionWheel = ShipReactionWheel.new()
 var rate_cap: float = deg_to_rad(20.0)
 var attitude_lead_seconds: float = 20.0
 var throttle: float = 0.0
@@ -178,6 +179,7 @@ func advance_local(delta: float, r: SimVector, v: SimVector, q: Dictionary, omeg
 	var remaining: float = delta
 	var impulse: SimVector = SimVector.new()
 	var angular_impulse: SimVector = SimVector.new()
+	var motor_work_omega: SimVector = _copy(angular_vel)
 	while remaining > 1e-12:
 		if _local_control_remaining <= 1e-12:
 			if executor_on:
@@ -195,7 +197,11 @@ func advance_local(delta: float, r: SimVector, v: SimVector, q: Dictionary, omeg
 		var force_impulse: SimVector = SimVector.scale(_local_force, step * fraction)
 		burn_delivered += SimVector.length(force_impulse) / current_mass()
 		impulse = SimVector.add(impulse, force_impulse)
-		angular_impulse = SimVector.add(angular_impulse, SimVector.scale(_local_torque, step))
+		var motor_torque: SimVector = reaction_wheel.drive(_local_torque, motor_work_omega, ship["inertia"], step)
+		angular_impulse = SimVector.add(angular_impulse, SimVector.scale(motor_torque, step))
+		# The native physics adapter owns passive gyro with the exact inertia
+		# tensor. Carry only motor work forward between control fragments.
+		motor_work_omega = SimVector.add(motor_work_omega, SimVector.new(motor_torque.x * step / float(ship.inertia.ix), motor_torque.y * step / float(ship.inertia.iy), motor_torque.z * step / float(ship.inertia.iz)))
 		ship["propellant_kg"] = available - spent
 		time += step
 		remaining -= step
@@ -666,7 +672,9 @@ func _attitude_active() -> bool:
 
 func _step_attitude(dt: float) -> void:
 	var torque: SimVector = FlightMath.clamp_magnitude(manual_torque, ship["max_torque_nm"]) if attitude_mode == "manual" else FlightMath.control_torque_body(orientation, angular_vel, attitude_target_dir(), ship["inertia"], ship["max_torque_nm"], rate_cap)
-	var next: Dictionary = FlightMath.integrate_attitude(orientation, angular_vel, ship["inertia"], torque, dt)
+	var motor_torque: SimVector = reaction_wheel.drive(torque, angular_vel, ship["inertia"], dt)
+	var after_motor: SimVector = SimVector.add(angular_vel, SimVector.new(motor_torque.x * dt / float(ship.inertia.ix), motor_torque.y * dt / float(ship.inertia.iy), motor_torque.z * dt / float(ship.inertia.iz)))
+	var next: Dictionary = reaction_wheel.integrate_passive(orientation, after_motor, ship["inertia"], dt)
 	orientation = next["q"]
 	angular_vel = next["omega"]
 

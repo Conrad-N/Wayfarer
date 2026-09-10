@@ -27,6 +27,7 @@ var _last_message: String = "SHIP READY"
 var _systems: Dictionary = {
 	"hull": {"health": 1.0, "enabled": true},
 	"rcs": {"health": 1.0, "enabled": true},
+	"reaction_wheel": {"health": 1.0, "enabled": true},
 	"power": {"health": 1.0, "enabled": true},
 	"cargo": {"health": 1.0, "enabled": true},
 	"airlock": {"health": 1.0, "enabled": true},
@@ -188,6 +189,17 @@ func consume_energy(request_j: float) -> float:
 	if supplied > 0.0:
 		changed.emit()
 	return supplied
+
+
+## Accept recovered electrical energy up to battery capacity; excess becomes heat.
+func store_energy(recovered_j: float) -> float:
+	if not is_finite(recovered_j) or recovered_j <= 0.0:
+		return 0.0
+	var stored: float = minf(recovered_j, BATTERY_CAPACITY_J - _battery_energy_j)
+	_battery_energy_j += stored
+	if stored > 0.0:
+		changed.emit()
+	return stored
 
 
 ## Apply normalized system damage and return the health actually lost.

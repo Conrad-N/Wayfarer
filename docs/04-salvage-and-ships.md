@@ -168,11 +168,24 @@ propellant (torque uses a 0.5 m effective lever arm). Empty tanks preserve motio
 
 Mouse movement turns the head freely within ±60° yaw and ±50° pitch. Beyond a
 12° offset the body follows through electrically powered reaction wheels;
-Q/E roll uses the same wheels. They provide 8 N·m and store up to 20 N·m·s on
-each axis. Motors pay electrical/mechanical losses; saturation prevents further
-momentum storage. X brakes rotation with wheels only, leaving drift and fuel
-alone. Alt also unloads stored wheel momentum using opposed propellant jets.
-There is no unlimited or free body rotation.
+Q/E roll uses the same wheels. They provide 8 N·m and store up to ±100 N·m·s
+on each axis. The wearable module follows Conrad's design note: 0.0239 kg·m²
+rotor inertia, about 40,000 rpm at capacity, and a 15 kg assembly included in the
+existing fully supplied 100 kg suit. Each full wheel stores about 209 kJ.
+Motors pay electrical/mechanical losses; saturation prevents further momentum
+storage. Slowing rotors recovers electrical energy with losses, without deleting
+angular momentum. X brakes rotation with wheels only, leaving drift and fuel
+alone. Alt unloads stored wheel momentum with opposing propellant jets while
+braking drift and spin.
+
+Hold C to run the wheels toward zero momentum. The equal and opposite torque
+acts on the suit, so a free suit spins up. A hand grip, seat harness or magnetic
+soles transfers that torque through physical contact to the attached body, whose
+larger combined inertia produces a slower spin. No wheel system reads or writes
+another wheel's storage. If the carrier independently has working attitude
+control enabled, its controller reacts to the resulting motion using its own
+wheel capacity and battery. Release C to stop unloading. Dumping uses no
+propellant and does not guarantee that you or the carrier will stop rotating.
 
 G toggles a hand grip with any tool selected; slot 3 also offers left-click grab
 and right-click release. A grip is a live six-axis physical constraint, with no

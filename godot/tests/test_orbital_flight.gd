@@ -255,8 +255,8 @@ func test_guided_transfer_arrives_through_live_jolt() -> void:
 	fixture.root.free()
 
 
-## Failed power or RCS cannot steer in either layer, while existing spin persists.
-func test_attitude_requires_working_power_and_rcs() -> void:
+## Failed power or reaction wheel cannot steer in either layer, while existing spin persists.
+func test_attitude_requires_working_power_and_reaction_wheel() -> void:
 	var fixture: Dictionary = _fixture()
 	var flight: OrbitalFlight = fixture.flight
 	var world: OrbitalWorld = fixture.session.world
@@ -269,11 +269,11 @@ func test_attitude_requires_working_power_and_rcs() -> void:
 	flight._advance_orbit(1.0)
 	check_near(world.angular_vel.x, 0.01, 1e-12, "unpowered ship retains existing principal-axis spin")
 	api.set_system_enabled("power", true)
-	api.set_system_enabled("rcs", false)
+	api.set_system_enabled("reaction_wheel", false)
 	world.angular_vel = SimVector.new()
 	flight._advance_orbit(1.0)
-	check_near(SimVector.length(world.angular_vel), 0.0, 1e-12, "disabled RCS cannot steer orbital ship")
-	api.set_system_enabled("rcs", true)
+	check_near(SimVector.length(world.angular_vel), 0.0, 1e-12, "disabled reaction wheel cannot steer orbital ship")
+	api.set_system_enabled("reaction_wheel", true)
 	var target: Dictionary = fixture.session.object_state("kestrel", world.time)
 	world.replace_state(SimVector.add(target.position, SimVector.new(100, 0, 0)), target.velocity)
 	flight._enter_encounter("kestrel")
@@ -287,11 +287,11 @@ func test_attitude_requires_working_power_and_rcs() -> void:
 	await _frames(2)
 	check_near(fixture.ship.angular_velocity.distance_to(spin), 0.0, 0.0001, "power loss also gates held fractional control torque")
 	api.set_system_enabled("power", true)
-	api.apply_damage("rcs", 1.0)
+	api.apply_damage("reaction_wheel", 1.0)
 	spin = fixture.ship.angular_velocity
 	flight._advance_local(1.0 / 60.0)
 	await _frames(2)
-	check_near(fixture.ship.angular_velocity.distance_to(spin), 0.0, 0.0001, "destroyed RCS cannot steer physical ship")
+	check_near(fixture.ship.angular_velocity.distance_to(spin), 0.0, 0.0001, "destroyed reaction wheel cannot steer physical ship")
 	fixture.root.free()
 
 

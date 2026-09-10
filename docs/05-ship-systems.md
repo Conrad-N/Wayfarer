@@ -8,7 +8,8 @@ worn.
 | system | provides | consumes | fails when | effect of failure |
 |---|---|---|---|---|
 | Main engine | thrust (N), Isp | propellant | damaged, no power to pumps | cannot burn; RCS only |
-| RCS | attitude and translation | RCS propellant | damaged | cannot point the ship; no docking |
+| RCS | jet braking and translation | RCS propellant | damaged or empty | no jet braking or docking translation |
+| Reaction wheels | electrical attitude control | charge and finite momentum storage | damaged, unpowered or saturated | cannot supply the requested wheel torque; existing spin remains |
 | Reactor | power (kW) | fuel (slow) | damaged, overheated | everything electrical degrades to battery |
 | Battery | buffer power | charge | depleted | lights, screens, life support stop when reactor is down |
 | Radiators | heat rejection | none | damaged | reactor and engine overheat and throttle down |
@@ -50,8 +51,8 @@ The interesting failure. Examples and what the player can do:
   expected return time.
 - **No propellant:** call rescue, or salvage propellant from the wreck's tanks with
   a transfer hose (a tool bought at stations).
-- **Tumbling ship:** RCS damaged and the ship is spinning. Fix RCS or accept the
-  ride and use the tablet to call for help.
+- **Tumbling ship:** wheels are saturated or disabled and jet braking is unavailable.
+  Restore an attitude actuator or accept the ride and use the tablet to call for help.
 
 ## Time and rest
 
@@ -99,10 +100,8 @@ cancels burns and local approach. Engine wear and thermal limits remain later wo
 
 Orbital attitude control and maneuver execution use the ported bounded torque
 controller. During physical encounters its braking calculation uses the actual
-hull inertia, with a 60-second pointing lead before maneuver nodes. The inherited
-attitude actuator models ideal reaction wheels: it requires ship power and a
-healthy enabled attitude/RCS section, but spends no jet propellant. Wheel saturation
-and electrical draw are not yet modeled. Local translation and station holding
+hull inertia, with a 60-second pointing lead before maneuver nodes. The reaction-wheel actuator now has finite momentum and electrical budgets,
+separate from the RCS section (see below). Local translation and station holding
 use the finite RCS tank.
 
 NAV's local controls provide six translation directions. Approach uses at most
@@ -117,5 +116,31 @@ A seat beside NAV has a mechanical harness. Its live constraint transfers ship
 forces to the suit; release preserves motion. Terminal and tablet use alone
 provide no restraint. The steel deck accepts switchable magnetic soles for
 walking; wall panels and arbitrary salvage do not automatically count as magnetic.
-Suit wheels now model electrical draw and saturation; the ship's inherited
-ideal attitude wheels remain the separate M4 system described above.
+Suit wheel unloading can transmit torque through any of these physical contacts.
+A carrier responds according to its own inertia and active controls.
+
+## Reaction-wheel module (2026-09-10)
+
+The starter ship has three finite wheels rated at ±100,000 N·m·s per axis,
+1,000 kg·m² rotor inertia and 5,500 N·m torque. These are provisional industrial
+module ratings, with module mass included in the existing 8,000 kg dry hull.
+A full single-axis wheel stores 5 MJ. Motors use the ship battery for positive
+work and losses of 2 J per N·m·s transferred; generating returns 90% of available
+energy up to battery capacity. Excess energy is dissipated, never extra charge.
+Momentum storage and battery charge are distinct limits.
+
+The `reaction_wheel` system has independent health and on/off state. NAV attitude
+AUTO OFF leaves automatic compensation disabled; STOP ROTATION or a direction
+hold requests torque from the bounded wheel module. A disabled, damaged,
+unpowered or saturated module cannot silently cancel spin. RCS station holding
+remains a separate propellant-consuming control. ShipApi exposes signed wheel
+momentum, capacity, utilization, torque rating and stored energy to every client.
+
+When a suit unloads while attached, its motor torques the suit, contact transfers
+torque to the ship, and the ship rotates. Only an enabled attitude controller then
+counteracts the observed rotation with its own actuator. There is no suit-to-ship
+wheel transfer command. This same physical path can later support ship unloading
+against a docking constraint or opposing jets. Station unloading, a ship dump
+control, environmental magnetic torques and a removable wheel part remain future
+work; the module's own state and ratings keep that later part separate from the
+attitude controller.

@@ -140,7 +140,17 @@ warp and event warp require the seat and remain unavailable near objects.
 G grips/releases surfaces with any tool selected; 3 selects hands instead of the
 removed tractor. B toggles magnetic soles at steel deck contact. X brakes spin
 using battery-powered wheels only; Alt uses jets to brake drift/spin and unload
-wheels. The HUD shows attachment status, resources and wheel saturation. Shift
+wheels. Hold C to unload wheel momentum into the suit and whatever is physically
+attached. A free suit spins; a carrier may counteract its resulting rotation if
+its own attitude control is active. The HUD shows unloading, attachment status,
+resources and wheel saturation. Unload suit wheels before using orbital warp.
+Shift
 plus mouse steers a hand-held load; normal mouse motion is free head look while
 holding it. Escape and focus loss cancel active motors and tools, retaining
 passive hand/boot/seat attachments.
+
+SHIP shows wheel storage, signed momentum on all three ship axes and capacity,
+plus a WHEELS toggle independent of RCS. NAV → FLIGHT shows storage and controller
+status. Choose AUTO OFF to let the hull react freely; STOP ROTATION and direction
+holds enable independent attitude compensation. Saturation and loss of power
+are visible. Fixed terminals and the tablet share these controls through ShipApi.

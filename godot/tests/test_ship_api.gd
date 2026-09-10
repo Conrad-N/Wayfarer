@@ -281,6 +281,25 @@ func test_command_signals_and_messages() -> void:
 	check_eq(notifications[0], before, "repeated feedback does not flood signals")
 
 
+## Regeneration accepts only real positive energy within the battery's capacity.
+func test_regenerated_energy_and_independent_wheel_system() -> void:
+	var api: ShipApi = ShipApi.new()
+	check_eq(api.store_energy(100.0), 0.0, "full battery rejects excess regeneration")
+	api.consume_energy(125.0)
+	check_eq(api.store_energy(100.0), 100.0, "recover energy into available space")
+	check_eq(api.store_energy(100.0), 25.0, "recovery clamps at capacity")
+	for invalid: float in [-1.0, 0.0, NAN, INF]:
+		check_eq(api.store_energy(invalid), 0.0, "invalid regeneration ignored")
+	check_eq(api.get_telemetry().battery_energy_j, ShipApi.BATTERY_CAPACITY_J, "battery never overfills")
+	check(api.set_system_enabled("reaction_wheel", false), "wheel has independent switch")
+	check(api.get_telemetry().systems.rcs.enabled, "wheel switch leaves jets available")
+	check(api.set_braking(true), "RCS brake works with disabled wheel")
+	check(api.set_system_enabled("reaction_wheel", true), "healthy wheel can restart")
+	api.apply_damage("reaction_wheel", 1.0)
+	check(not api.set_system_enabled("reaction_wheel", true), "destroyed wheel cannot restart")
+	check(api.get_telemetry().systems.rcs.enabled, "wheel damage does not destroy jets")
+
+
 func _open_ship() -> RefCounted:
 	var api: RefCounted = API_SCRIPT.new()
 	api.set_cargo_door(true)

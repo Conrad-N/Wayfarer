@@ -16,6 +16,8 @@ var _station: StaticBody3D
 var _rcs_direction: Vector3 = Vector3.ZERO
 var _approaching: bool = false
 var _publish_elapsed: float = 1.0
+var _wheel_energy_before_j: float = 0.0
+var _suit_dump_settle_s: float = 0.0
 const EVA_REFERENCE_ID: String = "__eva_coast_reference"
 const ATTITUDE_TORQUE_NM: float = 5500.0
 
@@ -52,6 +54,7 @@ func _physics_process(delta: float) -> void:
 		return
 	_sync_mass()
 	_sync_attitude_authority()
+	_suit_dump_settle_s = 0.3 if player.is_wheel_dumping() else maxf(0.0, _suit_dump_settle_s - delta)
 	if reference_id.is_empty() and (not is_aboard() or _needs_inertial_interior()):
 		_begin_open_space_eva()
 	if not bool(ship.api.get_telemetry().power_available):
@@ -122,23 +125,38 @@ func _advance_local(delta: float) -> void:
 	var omega: Vector3 = LocalOrbitFrame.GODOT_TO_SIM_BODY * (ship.global_basis.transposed() * ship.angular_velocity)
 	_sync_physical_inertia()
 	var controls: Dictionary = session.world.advance_local(delta, SimVector.sub(root_position, parent.position), SimVector.sub(root_velocity, parent.velocity), LocalOrbitFrame.orbital_orientation(ship.global_basis), LocalOrbitFrame.scalar(omega))
+	_settle_wheel_energy()
 	ship.api.publish_flight(ship.api.get_telemetry().flight, float(controls.propellant_kg))
 	ship.mass = float(ship.api.get_telemetry().mass_kg)
 	ship.apply_central_force(LocalOrbitFrame.native(controls.force_world))
 	var simulation_basis: Basis = ship.global_basis * LocalOrbitFrame.GODOT_TO_SIM_BODY.transposed()
-	if _attitude_available():
-		ship.apply_torque(simulation_basis * LocalOrbitFrame.native(controls.torque_body))
+	# The sim owns motor momentum/energy; the physical hull applies passive gyro
+	# using its complete inertia tensor, including with motor power switched off.
+	ship.rotor_momentum_body = LocalOrbitFrame.GODOT_TO_SIM_BODY.transposed() * LocalOrbitFrame.native(session.world.reaction_wheel.momentum_body)
+	ship.apply_torque(simulation_basis * LocalOrbitFrame.native(controls.torque_body))
 	_apply_rcs(delta)
 	_refresh_local_snapshot()
 
 
 func _attitude_available() -> bool:
 	var data: Dictionary = ship.api.get_telemetry()
-	return bool(data.power_available) and bool(data.systems.rcs.enabled) and float(data.systems.rcs.health) > 0.0
+	return bool(data.power_available) and bool(data.systems.reaction_wheel.enabled) and float(data.systems.reaction_wheel.health) > 0.0
 
 
 func _sync_attitude_authority() -> void:
 	session.world.ship.max_torque_nm = ATTITUDE_TORQUE_NM if _attitude_available() else 0.0
+	var data: Dictionary = ship.api.get_telemetry()
+	_wheel_energy_before_j = float(data.battery_energy_j)
+	session.world.reaction_wheel.battery_energy_j = _wheel_energy_before_j
+	session.world.reaction_wheel.enabled = _attitude_available()
+
+
+func _settle_wheel_energy() -> void:
+	var spent: float = _wheel_energy_before_j - session.world.reaction_wheel.battery_energy_j
+	if spent > 0.0:
+		ship.api.consume_energy(spent)
+	elif spent < 0.0:
+		ship.api.store_energy(-spent)
 
 
 func _sync_physical_inertia() -> void:
@@ -195,6 +213,7 @@ func _advance_orbit(delta: float) -> void:
 		sim_delta = minf(sim_delta, safe_time)
 	session.world.set_rate(sim_delta / delta)
 	session.world.advance(delta)
+	_settle_wheel_energy()
 	root_state = session.world.ship_root_state()
 	if reference_id.is_empty():
 		frame.set_reference(root_state.position, root_state.velocity)
@@ -237,6 +256,7 @@ func _enter_encounter(id: String) -> void:
 func _enter_local_ship() -> void:
 	ship_is_local = true
 	requested_warp = 1.0
+	ship.rotor_momentum_body = LocalOrbitFrame.GODOT_TO_SIM_BODY.transposed() * LocalOrbitFrame.native(session.world.reaction_wheel.momentum_body)
 	ship.freeze = false
 	ship.collision_layer = 1
 	ship.collision_mask = 1
@@ -322,6 +342,8 @@ func _command(command: String, args: Dictionary) -> Dictionary:
 			var value: float = args.get("rate", NAN)
 			if not is_finite(value) or value not in [1.0, 10.0, 100.0, 1000.0]:
 				return _result(false, "SELECT 1, 10, 100 OR 1000× WARP")
+			if value > 1.0 and _seated() and _needs_inertial_interior():
+				return _result(false, "HOLD C TO UNLOAD SUIT WHEELS, THEN RELEASE AND LET THE HARNESS SETTLE BEFORE WARP")
 			if value > 1.0 and (not reference_id.is_empty() or not is_aboard() or not _seated()):
 				return _result(false, "STRAP INTO THE PILOT SEAT TO WARP; 1× NEAR OBJECTS")
 			requested_warp = value
@@ -376,6 +398,8 @@ func _command(command: String, args: Dictionary) -> Dictionary:
 			_approaching = false
 			_rcs_direction = Vector3.ZERO
 		"next_event":
+			if _seated() and _needs_inertial_interior():
+				return _result(false, "UNLOAD SUIT WHEELS WITH C AND LET THE HARNESS SETTLE BEFORE EVENT WARP")
 			if not reference_id.is_empty() or not is_aboard() or not _seated():
 				return _result(false, "STRAP INTO THE PILOT SEAT FOR EVENT WARP; UNAVAILABLE NEAR OBJECTS")
 			if world.nodes.is_empty():
@@ -474,6 +498,7 @@ func _publish() -> void:
 		"mass_kg": world.current_mass(), "main_propellant_kg": world.ship.propellant_kg, "rcs_propellant_kg": data.propellant_kg,
 		"dv_budget_mps": ManeuverMath.dv_budget(world.ship.propellant_kg, world.structural_mass_kg(), world.ship.isp_seconds),
 		"throttle": world.throttle, "attitude_mode": world.attitude_mode, "executor_on": world.executor_on,
+		"reaction_wheel": world.reaction_wheel.snapshot(),
 		"burn_status": "RCS APPROACH" if _approaching else ("EXECUTING %d NODES" % world.nodes.size() if world.executor_on else ("MAIN THRUST" if world.throttle > 0.0 and float(world.ship.propellant_kg) > 0.0 else "COASTING")),
 		"target": {"id": target.id, "name": target.name, "range_m": SimVector.length(relative), "relative_speed_mps": SimVector.length(relative_velocity)},
 		"targets": targets, "plan": _plan_snapshot(), "scope": _scope_snapshot(state, target), "navball": _navball_snapshot(state, relative)}
@@ -581,6 +606,11 @@ func _seated() -> bool:
 
 
 func _needs_inertial_interior() -> bool:
+	# A live joint must transmit the suit motor's impulse. Keep physical ownership
+	# while its spinning rotors can react against the carrier, and briefly after
+	# unloading so the constraint solver finishes transmitting the last impulse.
+	if player.is_wheel_dumping() or _suit_dump_settle_s > 0.0 or player.attitude.momentum_body.length_squared() > 1e-8:
+		return true
 	var grip: PhysicalGrip = player.get_node_or_null("PhysicalGrip") as PhysicalGrip
 	var boots: MagneticBoots = player.get_node_or_null("MagneticBoots") as MagneticBoots
 	if (grip != null and grip.is_attached()) or (boots != null and boots.is_attached()) or player.grapple.is_attached():

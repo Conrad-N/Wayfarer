@@ -13,6 +13,7 @@ const THRUSTER_LEVER_ARM_M: float = 2.0
 
 var api: ShipApi = ShipApi.new()
 var navigation_target: RigidBody3D
+var rotor_momentum_body: Vector3 = Vector3.ZERO
 var _doors: Dictionary = {}
 var _lights: Array[OmniLight3D] = []
 
@@ -60,6 +61,13 @@ func system_at_shape(index: int) -> String:
 func _physics_process(delta: float) -> void:
 	var telemetry: Dictionary = api.get_telemetry()
 	mass = float(telemetry.mass_kg)
+	if not freeze:
+		var inverse: Basis = get_inverse_inertia_tensor()
+		if absf(inverse.determinant()) > 1e-30:
+			# OrbitalFlight supplies motor torque and this ship's rotor state.
+			# Jolt needs the passive body/rotor correction even with motors off.
+			var body_inertia: Basis = global_basis.transposed() * inverse.inverse() * global_basis
+			apply_torque(global_basis * GyroscopicMotion.torque(global_basis.transposed() * angular_velocity, body_inertia, rotor_momentum_body, delta))
 	if bool(telemetry.braking):
 		_brake(delta, telemetry)
 	var target_position: Vector3 = global_position

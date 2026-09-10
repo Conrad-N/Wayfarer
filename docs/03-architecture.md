@@ -135,3 +135,20 @@ Hands and boots likewise require the local inertial frame. Restrained transit ca
 warp requires the pilot seat. Local constraints retain relative anchors through
 recentring and body replacement. Flight mass budgets include the transported suit;
 the physical ship body excludes it because its live suit body supplies that mass.
+
+Reaction-wheel state persists across analytic/local handoffs. The orbital
+controller requests bounded torque from the ship's wheel module; the local adapter
+applies that torque to the hull while Jolt owns body motion. The suit wheel applies
+torque only to its suit body, so hands, boots and the seat transmit it through
+ordinary contact. Ship attitude control observes body motion independently.
+There is no cross-wheel momentum shortcut. A suit with stored wheel momentum,
+an active C dump, or the short post-dump settling interval retains local physics
+even when seated, including passive gyroscopic reactions through its restraint.
+Unload the suit wheels before orbital warp; ship wheel momentum remains in its
+own persistent scalar simulation state during warp.
+
+Local control returns motor torque only. `PlayerShip` applies the passive body
+and rotor gyroscopic reaction using its full physical inertia tensor; `Player`
+uses the same stable midpoint helper. In orbital flight the pure wheel module
+integrates passive precession with a matching orientation update. This avoids
+double-applying gyroscopic torque or adding energy at high stored momentum.

@@ -215,3 +215,31 @@ decide something the docs did not cover.
   carries the pilot afterward; unstrapping restores normal eye height and leaves
   solved motion intact. Wheel storage remains the original provisional 20 N·m·s
   per axis; Conrad's low-capacity feedback is recorded pending further tuning.
+
+- 2026-09-10 — Conrad's wearable reaction-wheel design note supersedes the
+  provisional 20 N·m·s / 0.15 kg·m² suit rating: ±100 N·m·s per axis,
+  0.0239 kg·m² rotor inertia, approximately 40,000 rpm, and a 15 kg assembly
+  included in the existing 100 kg suit mass. Motor torque remains 8 N·m.
+  Motor-generators recover energy with losses while preserving angular momentum.
+- 2026-09-10 — Hold C unloads suit wheels with equal opposite torque on the suit;
+  physical hands, boots or the pilot harness transmit that reaction to a carrier.
+  A carrier's controller independently responds to the resulting motion only
+  when enabled. No system transfers momentum directly between wheel stores.
+  Alt retains propellant-compensated unloading; X retains wheel-only spin braking.
+  Seated suits with stored wheel momentum retain local physics for gyroscopic
+  contact torque, so suit wheels must be unloaded before orbital warp.
+- 2026-09-10 — Replace the ship's ideal M4 attitude actuator with a finite wheel
+  module and independent `reaction_wheel` health/on-off system. Provisional
+  industrial ratings are ±100,000 N·m·s per axis, 1,000 kg·m² rotor inertia and
+  5,500 N·m torque; module mass is included in the existing 8,000 kg dry hull.
+  Regeneration is 90% efficient, with 2 J/N·m·s transfer losses. ShipApi exposes
+  persistent wheel telemetry across local and orbital flight. AUTO OFF disables
+  compensation; STOP ROTATION and direction holds command the bounded module.
+  Docking-based ship unloading, opposing-jet unloading, magnetic torquers and a
+  discrete removable wheel part remain future extensions of this torque path.
+- 2026-09-10 — Full-capacity testing exposed artificial energy growth in explicit
+  gyroscopic stepping. Suit and ship passive rotation now use implicit midpoint
+  integration; the scalar orbital path also uses its matching orientation step.
+  Local bodies use their complete physical inertia tensors and retain Jolt's
+  finite-step orientation accuracy. Tests cover saturated rotors with motors off,
+  as well as hand, boot and harness transfer followed by independent compensation.

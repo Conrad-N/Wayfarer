@@ -35,6 +35,7 @@ var _roll_input: float = 0.0
 var _pending_look: Vector2 = Vector2.ZERO
 var _braking: bool = false
 var _wheel_braking: bool = false
+var _wheel_dumping: bool = false
 
 
 func _ready() -> void:
@@ -51,6 +52,7 @@ func _process(_delta: float) -> void:
 		set_motion_input(Vector3.ZERO, 0.0)
 		set_braking(false)
 		set_wheel_braking(false)
+		set_wheel_dumping(false)
 		grapple.cancel_input()
 		if is_instance_valid(salvage_tools):
 			salvage_tools.cancel_input()
@@ -66,6 +68,7 @@ func _process(_delta: float) -> void:
 		grapple.set_reel_input(Input.get_axis("grapple_reel_out", "grapple_reel_in"))
 	set_braking(Input.is_action_pressed("brake"))
 	set_wheel_braking(Input.is_action_pressed("wheel_brake"))
+	set_wheel_dumping(Input.is_action_pressed("wheel_dump"))
 	set_motion_input(Vector3(
 		Input.get_axis("move_left", "move_right"),
 		Input.get_axis("move_down", "move_up"),
@@ -126,10 +129,17 @@ func _physics_process(delta: float) -> void:
 	# including through seats and boots while their suit motors are disabled.
 	var omega_body: Vector3 = global_basis.transposed() * angular_velocity
 	var inverse_inertia: Basis = get_inverse_inertia_tensor()
-	var gyro_torque: Vector3 = global_basis * attitude.gyroscopic_torque(omega_body)
 	if inverse_inertia.determinant() > 0.0:
-		gyro_torque -= angular_velocity.cross(inverse_inertia.inverse() * angular_velocity)
-	apply_torque(gyro_torque)
+		var inverse_body: Basis = global_basis.transposed() * inverse_inertia * global_basis
+		apply_torque(global_basis * GyroscopicMotion.torque(omega_body, inverse_body.inverse(), attitude.momentum_body, delta))
+	if _wheel_dumping:
+		_body_follow = false
+		# Only the suit receives this motor reaction. Joints/contact carry it to
+		# anything held, whose own attitude controller may respond independently.
+		if delta > 0.0:
+			var dump_torque: Vector3 = attitude.drive(attitude.momentum_body / delta, omega_body, roll_torque_nm, delta, suit, global_basis.transposed() * inverse_inertia * global_basis)
+			apply_torque(global_basis * dump_torque)
+		return
 	if surface_motion_active or bool(get_meta("seated", false)):
 		_body_follow = false
 		return
@@ -150,13 +160,13 @@ func _physics_process(delta: float) -> void:
 			motor_torque += global_basis.transposed() * (inverse_inertia.inverse() * (global_basis * acceleration))
 		if head_angles_rad.length() < 0.01 and Vector2(omega_body.x, omega_body.y).length() < 0.01:
 			_body_follow = false
-	var delivered: Vector3 = attitude.drive(motor_torque, omega_body, roll_torque_nm, delta, suit)
+	var delivered: Vector3 = attitude.drive(motor_torque, omega_body, roll_torque_nm, delta, suit, global_basis.transposed() * inverse_inertia * global_basis)
 	apply_torque(global_basis * delivered)
 
 
 func _update_head() -> void:
 	var requested_look: bool = _pending_look != Vector2.ZERO
-	if _body_follow and not freeze and not _braking and not _wheel_braking:
+	if _body_follow and not freeze and not _braking and not _wheel_braking and not _wheel_dumping:
 		var direction: Vector3 = global_basis.transposed() * _gaze_world
 		head_angles_rad = Vector2(atan2(-direction.x, -direction.z), asin(clampf(direction.y, -1.0, 1.0)))
 	if _pending_look != Vector2.ZERO:
@@ -167,7 +177,7 @@ func _update_head() -> void:
 	var camera: Camera3D = $Camera3D
 	camera.basis = Basis(Vector3.UP, head_angles_rad.x) * Basis(Vector3.RIGHT, head_angles_rad.y)
 	_gaze_world = -camera.global_basis.z
-	if requested_look and body_follow_enabled and head_angles_rad.length() > BODY_FOLLOW_THRESHOLD_RAD and not freeze and not _braking and not _wheel_braking:
+	if requested_look and body_follow_enabled and head_angles_rad.length() > BODY_FOLLOW_THRESHOLD_RAD and not freeze and not _braking and not _wheel_braking and not _wheel_dumping:
 		_body_follow = true
 
 
@@ -211,6 +221,16 @@ func set_wheel_braking(enabled: bool) -> void:
 ## Report the commanded wheel brake state, including at rest or saturation.
 func is_wheel_braking() -> bool:
 	return _wheel_braking
+
+
+## Hold rotor unloading: its real reaction spins the suit and any physical support.
+func set_wheel_dumping(enabled: bool) -> void:
+	_wheel_dumping = enabled
+
+
+## Report deliberate unloading, including in a seat or while wearing latched boots.
+func is_wheel_dumping() -> bool:
+	return _wheel_dumping
 
 
 func _wheel_brake_torque(delta: float, inverse_inertia: Basis) -> Vector3:
@@ -264,7 +284,7 @@ func _apply_brake(delta: float) -> void:
 	unload = unload.limit_length(jet_room)
 	var fuel_request: float = (force.length() + (torque.length() + unload.length()) / maxf(thruster_lever_arm_m, 0.01)) * delta / maxf(exhaust_velocity_mps, 1.0)
 	var fuel_fraction: float = minf(suit.propellant_kg / fuel_request, 1.0) if fuel_request > 0.0 else 0.0
-	var delivered: Vector3 = attitude.drive(unload * fuel_fraction, omega_body, roll_torque_nm, delta, suit)
+	var delivered: Vector3 = attitude.drive(unload * fuel_fraction, omega_body, roll_torque_nm, delta, suit, global_basis.transposed() * inverse_inertia * global_basis)
 	var wheel_torque_world: Vector3 = global_basis * delivered
 	# Reserve fuel for exactly cancelling wheel unloading before ordinary braking.
 	var cancel_fuel: float = wheel_torque_world.length() * delta / (maxf(thruster_lever_arm_m, 0.01) * maxf(exhaust_velocity_mps, 1.0))
@@ -298,6 +318,7 @@ func _release_mouse() -> void:
 	set_motion_input(Vector3.ZERO, 0.0)
 	set_braking(false)
 	set_wheel_braking(false)
+	set_wheel_dumping(false)
 	_pending_look = Vector2.ZERO
 	_body_follow = false
 	if is_instance_valid(grapple):

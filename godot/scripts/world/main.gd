@@ -78,7 +78,9 @@ func _process(delta: float) -> void:
 	_screenshot_status.visible = _screenshot_notice_seconds > 0.0
 	var capture_hint: String = "Esc releases mouse" if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED else "Click to fly"
 	var brake_hint: String = "RCS BRAKE" if _player.is_braking() else ("WHEEL BRAKE" if _player.is_wheel_braking() else "FREE FLIGHT")
-	if _player.suit.propellant_kg <= 0.0 and not _player.is_wheel_braking():
+	if _player.is_wheel_dumping() and not _player.is_braking():
+		brake_hint = "WHEEL DUMP / REACTION TORQUE"
+	if _player.suit.propellant_kg <= 0.0 and not _player.is_wheel_braking() and not _player.is_wheel_dumping():
 		brake_hint = "RCS EMPTY"
 	_readout.text = "WAYFARER / SALVAGE YARD\n%.2f m/s  |  %.1f deg/s  |  %s  |  %s" % [
 		_player.linear_velocity.length(), rad_to_deg(_player.angular_velocity.length()),
@@ -105,7 +107,7 @@ func _process(delta: float) -> void:
 	_grapple_status.text += "\n" + _grip.status + " | " + _boots.status
 	_supplies.text += " | WHEELS %.0f%%" % (_player.attitude.utilization() * 100.0)
 	if _player.attitude.utilization() >= 0.98:
-		_supply_warning.text += " | WHEELS SATURATED: Alt uses jets to unload"
+		_supply_warning.text += " | WHEELS FULL: C dumps into body / Alt unloads with jets"
 	_target_status.text = _interaction.hint + "\n" + _player.salvage_tools.target_readout
 	var in_ship: Vector3 = _ship.to_local(_player.global_position)
 	if in_ship.z < -1.8 and in_ship.z > -12.0 and absf(in_ship.x) < 4.0 and absf(in_ship.y) < 3.0:

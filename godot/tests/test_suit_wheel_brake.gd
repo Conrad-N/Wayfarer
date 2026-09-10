@@ -89,7 +89,7 @@ func test_supported_modes_suppress_wheel_brake() -> void:
 
 ## A fixed handhold transmits finite wheel torque and massive loads exhaust storage.
 func test_held_load_wheel_brake_transmits_torque_and_saturates() -> void:
-	for cargo_mass: float in [200.0, 2000.0]:
+	for cargo_mass: float in [200.0, 10000.0]:
 		var fixture: Node3D = Node3D.new()
 		(Engine.get_main_loop() as SceneTree).root.add_child(fixture)
 		var player: Player = (load("res://scenes/player.tscn") as PackedScene).instantiate() as Player
@@ -122,7 +122,7 @@ func test_held_load_wheel_brake_transmits_torque_and_saturates() -> void:
 		var speed_before: float = cargo.angular_velocity.length()
 		var drift_before: Vector3 = (player.linear_velocity * player.mass + cargo.linear_velocity * cargo.mass) / (player.mass + cargo.mass)
 		player.set_wheel_braking(true)
-		await _steps(240)
+		await _steps(840)
 		check(grip.is_attached(), "wheel braking keeps physical grip")
 		check(cargo.angular_velocity.length() < speed_before, "wheel brake slows the held load too")
 		check_near(player.angular_velocity.distance_to(cargo.angular_velocity), 0.0, 0.002, "held load and player keep shared rotation")

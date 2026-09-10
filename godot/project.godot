@@ -146,6 +146,11 @@ wheel_brake={
 "events": [Object(InputEventKey,"physical_keycode":88)]
 }
 
+wheel_dump={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"physical_keycode":67)]
+}
+
 [physics]
 
 3d/physics_engine="Jolt Physics"

@@ -7,10 +7,10 @@ func test_wheel_momentum_and_saturation() -> void:
 	var wheel: SuitAttitude = SuitAttitude.new()
 	var suit: SuitResources = SuitResources.new()
 	var body_impulse: Vector3 = Vector3.ZERO
-	for step: int in 1000:
+	for step: int in 1500:
 		body_impulse += wheel.drive(Vector3.RIGHT * 8.0, Vector3.ZERO, 8.0, 0.01, suit) * 0.01
 	check_near(body_impulse.distance_to(-wheel.momentum_body), 0.0, 0.0001, "wheel stores opposite body momentum")
-	check_near(wheel.momentum_body.x, -20.0, 0.0001, "finite rotor speed saturates wheel")
+	check_near(wheel.momentum_body.x, -100.0, 0.0001, "finite rotor speed saturates wheel")
 	check_near(wheel.drive(Vector3.RIGHT * 8.0, Vector3.ZERO, 8.0, 0.1, suit).length(), 0.0, 1e-5, "saturated axis supplies no additional torque")
 	check_near(wheel.utilization(), 1.0, 1e-5, "saturation visible in telemetry")
 	check(wheel.drive(Vector3.LEFT * 8.0, Vector3.ZERO, 8.0, 0.1, suit).x < 0.0, "reversing torque can recover headroom")
@@ -73,6 +73,26 @@ func test_unpowered_precession_preserves_world_momentum_and_energy() -> void:
 	check_near(momentum_after.distance_to(momentum_before), 0.0, 0.05, "unpowered rotor-axis precession preserves world angular momentum")
 	check_near(energy_after, energy_before, 0.02, "gyroscopic reaction does not create mechanical energy")
 	check_eq(player.suit.battery_energy_j, 0.0, "passive gyro reaction does not need battery")
+	player.free()
+
+
+## Full rated wheel momentum cannot amplify an unpowered suit's tumble.
+func test_full_capacity_precession_preserves_energy_and_momentum() -> void:
+	var player: Player = _spawn_player()
+	await _steps(3)
+	player.attitude.momentum_body = Vector3.UP * SuitAttitude.MOMENTUM_LIMIT_NMS
+	player.angular_velocity = Vector3.BACK * 0.3
+	player.suit.battery_energy_j = 0.0
+	var initial_body: Vector3 = player.get_inverse_inertia_tensor().inverse() * player.angular_velocity
+	var initial_momentum: Vector3 = initial_body + player.global_basis * player.attitude.momentum_body
+	var initial_energy: float = 0.5 * player.angular_velocity.dot(initial_body)
+	await _steps(180)
+	var final_body: Vector3 = player.get_inverse_inertia_tensor().inverse() * player.angular_velocity
+	var final_momentum: Vector3 = final_body + player.global_basis * player.attitude.momentum_body
+	var final_energy: float = 0.5 * player.angular_velocity.dot(final_body)
+	check_near(final_energy, initial_energy, 0.001, "full rotor precession does not create or destroy body kinetic energy")
+	check_near(final_momentum.distance_to(initial_momentum), 0.0, 0.03, "full rotor precession retains world angular momentum")
+	check_eq(player.suit.battery_energy_j, 0.0, "stable gyro needs no hidden motor electricity")
 	player.free()
 
 

@@ -30,3 +30,12 @@ func consume_energy(requested_j: float) -> float:
 	var supplied: float = minf(requested_j, battery_energy_j)
 	battery_energy_j -= supplied
 	return supplied
+
+
+## Accept recovered electrical energy up to battery capacity; excess becomes heat.
+func charge_energy(requested_j: float) -> float:
+	if not is_finite(requested_j) or requested_j <= 0.0:
+		return 0.0
+	var accepted: float = minf(requested_j, BATTERY_CAPACITY_J - battery_energy_j)
+	battery_energy_j += accepted
+	return accepted
