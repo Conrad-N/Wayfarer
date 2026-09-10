@@ -5,6 +5,7 @@ extends Node3D
 @onready var _readout: Label = $HUD/Readout
 @onready var _supplies: Label = $HUD/Supplies
 @onready var _supply_warning: Label = $HUD/SupplyWarning
+@onready var _grapple_status: Label = $HUD/GrappleStatus
 
 
 func _ready() -> void:
@@ -24,7 +25,7 @@ func _ready() -> void:
 		_add_box("StarboardRib", Vector3(0.15, 14, 0.15), Vector3(11.95, 0, z), cyan)
 	_add_box("ForwardMarker", Vector3(5, 0.25, 0.15), Vector3(0, 1.8, -14.95), cyan)
 	_add_box("ForwardMarker", Vector3(0.25, 3.5, 0.15), Vector3(0, 0.2, -14.95), cyan)
-	print("Wayfarer M1: twelve loose bodies, suit thrust and braking. Escape releases mouse.")
+	print("Wayfarer M1: debris, suit RCS, and grapple. Escape releases mouse.")
 
 
 func _process(_delta: float) -> void:
@@ -50,6 +51,9 @@ func _process(_delta: float) -> void:
 	elif _player.suit.battery_energy_j <= SuitResources.BATTERY_CAPACITY_J * 0.1:
 		warnings.append("LOW BATTERY")
 	_supply_warning.text = "  |  ".join(warnings)
+	_grapple_status.text = "GRAPPLE / " + _player.grapple.status
+	if _player.grapple.is_attached():
+		_grapple_status.text += "  |  CABLE %.1f m" % _player.grapple.cable_length_m
 
 
 func _add_box(label: String, size: Vector3, at: Vector3, colour: Color) -> void:

@@ -93,6 +93,15 @@ tablet={
 ]
 }
 
+grapple_reel_in={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"physical_keycode":82)]
+}
+grapple_reel_out={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"physical_keycode":84)]
+}
+
 [physics]
 
 3d/physics_engine="Jolt Physics"

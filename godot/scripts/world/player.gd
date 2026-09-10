@@ -14,6 +14,7 @@ extends RigidBody3D
 @export_range(0.01, 2.0, 0.01) var thruster_lever_arm_m: float = 0.5
 
 var suit: SuitResources = SuitResources.new()
+@onready var grapple: Grapple = $Grapple
 
 var _translation_input: Vector3 = Vector3.ZERO
 var _roll_input: float = 0.0
@@ -22,6 +23,7 @@ var _braking: bool = false
 
 
 func _ready() -> void:
+	grapple.configure(self, suit, $Camera3D)
 	if input_enabled and DisplayServer.get_name() != "headless":
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
@@ -32,7 +34,9 @@ func _process(_delta: float) -> void:
 	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 		set_motion_input(Vector3.ZERO, 0.0)
 		set_braking(false)
+		grapple.cancel_input()
 		return
+	grapple.set_reel_input(Input.get_axis("grapple_reel_out", "grapple_reel_in"))
 	set_braking(Input.is_action_pressed("brake"))
 	set_motion_input(Vector3(
 		Input.get_axis("move_left", "move_right"),
@@ -49,8 +53,14 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton:
 		var button: InputEventMouseButton = event as InputEventMouseButton
-		if button.pressed and button.button_index == MOUSE_BUTTON_LEFT:
+		if button.pressed and button.button_index == MOUSE_BUTTON_LEFT and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			get_viewport().set_input_as_handled()
+		elif Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and event.is_action_pressed("tool_primary"):
+			grapple.request_attach()
+			get_viewport().set_input_as_handled()
+		elif Input.mouse_mode == Input.MOUSE_MODE_CAPTURED and event.is_action_pressed("tool_secondary"):
+			grapple.detach()
 			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var motion: InputEventMouseMotion = event as InputEventMouseMotion
@@ -154,3 +164,5 @@ func _release_mouse() -> void:
 	set_motion_input(Vector3.ZERO, 0.0)
 	set_braking(false)
 	_pending_look = Vector2.ZERO
+	if is_instance_valid(grapple):
+		grapple.cancel_input()

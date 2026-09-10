@@ -63,14 +63,23 @@ anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 16.0
-offset_top = -76.0
+offset_top = -96.0
 offset_right = -16.0
 offset_bottom = -16.0
 grow_horizontal = 2
 grow_vertical = 0
 mouse_filter = 2
 theme_override_font_sizes/font_size = 20
-text = "WASD thrust  |  Space / Ctrl up / down  |  Q / E roll  |  Mouse look  |  Hold Alt to brake\nBump the labelled crates to compare 20, 100 and 1000 kg. Braking uses propellant."
+text = "WASD thrust  |  Space / Ctrl up / down  |  Q / E roll  |  Mouse look  |  Hold Alt to brake\nLeft click attaches grapple  |  Right click releases  |  Hold R / T to reel in / out\nAim at a crate or wall. The lighter end moves more. Reeling uses battery."
+
+[node name="GrappleStatus" type="Label" parent="HUD"]
+offset_left = 16.0
+offset_top = 184.0
+offset_right = 1400.0
+offset_bottom = 218.0
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.4, 0.85, 0.95, 1)
+theme_override_font_sizes/font_size = 20
 
 [node name="Reticle" type="Label" parent="HUD"]
 anchors_preset = 8

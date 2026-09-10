@@ -9,7 +9,8 @@ scripts. Headed for Steam.
 **Status:** M1 started. The first-person suit can thrust, coast, roll, brake, and
 look freely around a debris room. Twelve loose objects range from a 20 kg crate
 to a 4,200 kg hull segment; bumping them transfers momentum. Propellant powers suit
-movement, and the HUD shows both propellant and tool battery. The grapple is next in
+movement; a powered grapple lets you reel debris toward you or haul yourself to a
+wall. The HUD shows supplies and tether status. The F12 screenshot key is next in
 [docs/09-roadmap.md](docs/09-roadmap.md).
 
 ## Run
@@ -32,8 +33,11 @@ part scripts. Setup details in [AGENTS.md](AGENTS.md).
 - **Mouse:** turn the whole suit, including past vertical and upside down.
 - **Hold Alt:** brake drift and spin. This overrides thrust and roll while held;
   mouse look stays available. The HUD shows `RCS BRAKE` and the spin rate.
+- **Left click:** attach the grapple to the surface under the crosshair.
+- **Right click:** release the tether. **Hold R / T:** reel in / out.
 - **Escape:** release the mouse. **Left click:** capture it again. Losing window
-  focus also releases controls; the world continues moving.
+  focus also releases controls; the world continues moving. The capture click
+  does not fire the grapple, and releasing controls stops its reel.
 
 Releasing thrust leaves you coasting. Braking settles ordinary movement in about
 a second; high speeds and extra mass need longer because suit braking thrust is
@@ -43,14 +47,22 @@ The suit starts with **8 kg of propellant** and a **200 Wh tool battery**. Thrus
 roll, and braking use propellant; coasting and mouse aiming use none. Fuel leaving
 the suit reduces its mass. When the tank is empty, thrust and braking stop working
 and you keep drifting. The HUD warns at 10% remaining and when a supply is empty.
-Battery power is reserved for tools, so it stays full during movement for now.
-Powered tools and ship refilling are still to come.
+Battery power is reserved for tools, so movement leaves it unchanged. Successful
+grapple shots and reeling use battery; holding or releasing a tether uses none.
+An empty battery stops the reel and new shots, but an attached tether still holds.
+Other tools and ship refilling are still to come.
 
 The three equal-sized crates near the start weigh **20, 100, and 1,000 kg**.
 Coast into each at a similar speed to compare how much it moves and how strongly
 it slows you down. Panels, beams, cargo blocks, and the generated hull fill the
 rest of the room. They start at rest, and keep drifting or spinning after a bump.
 The floating mass labels are debug aids for this practice scene.
+
+Aim at a crate and reel in to compare the pull: the 20 kg crate moves toward you
+more quickly than you move toward it; the 1,000 kg crate mostly hauls you instead.
+Attaching to a wall pulls only you. Off-centre hits can spin debris. The grapple
+has one tether, a 30 m reach, and a 1 m minimum reel length. It releases if another
+object crosses the cable or its ends separate beyond 30 m; it cannot wrap corners.
 
 ## Where to read
 

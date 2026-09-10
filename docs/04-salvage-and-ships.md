@@ -79,6 +79,22 @@ hold, done. Simple and gamified on purpose.
 
 Later tools (not first version): free-cut plating, a deployable tow rig, a demolition charge.
 
+M1 grapple: left click attaches to the nearest aimed surface; right click releases.
+Hold R to reel in or T to reel out at 2 m/s, between 1 and 30 m of cable. A central
+suit harness pulls both bodies with equal opposing forces, capped at 300 N; the
+surface anchor follows the target and off-centre hits apply torque to it. A fixed
+wall pulls only the suit. Tension uses a 200 N/m spring and 50 N·s/m damping;
+slack cable cannot push. These values are exposed for playtesting.
+
+A successful attachment costs 100 J. The reel draws 1,000 W while moving cable,
+with proportional travel on the final partial battery charge and no draw at an
+end stop. The passive tether draws no power, so battery depletion prevents new
+attachments and reeling but preserves an existing tether. Releasing it preserves
+momentum and costs nothing. Escape or loss of focus stops the reel and cancels
+pending shots. The cable releases if an obstacle crosses it, its target disappears,
+or separation exceeds 30 m. The M1 visual is a straight line, including when slack;
+rope sag and wrapping are not simulated.
+
 ## Hazards
 
 | kind | trigger | effect |
@@ -102,7 +118,8 @@ applied impulse; expelled propellant reduces the body mass. Empty tanks leave
 the suit coasting with no thrust or braking. Mouse aiming remains available.
 The tool battery starts with 720,000 J (displayed as 200 Wh); RCS and coasting do
 not draw tool power. The debug HUD shows both stores and warns at 10% remaining
-or empty. Tool consumers, oxygen, and refilling at the ship come in later items.
+or empty. The grapple draws from this battery; other tools, oxygen, and refilling
+at the ship come in later items.
 
 ## Extraction: the core trade-off
 

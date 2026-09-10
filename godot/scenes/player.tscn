@@ -1,6 +1,7 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/player.gd" id="1_player"]
+[ext_resource type="Script" path="res://scripts/world/grapple.gd" id="2_grapple"]
 
 [sub_resource type="CapsuleShape3D" id="Capsule_suit"]
 radius = 0.35
@@ -30,3 +31,6 @@ position = Vector3(0, 0.55, 0)
 current = true
 fov = 85.0
 near = 0.05
+
+[node name="Grapple" type="Node3D" parent="."]
+script = ExtResource("2_grapple")

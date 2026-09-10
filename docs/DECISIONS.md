@@ -63,3 +63,18 @@ decide something the docs did not cover.
   asset now; the Blender `-convcol` pipeline change remains part of M2.
 - 2026-09-10 — Conrad changed the suit brake binding from X to Alt. Hold behavior
   and braking physics are unchanged.
+- 2026-09-10 — M1 grapple uses left click to attach, right click to release, and
+  R/T to reel in/out. The click that captures the mouse does not fire; Escape or
+  focus loss cancels pending shots and motor input but keeps an existing tether.
+- 2026-09-10 — Grapple tension is an equal opposing pull between the suit centre
+  and the selected target surface, including target torque. The tunable spring
+  is 200 N/m with 50 N·s/m damping and a 300 N cap; slack cable cannot push. The
+  reel moves at 2 m/s between 1 and 30 m. This gives light debris and heavy anchors
+  distinct responses without changing either body's velocity directly.
+- 2026-09-10 — Grapple attachment costs 100 J; reeling draws 1,000 W for actual
+  cable travel, leaving room above its 600 W peak mechanical output. Passive
+  holding and release cost nothing; empty batteries preserve the tether but stop
+  new shots and motor travel. These are initial tool tuning values.
+- 2026-09-10 — M1 draws the tether as a straight line and releases it when another
+  body blocks the line, the target disappears, or separation exceeds 30 m. Rope
+  wrapping and sag are deferred; the prototype cannot pull through obstacles.

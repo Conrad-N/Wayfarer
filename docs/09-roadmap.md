@@ -22,9 +22,9 @@ upside down without meaning to and have to think to fix it.
 - [x] Suit propellant and battery as numbers on a debug HUD.
 - [x] A test scene: a big box room with a dozen rigid bodies of different masses
       (use `hull_segment_a` and primitives). Bumping into things transfers momentum.
-- [ ] Grapple tool: raycast, tether visual, reel in/out, pulls the lighter body.
+- [x] Grapple tool: raycast, tether visual, reel in/out, pulls the lighter body.
 - [ ] Debug screenshot key F12 saves to `godot/build/screens/`.
-- [ ] Headless tests: thrust produces expected acceleration for a given mass; brake
+- [x] Headless tests: thrust produces expected acceleration for a given mass; brake
       converges; grapple reels the lighter body.
 
 Done when: five minutes in the box is fun and disorienting in the right way.
@@ -69,6 +69,19 @@ suit impacts, total linear momentum, and undamped drift/spin. `./check.sh` passe
 20 kg crate, 1,000 kg crate, and hull from the same 2 m/s approach and inspected
 their different responses, labels, and the room layout. Captures:
 `godot/build/screens/m1-debris-*.png` (ignored).
+
+Grapple progress (2026-09-10): left click attaches to the aimed surface, right click
+releases, and R/T reel in/out. Equal opposing tension moves the lighter end more;
+off-centre anchors spin debris. The HUD shows status and cable length. Attachment
+and reel travel spend battery; an empty battery leaves the passive tether intact.
+Fifteen new Jolt tests cover selection, anchors, mass response, momentum, torque,
+tension limits, release/coasting, slack, battery costs/depletion, and lost/blocked
+targets. `./check.sh` passes 330 checks; the main scene boots headless. A windowed
+exercise used player input events/polling to attach, reel both ways, release, and
+brake with the new Alt binding. It verified a 20 kg crate, a 1,000 kg crate, a wall,
+and battery depletion. The cable, controls, and status/warnings were inspected in
+`godot/build/screens/m1-grapple-*.png` (ignored). F12 capture and the final movement
+feel review remain before M1 is complete.
 
 ## M2 — Cut
 
