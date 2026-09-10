@@ -42,10 +42,7 @@ func _physics_process(_delta: float) -> void:
 		elif not boots.is_attached() and not bool(player.get_meta("seated", false)):
 			grip.try_grab()
 	if _boots_requested:
-		if boots.is_attached():
-			boots.release()
-		else:
-			boots.try_latch()
+		boots.toggle()
 	_grab_requested = false
 	_boots_requested = false
 	boots.set_walk_input(Vector2.ZERO if Input.is_action_pressed("brake") else Vector2(Input.get_axis("move_left", "move_right"), Input.get_axis("move_back", "move_forward")))

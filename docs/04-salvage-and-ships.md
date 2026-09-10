@@ -204,9 +204,13 @@ load using reaction wheels, and Q/E rolls it. The carried part retains its colli
 must fit through the cargo door. Release it inside the bay before clamps secure it.
 The grapple remains the longer-range tether; the tractor beam has been removed.
 
-B latches magnetic boots when aligned soles are in contact with a designated steel
-deck at low relative speed. WASD then walks along the deck in the torso's forward/right directions and
-normal mouse yaw turns the torso through the feet. Free look moves the head
+B arms magnetic boots; they keep checking for aligned sole contact with a designated
+steel surface at low relative speed. Descend onto it with Ctrl to latch automatically.
+B again cancels while armed or releases while latched. Arming and rejected contact
+attempts cost no energy; engagement is charged only once on success. A broken or
+overloaded latch switches off and requires B to rearm. WASD then walks along the
+surface in the torso's forward/right directions; normal mouse yaw turns the torso
+through the feet. Free look moves the head
 without steering the feet and supplies vertical aiming while latched. Engagement
 costs 50 J; steps/turns spend battery, with equal reaction on the deck. Foot pivots
 have 250 N·m of motor torque and budget 500 J per commanded radian; they retain

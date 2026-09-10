@@ -81,6 +81,7 @@ func test_overload_and_focus_stop() -> void:
 	(f.deck as RigidBody3D).linear_velocity = Vector3.UP * 3.0
 	await _frames(2)
 	check(not boots.is_attached(), "overload releases instead of unlimited magnetic force")
+	check(not boots.is_armed(), "overload disarms automatic catch to avoid repeated reattachment")
 	check(not player.surface_motion_active, "broken contact restores suit movement")
 	check_eq(player.suit.propellant_kg, 8.0, "overload does not automatically fire suit jets")
 	f.root.free()
@@ -146,6 +147,136 @@ func test_normal_mouse_pivots_boots_with_finite_torque() -> void:
 	check_eq(player.suit.propellant_kg, 8.0, "pivot uses no jets")
 	check(player.attitude.momentum_body.length() < 0.001, "foot pivots do not secretly engage suit wheels")
 	f.root.free()
+
+
+## Arming in open space waits without drawing power, then catches a real deck landing.
+func test_armed_boots_latch_after_actual_thruster_descent() -> void:
+	var f: Dictionary = _fixture()
+	var player: Player = f.player
+	var deck: RigidBody3D = f.deck
+	var boots: MagneticBoots = f.boots
+	player.position.y = 1.65
+	var contact: Dictionary = _watch_deck_contact(player, deck)
+	await _frames(3)
+	boots.toggle()
+	check(boots.is_armed(), "B arms boots before the soles reach the deck")
+	await _frames(12)
+	check(not boots.is_attached(), "armed boots do not attract across open space")
+	check_eq(player.suit.battery_energy_j, SuitResources.BATTERY_CAPACITY_J, "waiting for contact consumes no engagement pulses")
+	player.set_motion_input(Vector3.DOWN, 0.0)
+	await _frames(100)
+	check(bool(contact.hit), "descent reaches an actual capsule-to-deck collision")
+	check(boots.is_attached(), "armed soles latch after landing without a second B press")
+	check(player.surface_motion_active, "landing switches to surface movement")
+	check_near(player.suit.battery_energy_j, SuitResources.BATTERY_CAPACITY_J - MagneticBoots.ENGAGE_ENERGY_J, 0.001, "one successful landing pays exactly one engagement pulse")
+	check((player.linear_velocity - deck.linear_velocity).length() < 0.05, "latched landing settles with its moving deck")
+	var height: float = deck.to_local(player.global_position).y - 0.1
+	check(height >= 0.88 and height <= 0.93, "soles retain the actual collision height")
+	f.root.free()
+
+
+## Pressing B again while waiting cancels future catches, including a later collision.
+func test_cancel_armed_boots_before_descending() -> void:
+	var f: Dictionary = _fixture()
+	var player: Player = f.player
+	var deck: RigidBody3D = f.deck
+	var boots: MagneticBoots = f.boots
+	player.position.y = 1.65
+	var contact: Dictionary = _watch_deck_contact(player, deck)
+	await _frames(3)
+	boots.toggle()
+	check(boots.is_armed(), "first press arms waiting soles")
+	boots.toggle()
+	check(not boots.is_armed(), "second press cancels waiting soles")
+	player.set_motion_input(Vector3.DOWN, 0.0)
+	await _frames(100)
+	player.set_motion_input(Vector3.ZERO, 0.0)
+	check(bool(contact.hit), "cancelled suit still physically reaches the deck")
+	check(not boots.is_attached(), "cancelled boots cannot latch on later contact")
+	check(not player.surface_motion_active, "cancelled landing remains in EVA mode")
+	check_eq(player.suit.battery_energy_j, SuitResources.BATTERY_CAPACITY_J, "cancelled approach spends no engagement energy")
+	f.root.free()
+
+
+## Automatic retry retains the steel requirement when the suit actually hits a deck.
+func test_armed_boots_reject_nonmagnetic_landing() -> void:
+	var f: Dictionary = _fixture()
+	var player: Player = f.player
+	var deck: RigidBody3D = f.deck
+	var boots: MagneticBoots = f.boots
+	deck.remove_from_group("magnetic_surface")
+	player.position.y = 1.65
+	var contact: Dictionary = _watch_deck_contact(player, deck)
+	await _frames(3)
+	boots.toggle()
+	player.set_motion_input(Vector3.DOWN, 0.0)
+	await _frames(100)
+	player.set_motion_input(Vector3.ZERO, 0.0)
+	check(bool(contact.hit), "nonmagnetic test includes real foot collision")
+	check(not boots.is_attached(), "armed soles reject a nonmagnetic surface on contact")
+	check(boots.is_armed(), "material rejection keeps the deliberate waiting state")
+	check_eq(player.suit.battery_energy_j, SuitResources.BATTERY_CAPACITY_J, "repeated unsuitable contact costs no engagement pulses")
+	f.root.free()
+
+
+## Taking a seat cancels a pending sole catch; B cannot arm boots through restraints.
+func test_armed_boots_cancel_when_seated_and_ignore_seated_toggle() -> void:
+	var f: Dictionary = _fixture()
+	var player: Player = f.player
+	var boots: MagneticBoots = f.boots
+	player.position.y = 1.65
+	await _frames(3)
+	boots.toggle()
+	check(boots.is_armed(), "soles wait before taking a seat")
+	player.set_meta("seated", true)
+	await _frames(3)
+	check(not boots.is_armed(), "seated restraint cancels pending automatic attachment")
+	check(not boots.is_attached(), "taking a seat cannot create sole attachment")
+	boots.toggle()
+	check(not boots.is_armed(), "B cannot arm soles while seated")
+	player.set_meta("seated", false)
+	player.position.y = 0.92
+	await _frames(6)
+	check(not boots.is_attached(), "leaving the seat does not restore a cancelled catch")
+	check_eq(player.suit.battery_energy_j, SuitResources.BATTERY_CAPACITY_J, "seated cancellation uses no engagement power")
+	f.root.free()
+
+
+## An armed empty battery retries for free and pays once when power becomes available.
+func test_armed_contact_waits_for_power_and_charges_once() -> void:
+	var f: Dictionary = _fixture()
+	var player: Player = f.player
+	var boots: MagneticBoots = f.boots
+	player.suit.battery_energy_j = 0.0
+	await _frames(3)
+	boots.toggle()
+	await _frames(12)
+	check(boots.is_armed(), "unpowered soles retain the deliberate waiting command")
+	check(not boots.is_attached(), "empty battery cannot engage at valid sole contact")
+	check_eq(player.suit.battery_energy_j, 0.0, "unpowered retries consume and create no charge")
+	player.suit.battery_energy_j = MagneticBoots.ENGAGE_ENERGY_J - 1.0
+	await _frames(12)
+	check(not boots.is_attached(), "partial engagement energy remains insufficient")
+	check_eq(player.suit.battery_energy_j, MagneticBoots.ENGAGE_ENERGY_J - 1.0, "insufficient retries cannot consume partial pulses")
+	player.suit.battery_energy_j = MagneticBoots.ENGAGE_ENERGY_J + 25.0
+	await _frames(12)
+	check(boots.is_attached(), "restored power engages waiting soles without another B press")
+	check(not boots.is_armed(), "successful catch ends the pending retry state")
+	check_eq(player.suit.battery_energy_j, 25.0, "power restoration pays exactly one engagement pulse")
+	await _frames(12)
+	check_eq(player.suit.battery_energy_j, 25.0, "passive contact does not repeat the engagement charge")
+	f.root.free()
+
+
+func _watch_deck_contact(player: Player, deck: RigidBody3D) -> Dictionary:
+	var contact: Dictionary = {"hit": false}
+	player.contact_monitor = true
+	player.max_contacts_reported = 8
+	player.body_entered.connect(func(body: Node) -> void:
+		if body == deck:
+			contact.hit = true
+	)
+	return contact
 
 
 func _fixture() -> Dictionary:

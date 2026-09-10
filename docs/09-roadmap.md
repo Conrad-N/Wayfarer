@@ -322,6 +322,22 @@ a half turn with a peak of 4.72 rad/s, recentred the view on release, and displa
 the fading BUMP label after a real wall collision. Captures are under ignored
 `godot/build/screens/look-*.png`.
 
+### Boot contact usability revision
+
+- [x] B arms the boots before approach; suitable sole contact automatically latches.
+- [x] Clear OFF / ARMED / LATCHED feedback with steel-surface prompts and B cancellation.
+
+Regression coverage includes actual thruster descent into a colliding deck,
+nonmagnetic contact rejection, cancellation, overload disarming, seat exclusion,
+and waiting for sufficient engagement power without repeated charges. Fullscreen
+B → Ctrl → W → B input on the actual ship floor verified automatic attachment,
+roughly one metre of walking without jet fuel, and release. Screenshots are under
+ignored `godot/build/screens/boots-*.png`.
+
+Verification: `./check.sh` passes 2,884 checks with zero failures. The final focused
+boot suite, including the added seat and power-retry cases, passes 82 checks.
+The main scene boots headless without errors or node-leak warnings.
+
 ## M5 — Loop
 
 Goal: the whole job, once.

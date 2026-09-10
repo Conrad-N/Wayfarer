@@ -140,7 +140,8 @@ The Tab tablet works in either state. A loose suit is affected by ship maneuvers
 warp and event warp require the seat and remain unavailable near objects.
 
 G grips/releases surfaces with any tool selected; 3 selects hands instead of the
-removed tractor. B toggles magnetic soles at steel deck contact. X brakes spin
+removed tractor. B arms magnetic soles for automatic steel-surface contact, cancels arming,
+or releases a latch. X brakes spin
 using battery-powered wheels only; Alt uses jets to brake drift/spin and unload
 wheels. Hold C to unload wheel momentum into the suit and whatever is physically
 attached. A free suit spins; a carrier may counteract its resulting rotation if

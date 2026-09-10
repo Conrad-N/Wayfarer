@@ -264,3 +264,10 @@ decide something the docs did not cover.
   cap or an instant adhesion overload. Walking follows the torso during free look.
   The bump HUD flashes amber below the crosshair for 0.6 seconds after a contact
   impulse increase of at least 5 N·s; steady pressure and gentle touching stay quiet.
+
+- 2026-09-10 — B toggles magnetic boots between off and armed while free-floating.
+  Armed soles automatically latch on suitable steel contact once alignment, speed
+  and battery checks pass. Rejected attempts consume no energy; the 50 J engagement
+  pulse is paid only on success. B cancels arming or releases contact. Overload,
+  loss of contact, hand gripping and seating disarm the boots to prevent repeated
+  catches. Prompts distinguish OFF, ARMED and LATCHED and refer to steel surfaces.

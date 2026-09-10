@@ -10,7 +10,7 @@ const FOOT_HEIGHT_M: float = 0.92
 const TURN_TORQUE_NM: float = 250.0
 const TURN_ENERGY_J_PER_RAD: float = 500.0
 
-var status: String = "BOOTS OFF | B latch near a steel deck"
+var status: String = "BOOTS OFF | B arm"
 var player: Player
 var _target: PhysicsBody3D
 var _anchor: Vector3
@@ -19,6 +19,7 @@ var _heading: Vector3
 var _walking: Vector2 = Vector2.ZERO
 var _turn_remaining_rad: float = 0.0
 var _height: float = FOOT_HEIGHT_M
+var _armed: bool = false
 
 
 ## Bind the physical suit. The controller runs before suit actuators.
@@ -30,6 +31,26 @@ func configure(owner_player: Player) -> void:
 ## True while the soles retain contact with a suitable surface.
 func is_attached() -> bool:
 	return is_instance_valid(_target)
+
+
+## True while waiting to engage at safe physical sole contact.
+func is_armed() -> bool:
+	return _armed
+
+
+## Arm contact detection, or cancel/release if already enabled.
+func toggle() -> void:
+	if _armed or is_attached():
+		release()
+		return
+	if not is_instance_valid(player) or bool(player.get_meta("seated", false)):
+		return
+	var grip: PhysicalGrip = player.get_node_or_null("PhysicalGrip") as PhysicalGrip
+	if grip != null and grip.is_attached():
+		status = "BOOTS OFF | Release your hand grip first"
+		return
+	_armed = true
+	try_latch()
 
 
 ## Report the physical supporting body for frame transitions.
@@ -59,24 +80,25 @@ func try_latch() -> bool:
 	var hit: Dictionary = _foot_ray()
 	var body: PhysicsBody3D = hit.get("collider") as PhysicsBody3D
 	if body == null or not _magnetic_hit(hit):
-		status = "BOOTS | Bring your feet close to a steel deck"
+		_waiting("Bring your soles to a steel surface")
 		return false
 	var normal: Vector3 = hit.normal
 	var height: float = (player.global_position - (hit.position as Vector3)).dot(normal)
 	if height < 0.88 or height > 1.05:
-		status = "BOOTS | Bring your soles into contact with the deck"
+		_waiting("Bring your soles into contact with a steel surface")
 		return false
 	if normal.dot(player.global_basis.y) < 0.9:
-		status = "BOOTS | Align your feet with the deck"
+		_waiting("Align your soles with the steel surface")
 		return false
 	var relative: Vector3 = player.linear_velocity - _point_velocity(body, player.global_position)
 	if relative.length() > 0.6:
-		status = "BOOTS | Slow your approach before latching"
+		_waiting("Slow your approach before latching")
 		return false
 	if player.suit.battery_energy_j < ENGAGE_ENERGY_J:
-		status = "BOOTS | Battery too low to engage"
+		_waiting("Battery too low to engage")
 		return false
 	player.suit.consume_energy(ENGAGE_ENERGY_J)
+	_armed = false
 	_target = body
 	_anchor = body.to_local(hit.position)
 	_normal = body.global_basis.transposed() * normal
@@ -91,15 +113,22 @@ func try_latch() -> bool:
 
 ## Mechanical emergency release costs nothing and preserves motion.
 func release() -> void:
+	_armed = false
 	_target = null
 	_walking = Vector2.ZERO
 	_turn_remaining_rad = 0.0
 	if is_instance_valid(player):
 		player.surface_motion_active = false
-	status = "BOOTS OFF | B latch near a steel deck"
+	status = "BOOTS OFF | B arm"
 
 
 func _physics_process(delta: float) -> void:
+	if _armed and is_instance_valid(player):
+		var grip: PhysicalGrip = player.get_node_or_null("PhysicalGrip") as PhysicalGrip
+		if bool(player.get_meta("seated", false)) or (grip != null and grip.is_attached()):
+			release()
+		else:
+			try_latch()
 	if not is_attached():
 		if is_instance_valid(player):
 			player.surface_motion_active = false
@@ -115,7 +144,7 @@ func _physics_process(delta: float) -> void:
 	var hit: Dictionary = _foot_ray()
 	if hit.get("collider") != _target or not _magnetic_hit(hit) or offset.dot(normal) > 1.25 or offset.dot(normal) < 0.7:
 		release()
-		status = "BOOTS RELEASED | Lost deck contact"
+		status = "BOOTS RELEASED | Lost surface contact | B rearm"
 		return
 	var relative: Vector3 = player.linear_velocity - _point_velocity(_target, player.global_position)
 	var forward: Vector3 = (-player.global_basis.z).slide(normal).normalized()
@@ -136,7 +165,7 @@ func _physics_process(delta: float) -> void:
 	var error: Vector3 = anchor + normal * _height - player.global_position
 	if error.slide(normal).length() > 0.45:
 		release()
-		status = "BOOTS RELEASED | Step obstructed or holding force exceeded"
+		status = "BOOTS RELEASED | Step obstructed or holding force exceeded | B rearm"
 		return
 	var force: Vector3 = error * 16000.0 - relative * 1800.0
 	var target_omega: Vector3 = (_target as RigidBody3D).angular_velocity if _target is RigidBody3D else Vector3.ZERO
@@ -155,7 +184,7 @@ func _physics_process(delta: float) -> void:
 	torque -= (point - player.to_global(player.center_of_mass)).cross(force)
 	if force.length() > MAX_FORCE_N or torque.length() > MAX_TORQUE_NM:
 		release()
-		status = "BOOTS RELEASED | Holding force exceeded"
+		status = "BOOTS RELEASED | Holding force exceeded | B rearm"
 		return
 	player.apply_force(force, point - player.global_position)
 	player.apply_torque(torque)
@@ -170,6 +199,10 @@ func _foot_ray() -> Dictionary:
 	var origin: Vector3 = player.global_position
 	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(origin, origin - player.global_basis.y * 1.2, 1, [player.get_rid()])
 	return player.get_world_3d().direct_space_state.intersect_ray(query)
+
+
+func _waiting(reason: String) -> void:
+	status = "BOOTS ARMED | " + reason + " | B cancel" if _armed else "BOOTS | " + reason
 
 
 func _magnetic_hit(hit: Dictionary) -> bool:
