@@ -92,3 +92,35 @@ go dark with ship power; the handheld remains available to restore it.
 PLAN, dedicated CARGO/COMMS/AI apps, repairs, settings and orbital controls remain
 later milestones. The tablet's independent battery is not yet depleted by screen
 use; the suit's existing battery continues to power salvage tools.
+
+## M4 flight screens (2026-09-10)
+
+NAV now has ORBIT, FLIGHT and APPROACH/RCS pages. ORBIT shows the projected ship
+and target paths, altitude, apsides, inclination and a body-relative navball.
+FLIGHT shows simulation time, effective warp, mass, main-drive propellant and
+remaining delta-v, with throttle, attitude, cutoff and event-warp commands.
+APPROACH/RCS has six held translation buttons, local station holding and a bounded
+RCS approach to the nearby reference. Button release, switching apps, closing a
+screen and power loss cannot leave a manual RCS command held.
+
+PLAN selects the station or wreck and offers intercept, circularization,
+Hohmann, velocity matching and custom prograde/normal/radial nodes. Setup uses
+friendly units; the preview lists burn times, delta-v and fuel before execution.
+The starter Kestrel transfer defaults to 160 minutes; shorter requests may cross the
+planet or exceed the available fuel. A preview does not burn
+fuel. Execution rechecks the current budget; cancel/cutoff stops the main drive.
+Event warp advances through the same simulation and slows at burns and nearby
+objects, rather than teleporting to a destination. Manual warp choices are
+1/10/100/1000×, with 1× enforced near objects and while on EVA.
+
+Both ship terminals and the tablet run these same apps through ShipApi. PLAN
+replaces its M3 placeholder; later COMMS, market, repairs and the optional AI are
+still outside M4.
+
+To fly the starter trip: grip the NAV terminal with F, select PLAN, leave Kestrel
+and 160 minutes selected, then CALCULATE PREVIEW and EXECUTE BURNS. Switch to
+NAV → FLIGHT and use COAST TO NEXT EVENT. The executor points, burns and coasts
+through all five nodes, returning to 1× near the wreck. After the final match,
+NAV → APPROACH / RCS provides the short final approach and station holding.
+The Tab tablet offers the same controls. Open the airlock from SHIP for EVA;
+the existing scanner, cutter, grapple and tractor work on the arrived wreck.

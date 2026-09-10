@@ -23,6 +23,7 @@ script = ExtResource("1")
 size = Vector2i(640, 400)
 disable_3d = true
 handle_input_locally = true
+gui_embed_subwindows = true
 render_target_update_mode = 4
 
 [node name="ShipPanel" parent="SubViewport" instance=ExtResource("2")]

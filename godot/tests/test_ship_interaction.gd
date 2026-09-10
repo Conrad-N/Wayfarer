@@ -113,6 +113,7 @@ func _frames(count: int) -> void:
 ## Main connects every screen to one API and keeps NAV meaningful after a cut.
 func test_main_shares_ship_connection_and_retargets_after_cut() -> void:
 	var scene: Node3D = preload("res://scenes/main.tscn").instantiate() as Node3D
+	scene.set("salvage_practice", true)
 	(scene.get_node("Player") as Player).input_enabled = false
 	(Engine.get_main_loop() as SceneTree).root.add_child(scene)
 	await _frames(3)

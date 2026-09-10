@@ -196,21 +196,62 @@ section damage. Inspected NAV, tablet, manifest, airlock and impact screenshots 
 ignored `godot/build/screens/m3-*.png`. Broader life support, repair, economy and
 orbital systems remain later milestones.
 
-## M4 — Orbit
+## M4 — Orbit ✅
 
 Goal: real flight between places.
 
-- [ ] Port the orbital layer from `11-legacy-sim-port-notes.md` into
+- [x] Port the orbital layer from `11-legacy-sim-port-notes.md` into
       `scripts/sim/` with every verification number as a test.
-- [ ] `Sim` autoload: time, warp, objects. One planet, one moon, one station, one
+- [x] `Sim` autoload: time, warp, objects. One planet, one moon, one station, one
       derelict.
-- [ ] Orbital-to-local handoff with the three handoff tests. Floating origin.
-- [ ] NAV and PLAN apps live: orbit scope, navball, maneuver nodes, transfer planner,
+- [x] Orbital-to-local handoff with the three handoff tests. Floating origin.
+- [x] NAV and PLAN apps live: orbit scope, navball, maneuver nodes, transfer planner,
       rendezvous, budgets.
-- [ ] Burns move the ship in the orbital layer; RCS moves it in the local layer.
+- [x] Burns move the ship in the orbital layer; RCS moves it in the local layer.
 
 Done when: you plan a transfer at a terminal, burn, warp, arrive, and the wreck is
 there.
+
+M4 completed (2026-09-10): the main scene starts in orbital flight around Cradle,
+with Lune, Lowline Yard and the Kestrel wreck propagated as scalar64 data. The
+legacy Kepler, state conversion, maneuver, Lambert/rendezvous, powered-flight,
+attitude, time-warp and sphere-of-influence code is ported with its numerical
+fixtures, including interplanetary cases. Chat concurrency and market arithmetic
+checks remain with their later feature milestones.
+
+NAV and PLAN run through ShipApi on both terminals and the tablet. They provide
+an orbit scope, navball, live telemetry, transfer/calculator previews, fuel budgets,
+manual nodes, finite burns and bounded event warp. A 160-minute starter transfer
+uses departure, three guided corrections and a final velocity match. Cargo, main
+fuel and RCS mass enter acceleration and budget calculations.
+
+The physical encounter loads within 10 km and returns actual position/velocity to
+an orbit beyond 11 km. The shared executor continues through arrival using Jolt
+forces and actual hull inertia. A 2 km floating origin preserves nearby precision.
+Leaving and revisiting keeps cut state, conditions, scans, spent reservoirs and
+independently drifting/spinning fragments. Open-space EVA has its own coast
+reference. The terminal handhold temporarily excludes carrier collisions so its
+frozen suit cannot brake the arriving ship. Power or attitude-section failure
+removes control torque without deleting existing spin.
+
+Verification: `./check.sh` passes **2,451 checks, zero failures**, with no node-leak
+warnings, and the main scene boots headless without script errors. Coverage includes
+all orbital verification scenarios, the three required handoff cases, AU-scale
+precision, actual Jolt recentering and revisit, UI input/resource guards and a full
+transfer with the real terminal handhold. A scripted Forward+ run clicked PLAN,
+preview, execute and event warp through the in-world screen, then completed every
+burn and arrived about 76 m from physical salvage at 0.69 m/s. The external wreck
+inspection used a controlled camera pose without changing ship or wreck dynamics.
+
+A second windowed exercise started from a controlled 94 m/0.75 m/s closing arrival,
+clicked RCS approach, and stopped at 31 m with about 28 kg RCS fuel remaining.
+Held translation spent fuel and changed velocity; release stopped thrust and fuel
+use while preserving momentum. The conservative headless approach case starts
+with drift away from the wreck and still retains over 12 kg. Inspected scope,
+navball, plan, burn, arrival, RCS and planetary-sky screenshots under ignored
+`godot/build/screens/m4-*.png` and `m4_orbital_sky*.png`. Station docking, trading,
+contracts and disk saves remain M5; the existing local practice scene is retained
+through the main scene's `salvage_practice` property.
 
 ## M5 — Loop
 

@@ -43,6 +43,10 @@ var _motion: Dictionary = {
 	"orbital_available": false,
 }
 var _door_validator: Callable = Callable()
+var _flight_handler: Callable = Callable()
+var _flight: Dictionary = {"available": false}
+var _main_propellant_kg: float = 0.0
+var _main_capacity_kg: float = 0.0
 
 
 ## Return an independent snapshot; clients cannot change the ship through dictionaries.
@@ -59,8 +63,10 @@ func get_telemetry() -> Dictionary:
 	return {
 		"ship_name": "WAYFARER",
 		"dry_mass_kg": DRY_MASS_KG,
-		"mass_kg": DRY_MASS_KG + _propellant_kg + cargo_mass,
+		"mass_kg": DRY_MASS_KG + _propellant_kg + _main_propellant_kg + cargo_mass,
 		"propellant_kg": _propellant_kg,
+		"main_propellant_kg": _main_propellant_kg,
+		"flight": _flight.duplicate(true),
 		"battery_energy_j": _battery_energy_j,
 		"ship_health": health,
 		"systems": _systems.duplicate(true),
@@ -220,7 +226,7 @@ func assess_cargo(id: String, size_in_bay: Vector3, mass_kg: float, volume_m3: f
 	if size_in_bay.x > BAY_SIZE_M.x or size_in_bay.y > BAY_SIZE_M.y or size_in_bay.z > BAY_SIZE_M.z:
 		return _assessment(false, "PART DOES NOT FIT INSIDE BAY")
 	var occupied: float = 0.0
-	var loaded_mass: float = DRY_MASS_KG + _propellant_kg
+	var loaded_mass: float = DRY_MASS_KG + _propellant_kg + _main_propellant_kg
 	for entry: Dictionary in _manifest:
 		occupied += float(entry["volume_m3"])
 		loaded_mass += float(entry["mass_kg"])
@@ -307,3 +313,86 @@ func _reject(message: String) -> bool:
 
 func _assessment(ok: bool, reason: String) -> Dictionary:
 	return {"ok": ok, "reason": reason}
+
+
+## Bind flight commands to the owning orbital session; no app accesses its internals.
+func bind_flight(handler: Callable, main_capacity_kg: float = 24000.0) -> void:
+	_flight_handler = handler
+	if is_finite(main_capacity_kg) and main_capacity_kg >= 0.0:
+		_main_capacity_kg = main_capacity_kg
+		_main_propellant_kg = main_capacity_kg
+
+
+## Publish an independent SI snapshot and the authoritative main-drive fuel store.
+func publish_flight(snapshot: Dictionary, main_propellant_kg: float) -> void:
+	if not is_finite(main_propellant_kg) or main_propellant_kg < 0.0:
+		return
+	_flight = snapshot.duplicate(true)
+	_main_propellant_kg = minf(main_propellant_kg, _main_capacity_kg)
+	changed.emit()
+
+
+## Send a flight command through the same validation path for every client.
+func flight_command(command: String, arguments: Dictionary = {}) -> bool:
+	if not _flight_handler.is_valid():
+		return _reject("FLIGHT COMPUTER UNAVAILABLE")
+	var releasing_rcs: bool = command == "rcs_translate" and arguments.get("direction") is Vector3 and arguments["direction"] == Vector3.ZERO
+	if not _has_power() and not releasing_rcs and command not in ["cutoff", "cancel_plan", "set_warp"]:
+		return _reject("FLIGHT CONTROLS NEED SHIP POWER")
+	var result: Dictionary = _flight_handler.call(command, arguments.duplicate(true))
+	if not bool(result.get("ok", false)):
+		return _reject(str(result.get("message", "FLIGHT COMMAND REJECTED")))
+	_publish_command(command, arguments, str(result.get("message", "FLIGHT COMMAND ACCEPTED")))
+	return true
+
+
+## Command main-engine throttle as a fraction of full thrust.
+func set_throttle(throttle: float) -> bool:
+	return flight_command("set_throttle", {"throttle": throttle})
+
+
+## Select a bounded, validated simulation time multiplier.
+func set_warp(rate: float) -> bool:
+	return flight_command("set_warp", {"rate": rate})
+
+
+## Ask the attitude controller to point or stop rotation.
+func set_attitude_mode(mode: String) -> bool:
+	return flight_command("set_attitude_mode", {"mode": mode})
+
+
+## Choose an orbital target by its stable session identifier.
+func select_target(id: String) -> bool:
+	return flight_command("select_target", {"id": id})
+
+
+## Calculate a transfer and velocity match, leaving the preview unexecuted.
+func plan_intercept(tof_seconds: float) -> bool:
+	return flight_command("plan_intercept", {"tof_seconds": tof_seconds})
+
+
+## Preview a custom maneuver in the orbital prograde/normal/radial frame.
+func plan_maneuver(time: float, prograde: float, normal: float, radial: float) -> bool:
+	return flight_command("plan_maneuver", {"time": time, "dv_local": {"prograde": prograde, "normal": normal, "radial": radial}})
+
+
+## Commit the currently previewed plan to the finite-burn executor.
+func execute_plan() -> bool:
+	return flight_command("execute_plan")
+
+
+## Cancel pending and executing nodes, cutting main thrust immediately.
+func cancel_plan() -> bool:
+	return flight_command("cancel_plan")
+
+
+## Coast toward the next event while respecting nearby objects and burn windows.
+func advance_to_next_event() -> bool:
+	return flight_command("next_event")
+
+
+## Translate with the ship's finite local RCS, in right/up/back body axes.
+func set_rcs_translation(direction: Vector3) -> bool:
+	if not direction.is_finite():
+		return _reject("INVALID RCS DIRECTION")
+	return flight_command("rcs_translate", {"direction": direction.limit_length(1.0)})

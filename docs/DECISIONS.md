@@ -143,3 +143,27 @@ decide something the docs did not cover.
   300,000 J. Fuel/coolant plume interception deposits 20/8 kW into power/RCS
   damage with the same 300 kJ health scale, without a per-tick threshold. A blocked
   plume cannot damage the ship. Aggregate ship health is the mean section health.
+- 2026-09-10 — M4 ports the original scalar64 orbital math and finite-burn controller,
+  preserving its +X body axis behind an explicit Godot -Z conversion. Numerical
+  parity includes the legacy interplanetary cases; the playable starter system is
+  Cradle, Lune, Lowline Yard and the Kestrel wreck.
+- 2026-09-10 — The starter flight has 24,000 kg main propellant, 250 kN thrust and
+  900 s Isp, matching the inherited drive. PLAN initially offers a 160-minute
+  guided Kestrel transfer because shorter initial routes intersect the planet.
+  Guided correction nodes recompute their burns during flight, so preview fuel
+  remains an estimate. Cargo and RCS mass count in every flight budget.
+- 2026-09-10 — Encounters enter at 10 km, unload beyond 11 km, and recenter at
+  2 km. Local encounters and EVA use 1× time; free-flight warp offers 1/10/100/1000×
+  with automatic burn and approach limits. A free-space EVA gets its own coast
+  reference so the suit remains independent of the accelerating ship.
+- 2026-09-10 — Physical arrival continues the same maneuver executor using Jolt
+  forces and the hull's actual inertia, with a 60-second slew lead. Local RCS
+  approach is capped at 0.5 m/s toward a 30 m stand-off and spends existing RCS fuel.
+  The inherited attitude actuator is an ideal reaction wheel, gated by power and
+  section health; saturation and electrical draw remain later systems work.
+  Local translation/holding spends jet propellant. The conservative approach
+  speed preserves stopping fuel in the starter ship's small RCS tank.
+- 2026-09-10 — M4 stores cut state and individually propagated wreck fragments
+  in session memory, preserving drift, spin, damage, scans and exhausted reservoirs
+  on revisit. Disk persistence remains M5. Planet/moon discs use a procedural sky
+  to preserve camera precision for the ship interior and salvage tools.

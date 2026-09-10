@@ -87,3 +87,26 @@ an approximation after clamping. There is no sale, unloading UI or repair yet.
 Reactor generation, temperature, life support, wear, manual airlock cycling,
 spares and repairs remain later work described above. M3 is a local salvage yard;
 orbital flight and navigation arrive in M4.
+
+## M4 implementation (2026-09-10)
+
+The flight starter adds 24,000 kg of main propellant to the existing hull and RCS
+stores. The inherited main drive provides 250 kN at 900 s specific impulse.
+Finite burns consume main propellant and update total mass; cargo and remaining
+RCS propellant also count in acceleration and the available delta-v budget.
+An empty main tank stops thrust while preserving motion. Loss of ship power
+cancels burns and local approach. Engine wear and thermal limits remain later work.
+
+Orbital attitude control and maneuver execution use the ported bounded torque
+controller. During physical encounters its braking calculation uses the actual
+hull inertia, with a 60-second pointing lead before maneuver nodes. The inherited
+attitude actuator models ideal reaction wheels: it requires ship power and a
+healthy enabled attitude/RCS section, but spends no jet propellant. Wheel saturation
+and electrical draw are not yet modeled. Local translation and station holding
+use the finite RCS tank.
+
+NAV's local controls provide six translation directions. Approach uses at most
+10 kN and 0.5 m/s to settle 30 m from the selected encounter reference, consuming
+the finite RCS store at a 2,000 m/s exhaust velocity. It requires relative speed
+below 10 m/s and a finished maneuver sequence. Closing the screen or losing focus
+releases held translation. Changing target or cutting off cancels approach.

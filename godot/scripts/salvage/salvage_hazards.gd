@@ -158,3 +158,13 @@ func _remove_active(index: int) -> void:
 func _clear_active() -> void:
 	for index: int in range(_active.size() - 1, -1, -1):
 		_remove_active(index)
+
+
+## Snapshot spent reservoirs for an encounter that has finished venting.
+func spent_reservoirs() -> Dictionary:
+	return _spent.duplicate(true)
+
+
+## Restore exhausted reservoirs without granting fresh volatile supplies on revisit.
+func restore_spent_reservoirs(spent: Dictionary) -> void:
+	_spent = spent.duplicate(true)

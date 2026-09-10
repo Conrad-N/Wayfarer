@@ -1,5 +1,7 @@
-## Local salvage yard, working starter ship, and shared terminal/tablet controls.
+## First-person orbital flight with persistent local salvage encounters.
 extends Node3D
+
+@export var salvage_practice: bool = false
 
 @onready var _player: Player = $Player
 @onready var _readout: Label = $HUD/Readout
@@ -17,6 +19,7 @@ extends Node3D
 var _ship: PlayerShip
 var _cargo: CargoHold
 var _interaction: ShipInteraction
+var _flight: OrbitalFlight
 
 var _screenshot_notice_seconds: float = 0.0
 
@@ -24,7 +27,8 @@ var _screenshot_notice_seconds: float = 0.0
 func _ready() -> void:
 	_screenshot.capture_started.connect(_on_capture_started)
 	_screenshot.capture_finished.connect(_on_capture_finished)
-	_wreck.spawn(PracticeWreck.make_graph(), Transform3D(Basis(Vector3.UP, 0.3), Vector3(-7, 0, 0)), Vector3.ZERO, Vector3(0.0, 0.06, 0.025))
+	if salvage_practice:
+		_wreck.spawn(PracticeWreck.make_graph(), Transform3D(Basis(Vector3.UP, 0.3), Vector3(-7, 0, 0)), Vector3.ZERO, Vector3(0.0, 0.06, 0.025))
 	_hazards.configure(_wreck)
 	var tools: SalvageTools = SalvageTools.new()
 	tools.name = "SalvageTools"
@@ -32,6 +36,13 @@ func _ready() -> void:
 	tools.configure(_player, _wreck, _hazards)
 	_player.salvage_tools = tools
 	_build_ship()
+	if not salvage_practice:
+		_flight = OrbitalFlight.new()
+		_flight.name = "OrbitalFlight"
+		add_child(_flight)
+		_flight.configure(get_node("/root/Sim") as OrbitalSession, _ship, _player, _wreck, _hazards)
+		print("Wayfarer M4: orbital flight. F terminal / Tab tablet / PLAN transfer.")
+		return
 	var wall: Color = Color(0.12, 0.16, 0.20)
 	var deck: Color = Color(0.22, 0.26, 0.29)
 	var amber: Color = Color(0.85, 0.48, 0.12)
@@ -87,6 +98,13 @@ func _process(delta: float) -> void:
 	_salvage_status.text = "WRECK %d pieces | %d joints | SALVAGED VALUE %.0f cr | %d active leaks" % [
 		_wreck.bodies.size(), _wreck.graph.edge_ids().size(), _wreck.salvaged_value(), _hazards.active_count()
 	]
+	if not salvage_practice:
+		var flight: Dictionary = _ship.api.get_telemetry().flight
+		if bool(flight.get("available", false)):
+			_readout.text = "WAYFARER / %s\nSUIT %.2f m/s | %s | %s" % [str(flight.reference_name), _player.linear_velocity.length(), brake_hint, capture_hint]
+			if _wreck.bodies.is_empty():
+				_salvage_status.text = "%s / %.1f km | %.1f m/s relative | %.0f× time" % [str(flight.target.name), float(flight.target.range_m) / 1000.0, float(flight.target.relative_speed_mps), float(flight.warp)]
+
 
 
 func _on_capture_started() -> void:
@@ -128,7 +146,7 @@ func _build_ship() -> void:
 	_ship.name = "PlayerShip"
 	_ship.transform = Transform3D(Basis(Vector3.UP, PI / 2.0), Vector3(8, 0, 4))
 	add_child(_ship)
-	_ship.set_navigation_target(_wreck.bodies[0])
+	_ship.set_navigation_target(_wreck.bodies[0] if not _wreck.bodies.is_empty() else null)
 	_wreck.structure_changed.connect(_refresh_navigation_target)
 	for app: String in ["NAV", "SHIP"]:
 		var screen: WorldScreen = preload("res://ui/world_screen.tscn").instantiate() as WorldScreen

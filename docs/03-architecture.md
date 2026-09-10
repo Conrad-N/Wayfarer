@@ -97,3 +97,37 @@ Same save plus same inputs must give the same result on Linux and Windows. Sim s
 in fixed quanta; throttle decisions happen only on quantum boundaries; no wall-clock
 reads in `scripts/sim/`. Jolt is deterministic on the same build and platform, which
 is enough for single-player.
+
+## M4 implementation (2026-09-10)
+
+`Sim` is the thin `OrbitalSession` autoload under `scripts/world/`; it owns an
+`OrbitalWorld` RefCounted and the persistent object/encounter records. Numerical
+code under `scripts/sim/` has no nodes or native vectors. The original +X thrust
+axis remains in the port; `LocalOrbitFrame` maps it to Godot's -Z ship nose.
+
+The physical ship interior remains available during transit. `OrbitalFlight`
+keeps its nearby frame attached to the ship while orbital data advances. Inside
+10 km of a station or wreck, it creates the encounter and hands absolute
+position/velocity to Jolt relative to the reference object's propagated state.
+The executor continues through that handoff by returning main-drive forces and
+attitude torque instead of applying a second orbital integration. Local time is
+1×. Exiting beyond 11 km creates the new conic from the ship's actual local state.
+Recentring at 2 km shifts independent physical roots together.
+
+Encounter records preserve the ShipGraph, part condition, scans, partial cuts and
+spent reservoirs. Each loose connected component gets its own scalar64 orbital
+state, and is reconstructed at its propagated position on return. Secured cargo
+remains attached to the ship and is not recreated in the wreck. A running plume
+finishes before encounter unloading. These are in-session records; disk saving
+and loading remain M5.
+
+Leaving the ship in open space creates a propagated coast reference and transfers
+the ship to local physics at 1× time, so an EVA suit does not follow a later ship
+burn for free. Reboarding returns to orbital transit. Cradle and Lune are drawn
+in a procedural sky using their apparent directions and angular sizes; nearby
+geometry keeps a normal camera depth range.
+
+The terminal handhold temporarily excludes collisions between the held suit and
+its carrier ship. Otherwise a frozen suit behaves like an immovable obstacle
+during the first local physics step and incorrectly removes ship momentum.
+Releasing the handhold restores normal collisions and inherits ship motion.

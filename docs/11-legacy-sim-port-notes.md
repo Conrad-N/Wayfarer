@@ -393,3 +393,33 @@ arguments — no `World` reference, no hidden globals. Don't let these reach int
 singleton/autoload for `mu`, `time`, or ship state; `World` (and its GDScript
 equivalent) is the only place state should live. That boundary is what lets the
 `check-sim` numeric checks in §4 port 1:1 into GDScript/GUT unit tests.
+
+## M4 port map (2026-09-10)
+
+The GDScript equivalents use snake_case names and `SimVector` scalar64 components:
+
+| Legacy module | Godot implementation |
+|---|---|
+| types / vector helpers | `scripts/sim/sim_vector.gd` |
+| constants / system | `sim_constants.gd`, `orbital_system.gd` |
+| orbit | `orbit_math.gd` |
+| flight | `flight_math.gd` |
+| maneuver | `maneuver_math.gd` |
+| solvers | `orbital_solvers.gd` |
+| world | `orbital_world.gd` |
+| api (flight subset) | existing `scripts/ship/ship_api.gd` with `world/orbital_flight.gd` owner |
+
+Numerical suites retain the legacy Sol/Cradle/Vesper fixtures, including the full
+interplanetary transfer. The playable M4 session uses Cradle, its moon Lune,
+Lowline Yard and Kestrel instead. Browser/HTTP interfaces are rebuilt as Godot
+screens; the legacy server is not required. Checks 23 (chat concurrency) and 34
+(market arithmetic) are outside the orbital port and remain with their later
+feature milestones. All orbital verification scenarios are covered by the new
+headless suites.
+
+Port corrections include guarded inputs, exact final fuel exhaustion, retrograde
+state conversion, explicit invalid-orbit results, ordered affordable plans,
+planet-clearance checks, bounded transfer-window searches, safe warp event handling,
+and fixed attitude stepping without silently discarding rotation time. The local
+adapter obtains finite forces and torque from the same executor while Jolt owns
+nearby translation and rotation; it does not integrate those quantities twice.

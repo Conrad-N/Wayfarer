@@ -1,9 +1,10 @@
-## Shared NAV and SHIP apps: every reading and command goes through ShipApi.
+## Shared NAV, PLAN and SHIP apps: every reading and command goes through ShipApi.
 class_name ShipPanel
 extends Control
 
 const AMBER: Color = Color("efbd72")
 const CYAN: Color = Color("74dbe1")
+const MUTED: Color = Color("536b78")
 
 var api: ShipApi
 var current_app: String = "SHIP"
@@ -15,6 +16,30 @@ var _message: Label
 var _nav: Control
 var _ship: Control
 var _buttons: Dictionary = {}
+var _plan: Control
+var _nav_pages: Dictionary = {}
+var _nav_page: String = "scope"
+var _flight_readout: Label
+var _scope_readout: Label
+var _rcs_readout: Label
+var _scope: OrbitDisplay
+var _navball: OrbitDisplay
+var _target: OptionButton
+var _solver: OptionButton
+var _attitude: OptionButton
+var _warp: OptionButton
+var _throttle: HSlider
+var _inputs: Dictionary = {}
+var _input_labels: Dictionary = {}
+var _plan_setup: Control
+var _plan_preview: Control
+var _plan_summary: Label
+var _preview_visible: bool = false
+var _target_ids: PackedStringArray = []
+var _rcs_held: bool = false
+const ATTITUDES: PackedStringArray = ["manual", "kill", "prograde", "retrograde", "normal", "antinormal", "radial_out", "radial_in", "target", "anti_target", "node"]
+const WARP_RATES: Array[float] = [1.0, 10.0, 100.0, 1000.0]
+const SOLVERS: PackedStringArray = ["Intercept", "Circularize apoapsis", "Circularize periapsis", "Hohmann", "Match velocity", "Manual maneuver"]
 
 
 func _ready() -> void:
@@ -37,7 +62,9 @@ func configure(ship_api: ShipApi, initial_app: String = "SHIP") -> void:
 
 ## Switch the displayed app without replacing controls or losing their signals.
 func select_app(app: String) -> void:
-	current_app = "NAV" if app == "NAV" else "SHIP"
+	if _rcs_held:
+		_release_rcs()
+	current_app = app if app in ["NAV", "PLAN", "SHIP"] else "SHIP"
 	refresh()
 
 
@@ -47,13 +74,16 @@ func refresh() -> void:
 		return
 	_nav.visible = current_app == "NAV"
 	_ship.visible = current_app == "SHIP"
+	_plan.visible = current_app == "PLAN"
+	_readout.visible = current_app == "SHIP"
+	_detail.visible = current_app == "SHIP"
 	if api == null:
 		_title.text = "WAYFARER / NO CONNECTION"
 		_readout.text = "Ship telemetry unavailable."
 		_detail.text = ""
 		_message.text = ""
 		for button: Button in _buttons.values():
-			button.disabled = button.name not in [&"nav_tab", &"ship_tab"]
+			button.disabled = button.name not in [&"nav_tab", &"plan_tab", &"ship_tab"]
 		return
 	for button: Button in _buttons.values():
 		button.disabled = false
@@ -62,8 +92,26 @@ func refresh() -> void:
 	_message.text = str(data.get("last_message", ""))
 	if current_app == "NAV":
 		_refresh_nav(data)
+	elif current_app == "PLAN":
+		_refresh_plan(data)
 	else:
 		_refresh_ship(data)
+
+
+## Release held physical controls when an interface is closed or loses power.
+func cancel_input() -> void:
+	_release_rcs()
+	var popup: PopupMenu = active_popup()
+	if popup != null:
+		popup.hide()
+
+
+## Return the visible embedded selector so the physical screen can route its input.
+func active_popup() -> PopupMenu:
+	for selector: OptionButton in [_target, _solver, _attitude, _warp]:
+		if is_instance_valid(selector) and selector.get_popup().visible:
+			return selector.get_popup()
+	return null
 
 
 ## Return a named control for focus, accessibility, and integration checks.
@@ -82,15 +130,17 @@ func _build() -> void:
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(background)
-	_title = _label(self, Vector2(16, 12), Vector2(440, 30), 18, AMBER)
-	_button(self, "nav_tab", "NAV", Rect2(464, 8, 74, 34))
-	_button(self, "ship_tab", "SHIP", Rect2(546, 8, 78, 34))
+	_title = _label(self, Vector2(16, 12), Vector2(356, 30), 18, AMBER)
+	_button(self, "nav_tab", "NAV", Rect2(380, 8, 74, 34))
+	_button(self, "plan_tab", "PLAN", Rect2(462, 8, 78, 34))
+	_button(self, "ship_tab", "SHIP", Rect2(548, 8, 76, 34))
 	_readout = _label(self, Vector2(16, 56), Vector2(608, 112), 17, AMBER)
 	_detail = _label(self, Vector2(16, 176), Vector2(608, 84), 14, CYAN)
 	_nav = Control.new()
 	_nav.name = "NavControls"
 	add_child(_nav)
-	_button(_nav, "nav_brake", "HOLD STATION", Rect2(16, 282, 292, 36))
+	_build_nav()
+	_build_plan()
 	_ship = Control.new()
 	_ship.name = "ShipControls"
 	add_child(_ship)
@@ -104,12 +154,71 @@ func _build() -> void:
 
 
 func _refresh_nav(data: Dictionary) -> void:
+	var flight: Dictionary = data.get("flight", {})
+	var available: bool = bool(flight.get("available", false))
+	for page: String in _nav_pages:
+		_nav_pages[page].visible = page == _nav_page
+	_scope.set_flight(flight)
+	_navball.set_flight(flight)
+	var orbit: Dictionary = flight.get("orbit", {})
+	var target: Dictionary = flight.get("target", {})
 	var motion: Dictionary = data.get("motion", {})
 	var relative: Vector3 = motion.get("relative_velocity_mps", Vector3.ZERO)
-	var spin: Vector3 = motion.get("angular_velocity_radps", Vector3.ZERO)
-	_readout.text = "WRECK RANGE  %7.1f m\nRELATIVE SPD %7.2f m/s\nSHIP MASS    %7.1f kg\nPROPELLANT   %7.1f kg" % [float(motion.get("range_m", 0.0)), relative.length(), float(data.get("mass_kg", 0.0)), float(data.get("propellant_kg", 0.0))]
-	_detail.text = "REL V  %+6.2f  %+6.2f  %+6.2f m/s\nSPIN   %.2f deg/s\nORBITAL SOLUTION UNAVAILABLE" % [relative.x, relative.y, relative.z, rad_to_deg(spin.length())]
-	_buttons["nav_brake"].text = "RELEASE STATION HOLD" if bool(data.get("braking", false)) else "HOLD STATION"
+	var range_m: float = target.get("range_m", motion.get("range_m", 0.0))
+	var relative_speed: float = target.get("relative_speed_mps", relative.length())
+	_scope_readout.text = "%s\nALT  %s\nPe   %s\nAp   %s\nINC  %.1f°\nTGT  %s / %.1f m/s" % [str(flight.get("body_name", "ORBIT UNAVAILABLE")), _distance(orbit.get("altitude_m", 0.0)), _distance(orbit.get("periapsis_altitude_m", 0.0)), _distance(orbit.get("apoapsis_altitude_m", 0.0)), rad_to_deg(float(orbit.get("inclination_rad", 0.0))), _distance(range_m), relative_speed]
+	_flight_readout.text = "T + %s   WARP ×%.0f\nMASS %.1f t   FUEL %.1f t   Δv %.0f m/s\n%s" % [_duration(flight.get("time_s", 0.0)), float(flight.get("warp", 1.0)), float(data.get("mass_kg", 0.0)) / 1000.0, float(flight.get("main_propellant_kg", 0.0)) / 1000.0, float(flight.get("dv_budget_mps", 0.0)), str(flight.get("burn_status", "FLIGHT COMPUTER UNAVAILABLE")) + "  / THRUST %.0f%%" % (float(flight.get("throttle", 0.0)) * 100.0)]
+	_throttle.set_value_no_signal(float(flight.get("throttle", 0.0)) * 100.0)
+	var attitude_index: int = ATTITUDES.find(str(flight.get("attitude_mode", "manual")))
+	_attitude.select(maxi(0, attitude_index))
+	var warp_index: int = WARP_RATES.find(float(flight.get("requested_warp", 1.0)))
+	_warp.select(maxi(0, warp_index))
+	_throttle.editable = available
+	_attitude.disabled = not available
+	_warp.disabled = not available
+	_rcs_readout.text = "%s\nRANGE %s   REL SPD %.2f m/s\nRCS %.2f kg / %s" % [str(target.get("name", "WRECK")), _distance(range_m), relative_speed, float(data.get("propellant_kg", 0.0)), "LOCAL CONTROL" if bool(flight.get("local", true)) else "ORBITAL FLIGHT"]
+	_buttons["nav_brake"].text = "RELEASE HOLD" if bool(data.get("braking", false)) else "HOLD STATION"
+	for action: String in ["throttle_cutoff", "next_event", "approach"]:
+		_buttons[action].disabled = not available
+
+
+func _refresh_plan(data: Dictionary) -> void:
+	var flight: Dictionary = data.get("flight", {})
+	var targets: Array = flight.get("targets", [])
+	var ids: PackedStringArray = []
+	for target: Dictionary in targets:
+		ids.append(str(target.get("id", "")))
+	if ids != _target_ids:
+		_target_ids = ids
+		_target.clear()
+		for target: Dictionary in targets:
+			_target.add_item(str(target.get("name", "Target")))
+	var selected: String = str((flight.get("target", {}) as Dictionary).get("id", ""))
+	var target_index: int = _target_ids.find(selected)
+	if target_index >= 0:
+		_target.select(target_index)
+	_target.disabled = not bool(flight.get("available", false)) or targets.is_empty()
+	_plan_setup.visible = not _preview_visible
+	_plan_preview.visible = _preview_visible
+	_update_plan_inputs()
+	var plan: Dictionary = flight.get("plan", {})
+	if (plan.get("nodes", []) as Array).is_empty():
+		plan = {}
+	var lines: PackedStringArray = []
+	if plan.is_empty():
+		lines.append("NO MANEUVER PLANNED")
+		lines.append("Choose a calculator, then preview its burns.")
+	else:
+		lines.append(str(plan.get("label", "Maneuver plan")))
+		lines.append("%s   Δv %.1f m/s   FUEL %.1f kg" % ["EXECUTING" if bool(flight.get("executor_on", false)) else ("READY" if bool(plan.get("feasible", false)) else "PLAN NOT FEASIBLE"), float(plan.get("dv_mps", 0.0)), float(plan.get("propellant_kg", 0.0))])
+		var index: int = 0
+		for node: Dictionary in plan.get("nodes", []):
+			index += 1
+			lines.append("%d T+%s  P%+.1f N%+.1f R%+.1f m/s" % [index, _duration(node.get("time_s", 0.0)), float(node.get("prograde_mps", 0.0)), float(node.get("normal_mps", 0.0)), float(node.get("radial_mps", 0.0))])
+		lines.append("BUDGET %.0f m/s   %s" % [float(flight.get("dv_budget_mps", 0.0)), str(flight.get("burn_status", ""))])
+	_plan_summary.text = "\n".join(lines)
+	_buttons["execute_plan"].disabled = plan.is_empty() or not bool(plan.get("feasible", false)) or bool(flight.get("executor_on", false))
+	_buttons["calculate_plan"].disabled = not bool(flight.get("available", false))
 
 
 func _refresh_ship(data: Dictionary) -> void:
@@ -165,13 +274,30 @@ func _button(parent: Node, action: String, caption: String, bounds: Rect2) -> vo
 
 
 func _command(action: String) -> void:
-	if action == "nav_tab" or action == "ship_tab":
-		select_app("NAV" if action == "nav_tab" else "SHIP")
+	if action in ["nav_tab", "plan_tab", "ship_tab"]:
+		select_app(action.trim_suffix("_tab").to_upper())
 		return
 	if api == null:
 		return
 	var data: Dictionary = api.get_telemetry()
 	match action:
+		"nav_scope", "nav_flight", "nav_rcs":
+			_release_rcs()
+			_nav_page = action.trim_prefix("nav_")
+		"plan_setup", "plan_preview":
+			_preview_visible = action == "plan_preview"
+		"calculate_plan":
+			_calculate_plan(data)
+		"execute_plan":
+			api.execute_plan()
+		"cancel_plan":
+			api.cancel_plan()
+		"throttle_cutoff":
+			api.flight_command("cutoff")
+		"next_event":
+			api.advance_to_next_event()
+		"approach":
+			api.flight_command("approach")
 		"nav_brake":
 			api.set_braking(not bool(data.get("braking", false)))
 		"cargo":
@@ -183,3 +309,204 @@ func _command(action: String) -> void:
 			var system: Dictionary = systems.get(action, {})
 			api.set_system_enabled(action, not bool(system.get("enabled", false)))
 	refresh()
+
+
+func _build_nav() -> void:
+	_button(_nav, "nav_scope", "ORBIT", Rect2(16, 54, 192, 34))
+	_button(_nav, "nav_flight", "FLIGHT", Rect2(224, 54, 192, 34))
+	_button(_nav, "nav_rcs", "APPROACH / RCS", Rect2(432, 54, 192, 34))
+	for page: String in ["scope", "flight", "rcs"]:
+		var control: Control = Control.new()
+		control.name = page
+		control.visible = page == "scope"
+		_nav.add_child(control)
+		_nav_pages[page] = control
+	var scope_page: Control = _nav_pages.scope
+	_scope = OrbitDisplay.new()
+	_scope.position = Vector2(16, 96)
+	_scope.size = Vector2(364, 248)
+	_scope.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	scope_page.add_child(_scope)
+	_navball = OrbitDisplay.new()
+	_navball.display_kind = "navball"
+	_navball.position = Vector2(396, 96)
+	_navball.size = Vector2(228, 128)
+	_navball.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	scope_page.add_child(_navball)
+	_scope_readout = _label(scope_page, Vector2(396, 232), Vector2(228, 112), 12, CYAN)
+	var flight_page: Control = _nav_pages.flight
+	_flight_readout = _label(flight_page, Vector2(16, 100), Vector2(608, 76), 15, AMBER)
+	_label(flight_page, Vector2(16, 183), Vector2(108, 30), 14, CYAN).text = "THROTTLE %"
+	_throttle = HSlider.new()
+	_throttle.position = Vector2(132, 182)
+	_throttle.size = Vector2(354, 32)
+	_throttle.min_value = 0.0
+	_throttle.max_value = 100.0
+	_throttle.step = 1.0
+	_throttle.value_changed.connect(_throttle_changed)
+	flight_page.add_child(_throttle)
+	_button(flight_page, "throttle_cutoff", "CUTOFF", Rect2(504, 180, 120, 34))
+	_label(flight_page, Vector2(16, 234), Vector2(112, 30), 14, CYAN).text = "ATTITUDE"
+	_attitude = OptionButton.new()
+	_attitude.position = Vector2(132, 230)
+	_attitude.size = Vector2(208, 36)
+	for mode: String in ATTITUDES:
+		_attitude.add_item("STOP ROTATION" if mode == "kill" else mode.replace("_", " ").to_upper())
+	_attitude.item_selected.connect(_attitude_selected)
+	flight_page.add_child(_attitude)
+	_label(flight_page, Vector2(360, 234), Vector2(72, 30), 14, CYAN).text = "WARP"
+	_warp = OptionButton.new()
+	_warp.position = Vector2(432, 230)
+	_warp.size = Vector2(192, 36)
+	for rate: float in WARP_RATES:
+		_warp.add_item("×%.0f" % rate)
+	_warp.item_selected.connect(_warp_selected)
+	flight_page.add_child(_warp)
+	_button(flight_page, "next_event", "COAST TO NEXT EVENT", Rect2(16, 310, 608, 34))
+	var rcs_page: Control = _nav_pages.rcs
+	_rcs_readout = _label(rcs_page, Vector2(16, 100), Vector2(608, 74), 15, AMBER)
+	for action: String in ["forward", "back", "left", "right", "up", "down"]:
+		var positions: Dictionary = {"forward": Vector2(140, 180), "back": Vector2(140, 266), "left": Vector2(16, 223), "right": Vector2(264, 223), "up": Vector2(456, 180), "down": Vector2(456, 266)}
+		_button(rcs_page, "rcs_" + action, action.to_upper(), Rect2(positions[action], Vector2(116, 34)))
+		var button: Button = _buttons["rcs_" + action]
+		button.button_down.connect(_press_rcs.bind(action))
+		button.button_up.connect(_release_rcs)
+	_label(rcs_page, Vector2(140, 226), Vector2(116, 28), 12, MUTED).text = "HOLD TO THRUST"
+	_button(rcs_page, "nav_brake", "HOLD STATION", Rect2(16, 310, 292, 34))
+	_button(rcs_page, "approach", "APPROACH TARGET", Rect2(324, 310, 300, 34))
+
+
+func _build_plan() -> void:
+	_plan = Control.new()
+	_plan.name = "PlanControls"
+	add_child(_plan)
+	_label(_plan, Vector2(16, 59), Vector2(80, 30), 14, CYAN).text = "TARGET"
+	_target = OptionButton.new()
+	_target.position = Vector2(96, 54)
+	_target.size = Vector2(310, 36)
+	_target.item_selected.connect(_target_selected)
+	_plan.add_child(_target)
+	_button(_plan, "plan_setup", "SETUP", Rect2(422, 54, 94, 36))
+	_button(_plan, "plan_preview", "PREVIEW", Rect2(530, 54, 94, 36))
+	_plan_setup = Control.new()
+	_plan.add_child(_plan_setup)
+	_plan_preview = Control.new()
+	_plan_preview.visible = false
+	_plan.add_child(_plan_preview)
+	_solver = OptionButton.new()
+	_solver.position = Vector2(16, 106)
+	_solver.size = Vector2(608, 36)
+	for caption: String in SOLVERS:
+		_solver.add_item(caption.to_upper())
+	_solver.item_selected.connect(_solver_selected)
+	_plan_setup.add_child(_solver)
+	_numeric_input("duration", "FLIGHT TIME / min", Vector2(16, 168), 1.0, 360.0, 1.0, 160.0)
+	_numeric_input("altitude", "TARGET ALTITUDE / km", Vector2(16, 168), 1.0, 1000000.0, 1.0, 800.0)
+	_numeric_input("delay", "BURN IN / min", Vector2(16, 168), 0.0, 1000000.0, 1.0, 2.0)
+	_numeric_input("prograde", "PROGRADE / m/s", Vector2(224, 168), -50000.0, 50000.0, 1.0, 10.0)
+	_numeric_input("normal", "NORMAL / m/s", Vector2(432, 168), -50000.0, 50000.0, 1.0, 0.0)
+	_numeric_input("radial", "RADIAL / m/s", Vector2(16, 244), -50000.0, 50000.0, 1.0, 0.0)
+	_button(_plan_setup, "calculate_plan", "CALCULATE PREVIEW", Rect2(16, 310, 608, 34))
+	_plan_summary = _label(_plan_preview, Vector2(16, 106), Vector2(608, 194), 14, AMBER)
+	_plan_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_button(_plan_preview, "execute_plan", "EXECUTE BURNS", Rect2(16, 310, 292, 34))
+	_button(_plan_preview, "cancel_plan", "CANCEL / CUTOFF", Rect2(324, 310, 300, 34))
+
+
+func _numeric_input(id: String, caption: String, position_px: Vector2, minimum: float, maximum: float, increment: float, initial: float) -> void:
+	var label: Label = _label(_plan_setup, position_px - Vector2(0, 22), Vector2(192, 24), 12, CYAN)
+	label.text = caption
+	_input_labels[id] = label
+	var input: SpinBox = SpinBox.new()
+	input.position = position_px
+	input.size = Vector2(192, 36)
+	input.min_value = minimum
+	input.max_value = maximum
+	input.step = increment
+	input.value = initial
+	_plan_setup.add_child(input)
+	_inputs[id] = input
+
+
+func _update_plan_inputs() -> void:
+	var solver: int = _solver.selected
+	for id: String in _inputs:
+		var shown: bool = (id == "duration" and solver == 0) or (id == "altitude" and solver == 3) or (solver == 5 and id in ["delay", "prograde", "normal", "radial"])
+		_inputs[id].visible = shown
+		_input_labels[id].visible = shown
+
+
+func _calculate_plan(data: Dictionary) -> void:
+	var accepted: bool = false
+	match _solver.selected:
+		0:
+			accepted = api.plan_intercept(float(_inputs.duration.value) * 60.0)
+		1, 2:
+			accepted = api.flight_command("plan_circularize", {"at": "apoapsis" if _solver.selected == 1 else "periapsis"})
+		3:
+			accepted = api.flight_command("plan_hohmann", {"altitude_m": float(_inputs.altitude.value) * 1000.0})
+		4:
+			accepted = api.flight_command("plan_match_velocity")
+		5:
+			var flight: Dictionary = data.get("flight", {})
+			accepted = api.plan_maneuver(float(flight.get("time_s", 0.0)) + float(_inputs.delay.value) * 60.0, _inputs.prograde.value, _inputs.normal.value, _inputs.radial.value)
+	if accepted:
+		_preview_visible = true
+
+
+func _target_selected(index: int) -> void:
+	if api != null and index >= 0 and index < _target_ids.size():
+		api.select_target(_target_ids[index])
+	refresh()
+
+
+func _solver_selected(_index: int) -> void:
+	_update_plan_inputs()
+
+
+func _throttle_changed(percent: float) -> void:
+	if api != null:
+		api.set_throttle(percent / 100.0)
+
+
+func _attitude_selected(index: int) -> void:
+	if api != null and index >= 0 and index < ATTITUDES.size():
+		api.set_attitude_mode(ATTITUDES[index])
+
+
+func _warp_selected(index: int) -> void:
+	if api != null and index >= 0 and index < WARP_RATES.size():
+		api.set_warp(WARP_RATES[index])
+
+
+func _press_rcs(action: String) -> void:
+	if api == null:
+		return
+	var directions: Dictionary = {"forward": Vector3.FORWARD, "back": Vector3.BACK, "left": Vector3.LEFT, "right": Vector3.RIGHT, "up": Vector3.UP, "down": Vector3.DOWN}
+	_rcs_held = api.set_rcs_translation(directions.get(action, Vector3.ZERO))
+
+
+func _release_rcs() -> void:
+	if _rcs_held and api != null:
+		api.set_rcs_translation(Vector3.ZERO)
+	_rcs_held = false
+
+
+func _exit_tree() -> void:
+	_release_rcs()
+
+
+static func _distance(metres: float) -> String:
+	if not is_finite(metres):
+		return "ESCAPE"
+	return "%.1f km" % (metres / 1000.0) if absf(metres) >= 1000.0 else "%.1f m" % metres
+
+
+static func _duration(seconds: float) -> String:
+	if not is_finite(seconds):
+		return "—"
+	if seconds >= 86400.0:
+		return "%.1f d" % (seconds / 86400.0)
+	if seconds >= 3600.0:
+		return "%.1f h" % (seconds / 3600.0)
+	return "%.1f min" % (seconds / 60.0)

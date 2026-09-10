@@ -11,6 +11,7 @@ var _camera: Camera3D
 var _docked: bool = false
 var _dock_elapsed: float = 0.0
 var _start_local: Transform3D
+var _carrier_collision_exception_added: bool = false
 
 
 ## Connect the suit to its ship; the tablet uses the same ShipApi as both terminals.
@@ -56,6 +57,11 @@ func open_terminal(screen: WorldScreen) -> bool:
 	_docked = true
 	_dock_elapsed = 0.0
 	_start_local = ship.global_transform.affine_inverse() * player.global_transform
+	# A held suit follows the carrier, so its frozen collider must not obstruct
+	# the same hull when a physics step translates or rotates that hull.
+	_carrier_collision_exception_added = not player.get_collision_exceptions().has(ship)
+	if _carrier_collision_exception_added:
+		player.add_collision_exception_with(ship)
 	player.freeze = true
 	player.grapple.detach()
 	return true
@@ -65,10 +71,14 @@ func open_terminal(screen: WorldScreen) -> bool:
 func close_screen() -> void:
 	if not is_open():
 		return
+	active_screen.panel.cancel_input()
 	if _docked:
 		player.freeze = false
 		player.linear_velocity = ship.linear_velocity + ship.angular_velocity.cross(player.global_position - ship.to_global(ship.center_of_mass))
 		player.angular_velocity = ship.angular_velocity
+		if _carrier_collision_exception_added and is_instance_valid(ship):
+			player.remove_collision_exception_with(ship)
+		_carrier_collision_exception_added = false
 	_docked = false
 	tablet.visible = false
 	active_screen = null
@@ -142,3 +152,8 @@ func _aimed_screen() -> WorldScreen:
 		return null
 	var collider: Node = hit.collider as Node
 	return collider.get_parent() as WorldScreen if collider is Area3D else null
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and is_open():
+		active_screen.panel.cancel_input()
