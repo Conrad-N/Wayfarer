@@ -213,6 +213,8 @@ func _scanner(delta: float) -> void:
 		return
 	var count: int = 0
 	for id: String in _wreck.graph.part_ids():
+		if _wreck.body_for_part(id) == null:
+			continue
 		if _camera.global_position.distance_to(_wreck.part_pose(id).origin) <= 20.0:
 			_wreck.graph.get_part(id).scanned = true
 			count += 1

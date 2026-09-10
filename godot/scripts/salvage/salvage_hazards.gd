@@ -60,6 +60,14 @@ func active_count() -> int:
 	return _active.size()
 
 
+## Report whether a part is still venting before allowing cargo clamps.
+func is_part_active(part_id: String) -> bool:
+	for vent: Dictionary in _active:
+		if str(vent.part_id) == part_id:
+			return true
+	return false
+
+
 ## Report whether this part has ruptured any supported reservoir in this session.
 func was_triggered(part_id: String) -> bool:
 	return _spent.has(part_id)
@@ -89,6 +97,8 @@ func _physics_process(delta: float) -> void:
 		if not hit.is_empty() and hit.collider is RigidBody3D:
 			var target: RigidBody3D = hit.collider as RigidBody3D
 			target.apply_force(force, Vector3(hit.position) - target.global_position)
+			if target is PlayerShip:
+				(target as PlayerShip).receive_hazard_damage(str(vent.kind), float(vent.force_n) * powered_seconds * 20.0)
 		vent.remaining_s = maxf(0.0, float(vent.remaining_s) - powered_seconds)
 		if float(vent.remaining_s) <= 1e-9:
 			_remove_active(index)

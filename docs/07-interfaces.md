@@ -71,3 +71,24 @@ app shows a plain "no AI installed" screen and nothing else in the game changes.
 Retro-industrial. Monospace text, amber on dark for primary readouts, cyan for
 targets and plans, red only for warnings. Low-resolution screens with visible pixels.
 No skeuomorphic chrome; flat panels with thick borders.
+
+## M3 controls (2026-09-10)
+
+F grips an aimed terminal within 2.5 m when relative speed is below 0.5 m/s.
+The view eases to the screen over 0.35 seconds; the handhold follows the ship.
+Esc or F releases with the ship's velocity at that position. Holding F does not
+repeat the interaction. Tab opens the handheld screen and Esc/Tab closes it.
+The tablet leaves the suit drifting; brake before opening it when necessary.
+Mouse clicks and keyboard focus go to the app while either screen is active.
+Closing a screen cannot accidentally fire a held salvage tool.
+
+Both terminals and the tablet contain the same NAV and SHIP apps. NAV shows local
+wreck range, relative velocity, ship mass, propellant and station-holding control.
+SHIP shows system health, battery, cargo totals, doorway dimensions and commands
+for power, RCS, the cargo door and both interlocked airlock doors. The same ShipApi
+validates commands and supplies telemetry for all three screens. Fixed terminals
+go dark with ship power; the handheld remains available to restore it.
+
+PLAN, dedicated CARGO/COMMS/AI apps, repairs, settings and orbital controls remain
+later milestones. The tablet's independent battery is not yet depleted by screen
+use; the suit's existing battery continues to power salvage tools.

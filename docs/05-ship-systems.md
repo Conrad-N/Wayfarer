@@ -58,3 +58,32 @@ The interesting failure. Examples and what the player can do:
 Time warp is available from the ship's terminals when nothing is happening nearby.
 "Rest" is the in-fiction warp: you sleep, time passes, the ship coasts. Warp is
 capped at 1x in the local scene while anything is loose.
+
+## M3 implementation (2026-09-10)
+
+The starter ship has an 8,000 kg dry hull, 40 kg RCS propellant and a 2 kWh
+battery. Its kit-panel shell encloses a hab, an interlocked airlock and a cargo
+bay. The bay is 3.6 × 2.8 × 5 m (50.4 m³); its external opening is fixed at
+2.2 × 2.2 m. Doors refuse to close across a body. Each actual door movement
+costs 1,000 J; repeated requests for the current position cost nothing.
+
+`ShipApi` owns resources, commands, health and the cargo ledger. The physical ship
+publishes local motion through it. NAV can hold station with bounded RCS force
+and torque, consuming real propellant. No orbital solution is fabricated.
+Hull, power, RCS, cargo, airlock and sensors have health and enabled state.
+Impacts use incoming relative velocity and reduced mass; energy above 2,000 J
+reduces the contacted section's health by excess energy / 300,000 J. Intercepted
+fuel and coolant plumes cumulatively damage power and RCS respectively, using
+20 kW and 8 kW while the finite plume actually reaches the ship. Walls shield it.
+
+Cargo must be observed outside, pass the open aperture with clear alignment,
+fit entirely inside, and settle below 0.5 m/s and 0.35 rad/s relative to the ship.
+An active leak prevents clamping. Powered clamps then add the load's mass and
+volume to the shared manifest. The load becomes part of the ship's compound
+collision body, so its mass is counted once. Loading preserves linear and angular
+momentum; it is an inelastic attachment, with ship-axis diagonal inertia used as
+an approximation after clamping. There is no sale, unloading UI or repair yet.
+
+Reactor generation, temperature, life support, wear, manual airlock cycling,
+spares and repairs remain later work described above. M3 is a local salvage yard;
+orbital flight and navigation arrive in M4.

@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/ship/player_ship.gd" id="1_ship"]
+
+[node name="PlayerShip" type="RigidBody3D"]
+script = ExtResource("1_ship")

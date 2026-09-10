@@ -150,20 +150,51 @@ assembly, markers, cutter, plumes, compact labels, target details, and final tal
 in ignored `godot/build/screens/m2-*.png`. No cargo sale, ship systems, or additional
 hazard types are implied; those remain later milestones.
 
-## M3 — Ship
+## M3 — Ship ✅
 
 Goal: your ship is a place.
 
-- [ ] Player ship interior built from kit parts: a hab, an airlock, a cargo bay with
+- [x] Player ship interior built from kit parts: a hab, an airlock, a cargo bay with
       a door of fixed size, two terminals.
-- [ ] `ShipApi` with telemetry and commands (placeholder orbital data).
-- [ ] `WorldScreen` with input forwarding; NAV and SHIP apps showing live data.
-- [ ] Tablet with the same apps.
-- [ ] Cargo: parts must fit through the door; bay volume; mass total.
-- [ ] Ship damage from collisions and hazards; SHIP app shows health.
+- [x] `ShipApi` with telemetry and commands (placeholder orbital data).
+- [x] `WorldScreen` with input forwarding; NAV and SHIP apps showing live data.
+- [x] Tablet with the same apps.
+- [x] Cargo: parts must fit through the door; bay volume; mass total.
+- [x] Ship damage from collisions and hazards; SHIP app shows health.
 
 Done when: you cut a part off the wreck, tractor it to your ship, and it either fits
 through the door or doesn't, and the SHIP screen agrees.
+
+M3 completed (2026-09-10): the local yard now starts in the player's dynamic
+kit-panel ship, with hab, interlocked airlock, cargo bay and two powered terminals.
+NAV and SHIP share one ShipApi with the Tab tablet. F grips a nearby slow-approach
+terminal and eases the view; Esc/F releases with ship motion. Screens forward real
+mouse/keyboard input, cancel held tool controls, and show live local telemetry,
+resources, section health and cargo totals. NAV retargets after wreck body changes.
+Ship power loss darkens fixed terminals; the independent tablet can restore power.
+
+The cargo opening is 2.2 × 2.2 m, with 50.4 m³ of bay volume. Actual transformed
+mesh vertices measure fit, avoiding false oversize results from rotated tapered
+bounding boxes. Cargo requires a witnessed exterior approach, clear door passage,
+complete containment, slow relative drift/spin, power and no active leak. Clamping
+adds geometry to the ship body and updates mass/volume once, conserving momentum
+with the documented diagonal inertia approximation. Doors check obstructions;
+RCS station holding spends finite propellant. Incoming collisions and intercepted
+fuel/coolant plumes damage ship sections and update every SHIP app.
+
+Verification: `./check.sh` passes 1,699 checks with no failures or node-leak warnings;
+the main scene boots headless without script errors. New tests cover ShipApi,
+physical passages/doors/RCS/damage, forwarded screen clicks, moving handholds and
+input ownership, live navigation after cuts, cargo admission and compound momentum,
+and real plume interception/occlusion/expiry. A scripted Forward+ run used controlled
+suit camera poses (without camera-body collisions) while salvage bodies remained
+dynamic: cut the 90 kg nose, tractor it around the wreck, through the open hatch,
+and settle it into clamps. The tablet reported one load, 90 kg and 0.7 m³. A second
+windowed exercise checked the SHIP terminal, airlock interlock and open doorway,
+then drove an oversized hull into the cargo frame: no manifest entry, with visible
+section damage. Inspected NAV, tablet, manifest, airlock and impact screenshots in
+ignored `godot/build/screens/m3-*.png`. Broader life support, repair, economy and
+orbital systems remain later milestones.
 
 ## M4 — Orbit
 

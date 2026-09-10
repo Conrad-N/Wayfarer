@@ -123,3 +123,23 @@ decide something the docs did not cover.
 - 2026-09-10 — Scanned names and hazard markers keep a fixed screen size to avoid
   enormous labels near the camera. Detailed kind, mass, condition, and value are
   shown for the aimed scanned part on the debug HUD, keeping cut points visible.
+- 2026-09-10 — M3 starts inside a dynamic 8,000 kg dry ship with 40 kg RCS
+  propellant and a 2 kWh battery. The cargo bay is 50.4 m³ behind a fixed
+  2.2 × 2.2 m opening. Doors cost 1,000 J per movement, refuse obstructed closure,
+  and the airlock interlocks its two doors; atmosphere simulation comes later.
+- 2026-09-10 — F grips nearby terminals below 0.5 m/s relative speed and eases the
+  view over 0.35 s. The simplified handhold transfers approach impulse to the ship,
+  carries the suit pose, then releases with ship point velocity. Tab's identical
+  apps leave the suit drifting. Fixed screens require ship power; tablet display
+  power is independent and not yet metered. Held interaction/clicks cannot repeat
+  actions or fire tools on closing.
+- 2026-09-10 — Powered cargo clamps require observed exterior entry, clear
+  doorway alignment, whole-load containment, relative drift ≤0.5 m/s and spin
+  ≤0.35 rad/s, and no active leak. Transformed model vertices measure clearance, avoiding inflated rotated
+  bounding boxes for tapered parts. Secured geometry joins the ship body once; mass/volume enter ShipApi.
+  Inelastic clamping conserves linear/angular momentum with a ship-axis diagonal
+  approximation to combined inertia; cross terms are omitted after clamping.
+- 2026-09-10 — M3 section impact health loss is excess over 2,000 J divided by
+  300,000 J. Fuel/coolant plume interception deposits 20/8 kW into power/RCS
+  damage with the same 300 kJ health scale, without a per-tick threshold. A blocked
+  plume cannot damage the ship. Aggregate ship health is the mean section health.
