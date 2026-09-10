@@ -204,7 +204,7 @@ load using reaction wheels, and Q/E rolls it. The carried part retains its colli
 must fit through the cargo door. Release it inside the bay before clamps secure it.
 The grapple remains the longer-range tether; the tractor beam has been removed.
 
-B arms magnetic boots; they keep checking for aligned sole contact with a designated
+A tap of B arms magnetic boots; they keep checking for aligned sole contact with a designated
 steel surface at low relative speed. Descend onto it with Ctrl to latch automatically.
 B again cancels while armed or releases while latched. Arming and rejected contact
 attempts cost no energy; engagement is charged only once on success. A broken or
@@ -214,6 +214,19 @@ normal mouse movement freely aims the camera through unlimited yaw and ±85° pi
 without a modifier or any battery, fuel or wheel momentum cost. Z does not change
 this walking view. Releasing the boots centres the camera on the torso and restores
 physical EVA turning.
+
+Holding B for 0.35 s while unlatched enables an automatic suit approach to the
+nearest visible boot-compatible surface within 3 m of the suit centre. It aligns
+the soles with the surface normal using the existing reaction wheels and gently
+closes the gap using suit jets, targeting at most 0.25 m/s relative approach speed.
+A sideways suit too close to the surface backs away to make room before turning.
+The capsule path must be clear. Unsafe initial latch offsets wait for alignment
+before spending engagement power. This uses ordinary propellant, battery and finite
+wheel capacity; magnetic attraction is not used across the gap. Releasing B,
+losing input focus, braking or dumping wheels cancels assistance without resetting
+velocity; the boots remain armed for safe contact. A hold which begins by releasing
+a latch stays released for that press. An already-armed hold may rearm after its
+initial cancel tap. Seating and hand gripping also cancel the approach.
 
 Engagement costs 50 J. Powered walking has a provisional 5,000 W rated draw at full
 input, covering bounded walking and lift work, with equal reaction on the deck.

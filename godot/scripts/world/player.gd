@@ -42,6 +42,9 @@ var salvage_tools: SalvageTools
 var _capture_click_held: bool = false
 var _secondary_blocked: bool = false
 
+var _boot_approach_active: bool = false
+var _boot_approach_force: Vector3 = Vector3.ZERO
+var _boot_approach_torque: Vector3 = Vector3.ZERO
 var _translation_input: Vector3 = Vector3.ZERO
 var _roll_input: float = 0.0
 var _pending_look: Vector2 = Vector2.ZERO
@@ -166,6 +169,13 @@ func _physics_process(delta: float) -> void:
 		_body_follow = false
 		_apply_brake(delta)
 		return
+	if _boot_approach_active and not _wheel_braking:
+		_boot_approach_active = false
+		_cancel_body_look()
+		_apply_suit_forces(_boot_approach_force.limit_length(thrust_force_n), Vector3.ZERO, delta)
+		var approach_delivered: Vector3 = attitude.drive(_boot_approach_torque, omega_body, roll_torque_nm, delta, suit, global_basis.transposed() * inverse_inertia * global_basis)
+		apply_torque(global_basis * approach_delivered)
+		return
 	_apply_suit_forces(global_basis * _translation_input * thrust_force_n, Vector3.ZERO, delta)
 	var motor_torque: Vector3 = Vector3.BACK * _roll_input * roll_torque_nm
 	if _wheel_braking:
@@ -230,6 +240,15 @@ func _body_look_torque(omega_body: Vector3, inverse_inertia: Basis) -> Vector3:
 func _cancel_body_look() -> void:
 	_body_follow = false
 	_look_remaining = Vector2.ZERO
+
+
+## Supply boot approach requests through the normal finite suit actuators once per tick.
+func set_boot_approach(active: bool, force_world: Vector3 = Vector3.ZERO, torque_body: Vector3 = Vector3.ZERO) -> void:
+	_boot_approach_active = active
+	_boot_approach_force = force_world if force_world.is_finite() else Vector3.ZERO
+	_boot_approach_torque = torque_body if torque_body.is_finite() else Vector3.ZERO
+	if active:
+		_cancel_body_look()
 
 
 ## Centre the view after an explicit seated-pose transition, clearing pending steering.
@@ -395,6 +414,7 @@ func _apply_suit_forces(force: Vector3, torque: Vector3, delta: float) -> void:
 
 
 func _release_mouse() -> void:
+	set_boot_approach(false)
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	set_motion_input(Vector3.ZERO, 0.0)
 	set_braking(false)

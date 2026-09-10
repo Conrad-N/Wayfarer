@@ -19,6 +19,8 @@ var _heading: Vector3
 var _walking: Vector2 = Vector2.ZERO
 var _height: float = FOOT_HEIGHT_M
 var _armed: bool = false
+var _approach_held: bool = false
+var _approaching: bool = false
 
 
 ## Bind the physical suit. The controller runs before suit actuators.
@@ -35,6 +37,20 @@ func is_attached() -> bool:
 ## True while waiting to engage at safe physical sole contact.
 func is_armed() -> bool:
 	return _armed
+
+
+## Hold a paid suit approach while armed; releasing leaves contact detection armed.
+func set_approach_held(held: bool) -> void:
+	_approach_held = held and _armed and not is_attached()
+	if not _approach_held:
+		_approaching = false
+		if is_instance_valid(player):
+			player.set_boot_approach(false)
+
+
+## True while hold-B has an eligible surface and controls the ordinary suit actuators.
+func is_approaching() -> bool:
+	return _approaching
 
 
 ## Arm contact detection, or cancel/release if already enabled.
@@ -62,8 +78,9 @@ func set_walk_input(direction: Vector2) -> void:
 	_walking = direction.limit_length(1.0) if direction.is_finite() else Vector2.ZERO
 
 
-## Cancel walking when a panel or focus takes control.
+## Cancel walking and held approach when a panel or focus takes control.
 func cancel_input() -> void:
+	set_approach_held(false)
 	_walking = Vector2.ZERO
 
 
@@ -88,6 +105,16 @@ func try_latch() -> bool:
 	if normal.dot(player.global_basis.y) < 0.9:
 		_waiting("Align your soles with the steel surface")
 		return false
+	# A slanted sole ray can put the spring anchor far beside the suit. Reject
+	# that catch before paying, reserving force for damping and later disturbances.
+	var catch_error: Vector3 = (hit.position as Vector3) + normal * height - player.global_position
+	if catch_error.length() * 16000.0 > MAX_FORCE_N * 0.5:
+		_waiting("Align your soles with the steel surface | Hold B to approach")
+		return false
+	if _approach_held:
+		var carrier_omega: Vector3 = (body as RigidBody3D).angular_velocity if body is RigidBody3D else Vector3.ZERO
+		if normal.dot(player.global_basis.y) < 0.997 or (player.angular_velocity - carrier_omega).length() > 0.25:
+			return false
 	var relative: Vector3 = player.linear_velocity - _point_velocity(body, player.global_position)
 	if relative.length() > 0.6:
 		_waiting("Slow your approach before latching")
@@ -96,6 +123,7 @@ func try_latch() -> bool:
 		_waiting("Battery too low to engage")
 		return false
 	player.suit.consume_energy(ENGAGE_ENERGY_J)
+	set_approach_held(false)
 	_armed = false
 	_target = body
 	_anchor = body.to_local(hit.position)
@@ -110,6 +138,7 @@ func try_latch() -> bool:
 
 ## Mechanical emergency release costs nothing and preserves motion.
 func release() -> void:
+	set_approach_held(false)
 	_armed = false
 	_target = null
 	_walking = Vector2.ZERO
@@ -119,6 +148,9 @@ func release() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if is_instance_valid(player):
+		player.set_boot_approach(false)
+	_approaching = false
 	if _armed and is_instance_valid(player):
 		var grip: PhysicalGrip = player.get_node_or_null("PhysicalGrip") as PhysicalGrip
 		if bool(player.get_meta("seated", false)) or (grip != null and grip.is_attached()):
@@ -126,6 +158,8 @@ func _physics_process(delta: float) -> void:
 		else:
 			try_latch()
 	if not is_attached():
+		if _approach_held and _armed:
+			_update_approach()
 		if is_instance_valid(player):
 			player.surface_motion_active = false
 		return
@@ -208,6 +242,103 @@ func _physics_process(delta: float) -> void:
 		rigid.apply_force(-force, point - rigid.global_position)
 		rigid.apply_torque(-torque)
 	status = "BOOTS WALKING" if powered and fraction > 0.0 else "BOOTS LATCHED | Passive hold | B release"
+
+
+func _update_approach() -> void:
+	if player.is_braking() or player.is_wheel_braking() or player.is_wheel_dumping() or player.freeze:
+		set_approach_held(false)
+		return
+	var hit: Dictionary = _nearest_approach_surface()
+	if hit.is_empty():
+		status = "BOOTS ARMED | No clear steel surface within 3 m | Release B to wait"
+		return
+	var target: PhysicsBody3D = hit.collider
+	var normal: Vector3 = hit.normal
+	var goal: Vector3 = (hit.position as Vector3) + normal * 0.95
+	var relative: Vector3 = player.linear_velocity - _point_velocity(target, player.global_position)
+	var target_omega: Vector3 = (target as RigidBody3D).angular_velocity if target is RigidBody3D else Vector3.ZERO
+	var omega: Vector3 = player.global_basis.transposed() * (player.angular_velocity - target_omega)
+	var axis: Vector3 = player.global_basis.y.cross(normal)
+	var angle: float = acos(clampf(player.global_basis.y.dot(normal), -1.0, 1.0))
+	if axis.length_squared() < 0.000001:
+		axis = player.global_basis.x
+	var error: Vector3 = player.global_basis.transposed() * axis.normalized() * angle
+	var inverse: Basis = player.global_basis.transposed() * player.get_inverse_inertia_tensor() * player.global_basis
+	if inverse.determinant() <= 0.0:
+		return
+	var desired_omega: Vector3 = Vector3.ZERO
+	for component: int in 3:
+		var acceleration: float = maxf(inverse[component][component] * player.roll_torque_nm, 0.0)
+		desired_omega[component] = signf(error[component]) * minf(absf(error[component]) * 3.0, sqrt(1.4 * acceleration * absf(error[component])))
+	var torque: Vector3 = inverse.inverse() * (desired_omega - omega) * 6.0
+	var desired_velocity: Vector3 = Vector3.ZERO
+	var path_clear: bool = true
+	var clearance: float = (player.global_position - (hit.position as Vector3)).dot(normal)
+	if angle >= 0.08 and clearance < 0.94:
+		# A sideways suit lying on the deck needs room to rotate its full capsule.
+		# Back away using ordinary jets first; do not lever its head into the floor.
+		var retreat: Vector3 = normal * (0.98 - clearance)
+		path_clear = _clear_step(retreat)
+		if path_clear:
+			desired_velocity = (retreat * 1.2).limit_length(0.25)
+		torque = inverse.inverse() * -omega * 6.0
+	elif angle < 0.08 and omega.length() < 0.25:
+		var travel: Vector3 = goal - player.global_position
+		path_clear = _clear_step(travel)
+		if path_clear:
+			desired_velocity = (travel * 1.2).limit_length(0.25)
+	var force: Vector3 = ((desired_velocity - relative) * player.mass * 3.0).limit_length(player.thrust_force_n)
+	player.set_boot_approach(true, force, torque)
+	_approaching = true
+	status = "BOOTS APPROACH | Release B to stop | Uses suit fuel and charge" if path_clear else "BOOTS APPROACH | Path blocked | Release B to stop"
+
+
+func _nearest_approach_surface() -> Dictionary:
+	var nearest: Dictionary = {}
+	var distance: float = 3.0001
+	var directions: Array[Vector3] = [Vector3.UP, Vector3.DOWN, Vector3.LEFT, Vector3.RIGHT, Vector3.FORWARD, Vector3.BACK]
+	# Exact box-face candidates cover narrow steel parts that angular ray sampling
+	# could miss. The confirming ray still rejects an intervening obstruction.
+	var vicinity: PhysicsShapeQueryParameters3D = PhysicsShapeQueryParameters3D.new()
+	var sphere: SphereShape3D = SphereShape3D.new()
+	sphere.radius = 3.0
+	vicinity.shape = sphere
+	vicinity.transform.origin = player.global_position
+	vicinity.collision_mask = 1
+	vicinity.exclude = [player.get_rid()]
+	for candidate: Dictionary in player.get_world_3d().direct_space_state.intersect_shape(vicinity, 128):
+		var body: PhysicsBody3D = candidate.get("collider") as PhysicsBody3D
+		if body == null:
+			continue
+		var shape_index: int = int(candidate.get("shape", -1))
+		if shape_index < 0:
+			continue
+		var owner: CollisionShape3D = body.shape_owner_get_owner(body.shape_find_owner(shape_index)) as CollisionShape3D
+		if owner == null or not owner.shape is BoxShape3D:
+			continue
+		var half_size: Vector3 = (owner.shape as BoxShape3D).size * 0.5
+		var local: Vector3 = owner.to_local(player.global_position)
+		var closest: Vector3 = local.clamp(-half_size, half_size)
+		var difference: Vector3 = owner.to_global(closest) - player.global_position
+		if difference.length_squared() > 0.000001:
+			directions.append(difference.normalized())
+	# Uniform rays find nearby surfaces on every side, independent of camera aim.
+	for sample: int in 96:
+		var y: float = 1.0 - 2.0 * (float(sample) + 0.5) / 96.0
+		var radius: float = sqrt(1.0 - y * y)
+		var angle: float = float(sample) * 2.399963229728653
+		directions.append(Vector3(cos(angle) * radius, y, sin(angle) * radius))
+	var space: PhysicsDirectSpaceState3D = player.get_world_3d().direct_space_state
+	for direction: Vector3 in directions:
+		var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(player.global_position, player.global_position + direction * 3.0, 1, [player.get_rid()])
+		var hit: Dictionary = space.intersect_ray(query)
+		if hit.is_empty() or not _magnetic_hit(hit):
+			continue
+		var candidate: float = player.global_position.distance_to(hit.position)
+		if candidate < distance:
+			distance = candidate
+			nearest = hit
+	return nearest
 
 
 func _clear_step(lift: Vector3) -> bool:

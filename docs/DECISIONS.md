@@ -288,3 +288,17 @@ decide something the docs did not cover.
   0.12 m of the actual body to avoid runaway pushing against walls. Full walking
   input budgets 5,000 W to cover the increased force rating and combined lift/
   translation speed; idle and view-only resource use remain zero.
+
+- 2026-09-10 — Conrad requests hold-B alignment and gentle surface approach.
+  After a 0.35 s hold while unlatched, seek the nearest visible boot-compatible
+  surface within 3 m of the suit centre. Use the existing finite suit thrusters
+  and 50 N·m reaction wheels, with a 0.25 m/s target approach speed and capsule
+  path checks. A sideways suit first backs off enough to rotate safely. This
+  consumes ordinary propellant and electricity; no remote magnetic force or
+  momentum reset is introduced. Release/focus loss/braking/wheel dumping stops
+  assistance and preserves passive arming. Hand grips and seats exclude it. A
+  press which begins latched releases without immediately recatching on hold;
+  holding an already-armed press may rearm after the initial cancel tap.
+  Reject initial sole anchors whose spring load already consumes more than half
+  the holding-force budget before charging engagement power. Held approaches
+  wait for close sole alignment and low relative angular speed before latching.

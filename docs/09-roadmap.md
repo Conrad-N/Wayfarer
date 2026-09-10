@@ -357,6 +357,24 @@ errors or node-leak warnings. The main scene boots headless cleanly. Fullscreen
 exercise verified a free 120° yaw / 60° pitch view, both-way threshold traversal
 with upright alignment maintained, fuel-free walking, and release back to EVA.
 
+### Held boot approach revision
+
+- [x] Hold B to align soles and gently approach the nearest nearby compatible surface.
+- [x] Use finite suit thrusters/wheels with normal resource costs and clear-path checks.
+- [x] Preserve tap/cancel/release semantics and stop paid assistance on input release.
+
+The assist searches within 3 m, targets 0.25 m/s, and backs away first if a sideways
+suit needs room to turn. Coverage includes surface eligibility/proximity, tilted
+alignment and attachment, cancellation, empty resources, input ownership and
+excluded restraints. Fullscreen native B input turns a sideways suit upright,
+attaches it to the ship floor, and keeps a subsequent held release detached.
+Captures are under ignored `godot/build/screens/boots-approach-*.png`.
+
+Verification: `./check.sh` passes **3,006 checks, zero failures**, without script
+errors or node-leak warnings; the main scene boots headless cleanly. Native B
+press/hold/release was exercised fullscreen, including alignment from sideways
+flight, automatic ship-floor contact, and a held release that stays detached.
+
 ## M5 — Loop
 
 Goal: the whole job, once.
