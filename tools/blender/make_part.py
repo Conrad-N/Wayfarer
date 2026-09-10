@@ -15,7 +15,8 @@ Conventions enforced here:
   * Empties named HAZARD_<kind>_<n> mark volatile locations (fuel, coolant,
     pressure, power). The kind is read by the salvage system.
   * Custom properties on the mesh object become glTF extras, which Godot reads
-    as node metadata: part_kind, mass_kg, value_cr, material.
+    as node metadata: part_kind, mass_kg, value_cr, material, volume_m3,
+    thickness_mm. The -convcol suffix requests imported convex collision.
   * Low-poly: 8-16 sided cylinders, single-segment bevels, flat shading.
 """
 import argparse
@@ -55,7 +56,7 @@ def add_empty(name: str, location, rotation=(0.0, 0.0, 0.0), parent=None):
 def build_hull_segment(name: str, length: float, radius: float):
     bpy.ops.mesh.primitive_cylinder_add(vertices=12, radius=radius, depth=length)
     body = bpy.context.active_object
-    body.name = name
+    body.name = name + "-convcol"
     # Cylinder axis is Z; rotate so the long axis is +Y (our "forward").
     body.rotation_euler = (math.radians(90.0), 0.0, 0.0)
     bpy.ops.object.transform_apply(rotation=True, scale=True)
@@ -69,6 +70,11 @@ def build_hull_segment(name: str, length: float, radius: float):
     body["mass_kg"] = 4200.0
     body["value_cr"] = 900.0
     body["material"] = "steel"
+    body["volume_m3"] = math.pi * radius * radius * length
+    body["thickness_mm"] = 18.0
+    material = bpy.data.materials.new("Hull steel")
+    material.diffuse_color = (0.36, 0.43, 0.49, 1.0)
+    body.data.materials.append(material)
 
     half = length / 2.0
     add_empty("SOCKET_fore", (0.0, half, 0.0), (0.0, 0.0, 0.0), body)

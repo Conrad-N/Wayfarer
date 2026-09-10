@@ -11,7 +11,7 @@ AGENTS.md). Each milestone ends with something you can run and feel.
 - [x] Design docs and AGENTS.md
 - [x] Previous version moved to `legacy/web/`
 
-## M1 — Float
+## M1 — Float ✅
 
 Goal: zero-g first-person movement that feels like Shipbreaker. You should end up
 upside down without meaning to and have to think to fix it.
@@ -100,14 +100,14 @@ All 16 cycles kept finite motion and the suit inside the room; 5.05 kg propellan
 and 186.1 Wh remained. F12 captures showed freely rotated views and readable HUD
 controls. This verifies stability, not the subjective "fun and disorienting"
 criterion, which remains a player playtesting judgment. Next implementation work
-is the M2 ship graph.
+is the M2 ship graph. Conrad accepted M1 as complete on 2026-09-10.
 
 ## M2 — Cut
 
 Goal: take a wreck apart.
 
-- [ ] `ShipGraph` data class and tests (parts, sockets, edges, connected components).
-- [ ] Part kit v1: 12 parts across hull, cap, tank, engine, radiator, mast, plating.
+- [x] `ShipGraph` data class and tests (parts, sockets, edges, connected components).
+- [x] Part kit v1: 12 parts across hull, cap, tank, engine, radiator, mast, plating.
       Add `-convcol` collision and `volume_m3`, `thickness_mm` metadata. Update the
       import test.
 - [ ] Spawn a hand-written `ShipGraph` of 8 parts as one compound `RigidBody3D`.

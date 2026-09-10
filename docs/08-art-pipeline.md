@@ -40,11 +40,23 @@ committed `.glb` is output. To change a part, change the script and re-run it.
 - `CUT_<name>`: cut points, usually one per socket, 0.4 m inboard.
 - `HAZARD_<kind>_<n>`: kind is `fuel`, `coolant`, `power`, or `pressure`.
 - Custom properties on the mesh object: `part_kind`, `mass_kg`, `value_cr`,
-  `material`, and later `volume_m3`, `thickness_mm`. Godot exposes them as
+  `material`, `volume_m3`, `thickness_mm`. Godot exposes them as
   `mesh.get_meta("extras")`, a Dictionary.
 - Collision: name the mesh object with the `-convcol` suffix when convex collision
-  should be generated on import (Godot strips the suffix). To be adopted in M2 when
-  parts become rigid bodies; update `make_part.py` and the import test together.
+  should be generated on import (Godot strips the suffix). M2 adopts this in both
+  scripts and verifies a convex shape on every part. The catalog extracts shapes
+  into the dynamic compound body; imported static preview bodies are not nested
+  inside that dynamic body.
+
+M2 kit: `make_part_kit.py` generates `hull_segment_a/b`, `cap_nose_a`, `cap_tail_a`,
+`tank_fuel_a`, `tank_coolant_a`, `engine_chemical_a`, `engine_ion_a`,
+`radiator_panel_a/b`, `sensor_mast_a`, and `plating_panel_a`. Run it with
+`--out godot/assets/models/parts`, then run `./check.sh`. The original hull retains
+its geometry, mass, and markers. New cut markers sit on the outer surface near
+their sockets for accessible aiming. Socket size suffixes are stripped when
+matching them to unsized CUT marker names. `volume_m3` is an envelope estimate
+for handling/cargo, while `thickness_mm` sets cutter duration; neither is a
+material-volume-derived mass calculation. All meshes stay below 2,000 triangles.
 
 ## Import
 

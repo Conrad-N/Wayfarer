@@ -75,6 +75,7 @@ static func create_hull() -> RigidBody3D:
 		return null
 	var body: RigidBody3D = _create_body(mass_kg)
 	body.name = "HullSegment"
+	_disable_static_collision(model)
 	body.add_child(model)
 	mesh.material_override = _material(STEEL)
 	var collision: CollisionShape3D = CollisionShape3D.new()
@@ -89,6 +90,16 @@ static func create_hull() -> RigidBody3D:
 	collision.transform = mesh_pose
 	body.add_child(collision)
 	return body
+
+
+static func _disable_static_collision(node: Node) -> void:
+	# The M2 -convcol import supplies static preview collision. This old M1
+	# playground already supplies its own dynamic convex shape below.
+	if node is StaticBody3D:
+		(node as StaticBody3D).collision_layer = 0
+		(node as StaticBody3D).collision_mask = 0
+	for child: Node in node.get_children():
+		_disable_static_collision(child)
 
 
 func _place_box(label: String, size: Vector3, mass_kg: float, at: Vector3, colour: Color, angles: Vector3 = Vector3.ZERO) -> void:

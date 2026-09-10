@@ -84,3 +84,13 @@ decide something the docs did not cover.
   ignored. A four-second notice confirms success or failure, and is hidden before
   the next capture. Headless capture reports unavailable immediately; this debug
   feature remains a scene node rather than an autoload.
+- 2026-09-10 — M2 represents physical definitions as Resources, individual part
+  condition/scan state as RefCounted data, and socket connections as a deterministic
+  ShipGraph. Different sockets may form parallel connections; parts separate only
+  when disconnected. This supports multiple mounts without tying connectivity to
+  scene nodes.
+- 2026-09-10 — The first kit contains twelve generated parts across all seven M2
+  kinds. `-convcol` imports convex collision, while volume is an envelope estimate
+  and thickness is explicit cutter tuning. New cut markers sit on the skin near
+  their sockets; size suffixes are removed when resolving CUT names. The original
+  large hull remains compatible with the M1 collision playground.
