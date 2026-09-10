@@ -3,6 +3,8 @@ extends Node3D
 
 @onready var _player: Player = $Player
 @onready var _readout: Label = $HUD/Readout
+@onready var _supplies: Label = $HUD/Supplies
+@onready var _supply_warning: Label = $HUD/SupplyWarning
 
 
 func _ready() -> void:
@@ -29,10 +31,26 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	var capture_hint: String = "Esc releases mouse" if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED else "Click to fly"
 	var brake_hint: String = "RCS BRAKE" if _player.is_braking() else "FREE FLIGHT"
+	if _player.suit.propellant_kg <= 0.0:
+		brake_hint = "RCS EMPTY"
 	_readout.text = "WAYFARER / SUIT MOVEMENT TEST\n%.2f m/s  |  %.1f deg/s  |  %s  |  %s" % [
 		_player.linear_velocity.length(), rad_to_deg(_player.angular_velocity.length()),
 		brake_hint, capture_hint
 	]
+	_supplies.text = "PROPELLANT  %.3f kg / %.1f kg  |  BATTERY  %.1f Wh / %.0f Wh" % [
+		_player.suit.propellant_kg, SuitResources.PROPELLANT_CAPACITY_KG,
+		_player.suit.battery_energy_j / 3600.0, SuitResources.BATTERY_CAPACITY_J / 3600.0
+	]
+	var warnings: PackedStringArray = []
+	if _player.suit.propellant_kg <= 0.0:
+		warnings.append("PROPELLANT EMPTY: thrust and brake unavailable")
+	elif _player.suit.propellant_kg <= SuitResources.PROPELLANT_CAPACITY_KG * 0.1:
+		warnings.append("LOW PROPELLANT")
+	if _player.suit.battery_energy_j <= 0.0:
+		warnings.append("BATTERY EMPTY: no tool power")
+	elif _player.suit.battery_energy_j <= SuitResources.BATTERY_CAPACITY_J * 0.1:
+		warnings.append("LOW BATTERY")
+	_supply_warning.text = "  |  ".join(warnings)
 
 
 func _add_box(label: String, size: Vector3, at: Vector3, colour: Color) -> void:

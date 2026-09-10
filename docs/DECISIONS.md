@@ -43,3 +43,14 @@ decide something the docs did not cover.
   60 N·m. These tunable limits keep ordinary movement quick to stop while making
   high speed and extra mass take longer. Releasing X returns to coasting or the
   thrust commands still held; releasing mouse capture also cancels braking.
+- 2026-09-10 — M1 suit stores start at 8 kg of propellant and 720,000 J of tool
+  battery energy. RCS fuel cost is impulse divided by a tunable 2,000 m/s exhaust
+  velocity; roll and braking torque use a 0.5 m effective jet lever arm. Linear
+  and angular demands share the remaining propellant proportionally on the last
+  tick. Expelled fuel reduces the suit's initially 100 kg mass. These are movement
+  tuning values, pending later playtesting.
+- 2026-09-10 — Suit battery remains dedicated to tools, as specified in doc 04;
+  there is no idle or RCS battery drain. Coasting and mouse aiming spend nothing.
+  Empty propellant disables translation, roll jets, and braking without changing
+  existing motion. The debug HUD shows low warnings at 10% and explicit empty
+  warnings. Powered tools, oxygen, and ship refilling remain later work.

@@ -96,6 +96,14 @@ you accidentally disable your own ship.
 Oxygen (minutes), propellant (for suit RCS movement), battery (for tools). All refill
 at the ship. Suit RCS is weak: use the grapple to move far.
 
+M1 movement tuning: the 100 kg fully supplied suit includes 8 kg of propellant.
+Translation, roll jets, and braking draw from that tank in proportion to their
+applied impulse; expelled propellant reduces the body mass. Empty tanks leave
+the suit coasting with no thrust or braking. Mouse aiming remains available.
+The tool battery starts with 720,000 J (displayed as 200 Wh); RCS and coasting do
+not draw tool power. The debug HUD shows both stores and warns at 10% remaining
+or empty. Tool consumers, oxygen, and refilling at the ship come in later items.
+
 ## Extraction: the core trade-off
 
 Your ship has a cargo door of a fixed size and a bay of a fixed volume. A part goes in

@@ -10,6 +10,10 @@ extends RigidBody3D
 @export_range(0.0, 2000.0, 1.0) var brake_force_n: float = 600.0
 @export_range(0.0, 200.0, 1.0) var brake_torque_nm: float = 60.0
 @export_range(0.1, 5.0, 0.1) var brake_response_seconds: float = 1.0
+@export_range(1.0, 10000.0, 1.0) var exhaust_velocity_mps: float = 2000.0
+@export_range(0.01, 2.0, 0.01) var thruster_lever_arm_m: float = 0.5
+
+var suit: SuitResources = SuitResources.new()
 
 var _translation_input: Vector3 = Vector3.ZERO
 var _roll_input: float = 0.0
@@ -68,8 +72,10 @@ func _physics_process(delta: float) -> void:
 	if _braking:
 		_apply_brake(delta)
 		return
-	apply_central_force(global_basis * _translation_input * thrust_force_n)
-	apply_torque(global_basis.z * _roll_input * roll_torque_nm)
+	_apply_suit_forces(
+		global_basis * _translation_input * thrust_force_n,
+		global_basis.z * _roll_input * roll_torque_nm, delta
+	)
 
 
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
@@ -114,15 +120,33 @@ func _apply_brake(delta: float) -> void:
 	# This step-aware gain cannot demand a velocity reversal, even at low tick rates.
 	var response: float = maxf(brake_response_seconds, 0.1)
 	var gain: float = (1.0 - exp(-log(100.0) * delta / response)) / delta
-	var force: Vector3 = -linear_velocity * mass * gain
-	apply_central_force(force.limit_length(maxf(brake_force_n, 0.0)))
+	var force: Vector3 = (-linear_velocity * mass * gain).limit_length(maxf(brake_force_n, 0.0))
 	# The capsule resists spin differently on each axis. Convert the requested
 	# angular deceleration through its current world-space inertia before limiting jets.
 	var inverse_inertia: Basis = get_inverse_inertia_tensor()
-	if inverse_inertia.determinant() <= 0.0:
-		return # The physics body may not have its inertia yet on the first frame.
-	var torque: Vector3 = inverse_inertia.inverse() * (-angular_velocity * gain)
-	apply_torque(torque.limit_length(maxf(brake_torque_nm, 0.0)))
+	var torque: Vector3 = Vector3.ZERO
+	if inverse_inertia.determinant() > 0.0:
+		torque = inverse_inertia.inverse() * (-angular_velocity * gain)
+		torque = torque.limit_length(maxf(brake_torque_nm, 0.0))
+	_apply_suit_forces(force, torque, delta)
+
+
+func _apply_suit_forces(force: Vector3, torque: Vector3, delta: float) -> void:
+	if not is_finite(delta) or delta <= 0.0:
+		return
+	# Torque comes from opposed jets: their summed force is torque / lever arm.
+	var jet_force: float = force.length() + torque.length() / maxf(thruster_lever_arm_m, 0.01)
+	var requested: float = jet_force * delta / maxf(exhaust_velocity_mps, 1.0)
+	if not is_finite(requested) or requested <= 0.0:
+		return
+	var spent: float = suit.consume_propellant(requested)
+	if spent <= 0.0:
+		return
+	var fraction: float = spent / requested
+	# The last partial tick delivers only the impulse its remaining fuel can buy.
+	mass = maxf(mass - spent, 0.001)
+	apply_central_force(force * fraction)
+	apply_torque(torque * fraction)
 
 
 func _release_mouse() -> void:

@@ -8,7 +8,8 @@ scripts. Headed for Steam.
 
 **Status:** M1 started. The first-person suit can thrust, coast, roll, brake, and
 look freely around a simple practice room. The player is a physical capsule that
-collides with the walls. Suit propellant and battery are the next item in
+collides with the walls. Propellant powers suit movement, and the HUD shows both
+propellant and tool battery. The room's loose debris is the next item in
 [docs/09-roadmap.md](docs/09-roadmap.md).
 
 ## Run
@@ -37,7 +38,13 @@ part scripts. Setup details in [AGENTS.md](AGENTS.md).
 Releasing thrust leaves you coasting. Braking settles ordinary movement in about
 a second; high speeds and extra mass need longer because suit braking thrust is
 limited. Releasing X restores coasting or any thrust controls you still hold.
-Suit resources, loose debris, and tools are later M1 items.
+
+The suit starts with **8 kg of propellant** and a **200 Wh tool battery**. Thrust,
+roll, and braking use propellant; coasting and mouse aiming use none. Fuel leaving
+the suit reduces its mass. When the tank is empty, thrust and braking stop working
+and you keep drifting. The HUD warns at 10% remaining and when a supply is empty.
+Battery power is reserved for tools, so it stays full during movement for now.
+Powered tools and ship refilling are still to come.
 
 ## Where to read
 

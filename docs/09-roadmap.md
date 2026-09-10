@@ -19,7 +19,7 @@ upside down without meaning to and have to think to fix it.
 - [x] `Player` as a `RigidBody3D` capsule with 6DOF thrust: forward/back, left/right,
       up/down, roll. Mouse look rotates the body freely (no up vector, no clamping).
 - [x] Brake key: kills linear and angular velocity over about a second (suit RCS).
-- [ ] Suit propellant and battery as numbers on a debug HUD.
+- [x] Suit propellant and battery as numbers on a debug HUD.
 - [ ] A test scene: a big box room with a dozen rigid bodies of different masses
       (use `hull_segment_a` and primitives). Bumping into things transfers momentum.
 - [ ] Grapple tool: raycast, tether visual, reel in/out, pulls the lighter body.
@@ -47,6 +47,16 @@ mass response, release, control priority, mouse look, and the X binding.
 verified the brake through input polling, settling, release/coasting, and Escape
 cancellation. The braking indicator, speed/spin readouts, and stable rotated view
 were inspected in `godot/build/screens/m1-brake-*.png` (ignored local captures).
+
+Suit supplies progress (2026-09-10): the HUD shows propellant in kg and battery in
+Wh, with low/empty warnings. Translation, roll, and braking spend propellant;
+empty tanks leave momentum intact. Battery stores are ready for future powered
+tools and do not drain during movement. Eleven resource tests cover accounting,
+invalid requests, isolation, movement costs, mass loss, depletion, and the final
+partial tick. `./check.sh` passes 175 checks; the main scene boots headless.
+A windowed exercise verified live consumption and stopping with fuel, then used
+explicit low/empty test fixtures to inspect warnings and depletion behavior.
+Captures: `godot/build/screens/m1-supplies-*.png` (ignored).
 
 ## M2 — Cut
 
