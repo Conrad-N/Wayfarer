@@ -4,11 +4,11 @@ extends Node
 
 const ENGAGE_ENERGY_J: float = 50.0
 const WALK_SPEED_MPS: float = 1.3
-const MAX_FORCE_N: float = 1200.0
-const MAX_TORQUE_NM: float = 1000.0
+const MAX_FORCE_N: float = 3000.0
+const MAX_TORQUE_NM: float = 2000.0
 const FOOT_HEIGHT_M: float = 0.92
-const TURN_TORQUE_NM: float = 250.0
-const TURN_ENERGY_J_PER_RAD: float = 500.0
+const MAX_STEP_HEIGHT_M: float = 0.30
+const STEP_LIFT_SPEED_MPS: float = 0.8
 
 var status: String = "BOOTS OFF | B arm"
 var player: Player
@@ -17,7 +17,6 @@ var _anchor: Vector3
 var _normal: Vector3
 var _heading: Vector3
 var _walking: Vector2 = Vector2.ZERO
-var _turn_remaining_rad: float = 0.0
 var _height: float = FOOT_HEIGHT_M
 var _armed: bool = false
 
@@ -63,10 +62,9 @@ func set_walk_input(direction: Vector2) -> void:
 	_walking = direction.limit_length(1.0) if direction.is_finite() else Vector2.ZERO
 
 
-## Cancel walking and outstanding turn input when a panel or focus takes control.
+## Cancel walking when a panel or focus takes control.
 func cancel_input() -> void:
 	_walking = Vector2.ZERO
-	_turn_remaining_rad = 0.0
 
 
 ## Engage only at actual nearby foot contact, with suitable material and low relative speed.
@@ -104,7 +102,6 @@ func try_latch() -> bool:
 	_normal = body.global_basis.transposed() * normal
 	_height = height
 	_heading = body.global_basis.transposed() * (-player.global_basis.z).slide(normal).normalized()
-	_turn_remaining_rad = 0.0
 	player.surface_motion_active = true
 	player.set_motion_input(Vector3.ZERO, 0.0)
 	status = "BOOTS LATCHED | WASD walk | B release"
@@ -116,7 +113,6 @@ func release() -> void:
 	_armed = false
 	_target = null
 	_walking = Vector2.ZERO
-	_turn_remaining_rad = 0.0
 	if is_instance_valid(player):
 		player.surface_motion_active = false
 	status = "BOOTS OFF | B arm"
@@ -133,34 +129,57 @@ func _physics_process(delta: float) -> void:
 		if is_instance_valid(player):
 			player.surface_motion_active = false
 		return
-	var look: Vector2 = player.take_surface_look()
-	if player.is_freelooking() or player.is_braking() or player.is_wheel_braking() or player.is_wheel_dumping():
-		_turn_remaining_rad = 0.0
-	else:
-		_turn_remaining_rad += look.x
+	player.take_surface_look()
 	var normal: Vector3 = (_target.global_basis * _normal).normalized()
 	var anchor: Vector3 = _target.to_global(_anchor)
 	var offset: Vector3 = player.global_position - anchor
-	var hit: Dictionary = _foot_ray()
-	if hit.get("collider") != _target or not _magnetic_hit(hit) or offset.dot(normal) > 1.25 or offset.dot(normal) < 0.7:
+	var hit: Dictionary = _support_ray(player.global_position, normal)
+	if hit.get("collider") != _target or not _magnetic_hit(hit) or offset.dot(normal) > 1.3 or offset.dot(normal) < 0.55:
 		release()
 		status = "BOOTS RELEASED | Lost surface contact | B rearm"
 		return
 	var relative: Vector3 = player.linear_velocity - _point_velocity(_target, player.global_position)
-	var forward: Vector3 = (-player.global_basis.z).slide(normal).normalized()
+	var forward: Vector3 = (-(player.get_node("Camera3D") as Camera3D).global_basis.z).slide(normal).normalized()
 	var right: Vector3 = forward.cross(normal)
 	var walking: Vector3 = (right * _walking.x + forward * _walking.y) * WALK_SPEED_MPS
 	var powered: bool = walking.length_squared() > 0.0001
-	var turn_step: float = _turn_remaining_rad
-	powered = powered or absf(turn_step) > 0.000001
 	var fraction: float = 1.0
 	if powered:
-		# Powered steps have a conservative rated draw above the maximum mechanical output.
-		var request: float = delta * 1800.0 * _walking.length() + TURN_ENERGY_J_PER_RAD * absf(turn_step)
-		fraction = player.suit.consume_energy(request) / request
-		_anchor += _target.global_basis.transposed() * walking * delta * fraction
-		_heading = Basis(_normal, turn_step * fraction) * _heading
-		_turn_remaining_rad -= turn_step * fraction
+		fraction = player.suit.consume_energy(delta * 5000.0 * _walking.length()) / (delta * 5000.0 * _walking.length())
+		var surface: Vector3 = hit.position
+		var support_height: float = surface.dot(normal)
+		var desired_height: float = support_height
+		var blocked: bool = false
+		# Sample the soles' footprint and a leading step before driving into a riser.
+		var direction: Vector3 = walking.normalized()
+		for sample: Vector3 in [Vector3.ZERO, direction * 0.1, direction * 0.2, direction * 0.3, direction * 0.4, direction * 0.5, direction * 0.60, direction * -0.1, direction * -0.2, direction * -0.34, right * 0.32, right * -0.32]:
+			var support: Dictionary = _support_ray(surface + sample + normal * 1.0, normal)
+			if support.get("collider") != _target or not _magnetic_hit(support) or (support.normal as Vector3).dot(normal) < 0.95:
+				if sample == direction * 0.60:
+					blocked = true
+				continue
+			var candidate_height: float = (support.position as Vector3).dot(normal)
+			if candidate_height - support_height > MAX_STEP_HEIGHT_M + 0.002:
+				blocked = true
+			else:
+				desired_height = maxf(desired_height, candidate_height)
+		# Chest-height obstructions never become climbing steps.
+		var wall_query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(player.global_position, player.global_position + direction * 0.55, 1, [player.get_rid()])
+		if not player.get_world_3d().direct_space_state.intersect_ray(wall_query).is_empty():
+			blocked = true
+		var rise: float = desired_height + _height - player.global_position.dot(normal)
+		if rise > 0.025 and not _clear_step(normal * rise):
+			blocked = true
+			desired_height = anchor.dot(normal)
+		var elevation: float = move_toward(anchor.dot(normal), desired_height, STEP_LIFT_SPEED_MPS * delta * fraction * _walking.length())
+		anchor += normal * (elevation - anchor.dot(normal))
+		var clearance: float = player.global_position.dot(normal) - _height - desired_height
+		if not blocked and clearance > -0.045:
+			anchor += walking * delta * fraction
+		# A wall can oppose the motor indefinitely without an ever-receding anchor.
+		var lead: Vector3 = (anchor - player.global_position).slide(normal)
+		anchor -= lead - lead.limit_length(0.12)
+		_anchor = _target.to_local(anchor)
 	anchor = _target.to_global(_anchor)
 	var error: Vector3 = anchor + normal * _height - player.global_position
 	if error.slide(normal).length() > 0.45:
@@ -175,10 +194,6 @@ func _physics_process(delta: float) -> void:
 	if difference.w < 0.0:
 		difference = -difference
 	var torque: Vector3 = difference.get_axis() * difference.get_angle() * 900.0 - (player.angular_velocity - target_omega) * 180.0
-	# Foot pivots have finite motor torque. A large requested turn must not
-	# instantly overload adhesion before the body has had time to rotate.
-	var yaw_torque: float = torque.dot(normal)
-	torque += normal * (clampf(yaw_torque, -TURN_TORQUE_NM, TURN_TORQUE_NM) - yaw_torque)
 	# Apply forces at one shared point, including the balancing ankle moment.
 	var point: Vector3 = player.global_position - normal * _height
 	torque -= (point - player.to_global(player.center_of_mass)).cross(force)
@@ -193,6 +208,25 @@ func _physics_process(delta: float) -> void:
 		rigid.apply_force(-force, point - rigid.global_position)
 		rigid.apply_torque(-torque)
 	status = "BOOTS WALKING" if powered and fraction > 0.0 else "BOOTS LATCHED | Passive hold | B release"
+
+
+func _clear_step(lift: Vector3) -> bool:
+	var capsule: CapsuleShape3D = CapsuleShape3D.new()
+	capsule.radius = 0.35
+	capsule.height = 1.8
+	var query: PhysicsShapeQueryParameters3D = PhysicsShapeQueryParameters3D.new()
+	query.shape = capsule
+	query.transform = player.global_transform
+	query.motion = lift
+	query.collision_mask = 1
+	query.exclude = [player.get_rid()]
+	var fractions: PackedFloat32Array = player.get_world_3d().direct_space_state.cast_motion(query)
+	return fractions[0] >= 0.999
+
+
+func _support_ray(origin: Vector3, normal: Vector3) -> Dictionary:
+	var query: PhysicsRayQueryParameters3D = PhysicsRayQueryParameters3D.create(origin, origin - normal * 1.65, 1, [player.get_rid()])
+	return player.get_world_3d().direct_space_state.intersect_ray(query)
 
 
 func _foot_ray() -> Dictionary:

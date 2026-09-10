@@ -271,3 +271,20 @@ decide something the docs did not cover.
   pulse is paid only on success. B cancels arming or releases contact. Overload,
   loss of contact, hand gripping and seating disarm the boots to prevent repeated
   catches. Prompts distinguish OFF, ARMED and LATCHED and refer to steel surfaces.
+
+- 2026-09-10 — Conrad requests more forgiving boot movement. Raise provisional
+  sole holding limits from 1,200 N / 1,000 N·m to 3,000 N / 2,000 N·m; keep the
+  50 J engagement pulse and passive zero-draw hold. Latched mouse look is free
+  camera aim with unrestricted yaw and ±85° pitch, independent of Z and without
+  battery, propellant or rotor momentum cost. Walking follows the view projected
+  onto the surface; releasing boots centres the view and restores physical EVA
+  turning. Replace powered foot-yaw look with this explicit playability allowance.
+  Add a 0.30 m step-over allowance; larger obstacles block walking rather than
+  letting a growing walking-target error topple the suit. External overloads
+  still exceed finite adhesion and release the boots.
+  Step assistance uses bounded anchor lift at up to 0.8 m/s, dense foot-path probes
+  and a capsule clearance sweep; it does not teleport the suit or remove collision.
+  Steel lower doorway sills support the soles. The walking target stays within
+  0.12 m of the actual body to avoid runaway pushing against walls. Full walking
+  input budgets 5,000 W to cover the increased force rating and combined lift/
+  translation speed; idle and view-only resource use remain zero.

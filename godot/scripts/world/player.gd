@@ -1,5 +1,5 @@
 ## Physical EVA suit: propellant-fed translation/braking, bounded electric reaction
-## wheels for body rotation, and modifier-held free head look.
+## wheels for body rotation, modifier-held EVA head look, and free walking aim.
 class_name Player
 extends RigidBody3D
 
@@ -15,12 +15,22 @@ extends RigidBody3D
 
 const HEAD_YAW_LIMIT_RAD: float = PI / 3.0
 const HEAD_PITCH_LIMIT_RAD: float = PI * 5.0 / 18.0
+const SURFACE_PITCH_LIMIT_RAD: float = PI * 17.0 / 36.0
 
 var suit: SuitResources = SuitResources.new()
 var attitude: SuitAttitude = SuitAttitude.new()
 var head_angles_rad: Vector2 = Vector2.ZERO
 var brake_reference: Callable
-var surface_motion_active: bool = false
+var surface_motion_active: bool = false:
+	set(active):
+		if surface_motion_active == active:
+			return
+		surface_motion_active = active
+		_cancel_body_look()
+		_pending_look = Vector2.ZERO
+		_surface_look = Vector2.ZERO
+		if not active:
+			centre_head()
 var body_follow_enabled: bool = true
 var _body_follow: bool = false
 var _look_remaining: Vector2 = Vector2.ZERO
@@ -168,7 +178,11 @@ func _physics_process(delta: float) -> void:
 
 
 func _update_head() -> void:
-	if _freelooking:
+	if surface_motion_active:
+		head_angles_rad -= _pending_look * mouse_sensitivity
+		head_angles_rad.x = wrapf(head_angles_rad.x, -PI, PI)
+		head_angles_rad.y = clampf(head_angles_rad.y, -SURFACE_PITCH_LIMIT_RAD, SURFACE_PITCH_LIMIT_RAD)
+	elif _freelooking:
 		head_angles_rad -= _pending_look * mouse_sensitivity
 		head_angles_rad.x = clampf(head_angles_rad.x, -HEAD_YAW_LIMIT_RAD, HEAD_YAW_LIMIT_RAD)
 		head_angles_rad.y = clampf(head_angles_rad.y, -HEAD_PITCH_LIMIT_RAD, HEAD_PITCH_LIMIT_RAD)
@@ -224,24 +238,26 @@ func centre_head() -> void:
 	_pending_look = Vector2.ZERO
 	_surface_look = Vector2.ZERO
 	_cancel_body_look()
-	var camera: Camera3D = $Camera3D
-	camera.basis = Basis.IDENTITY
+	var camera: Camera3D = get_node_or_null("Camera3D") as Camera3D
+	if is_instance_valid(camera):
+		camera.basis = Basis.IDENTITY
 
 
-## Hold head-only aiming; transitions discard neck movement and queued body steering.
+## Hold EVA head-only aiming; walking already permits free camera aim.
 func set_freelooking(enabled: bool) -> void:
 	if _freelooking == enabled:
 		return
 	_freelooking = enabled
-	centre_head()
+	if not surface_motion_active:
+		centre_head()
 
 
-## Report whether mouse movement currently aims only the head.
+## Report whether the EVA head-look modifier is held.
 func is_freelooking() -> bool:
 	return _freelooking
 
 
-## Consume normal mouse yaw/pitch radians for powered walking on a latched surface.
+## Consume separate surface steering; free camera aim does not populate this queue.
 func take_surface_look() -> Vector2:
 	var result: Vector2 = _surface_look
 	_surface_look = Vector2.ZERO
@@ -258,10 +274,8 @@ func set_motion_input(translation: Vector3, roll: float) -> void:
 func queue_mouse_look(relative: Vector2) -> void:
 	if not relative.is_finite():
 		return
-	if _freelooking:
+	if surface_motion_active or _freelooking:
 		_pending_look += relative
-	elif surface_motion_active:
-		_surface_look -= relative * mouse_sensitivity
 	elif not freeze and not bool(get_meta("seated", false)) and body_follow_enabled and not _braking and not _wheel_braking and not _wheel_dumping:
 		if not _body_follow:
 			_look_previous_basis = global_basis

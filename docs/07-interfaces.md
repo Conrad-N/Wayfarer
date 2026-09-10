@@ -147,12 +147,13 @@ wheels. Hold C to unload wheel momentum into the suit and whatever is physically
 attached. A free suit spins; a carrier may counteract its resulting rotation if
 its own attitude control is active. The HUD shows unloading, attachment status,
 resources and wheel saturation. Unload suit wheels before using orbital warp.
-Normal mouse motion requests a physical body turn; the camera remains centred
+During EVA, normal mouse motion requests a physical body turn; the camera remains centred
 on the torso. Hold Z for head-only aiming, then release it
 to snap back to centre. The head is limited to ±60° yaw / ±50° pitch; body turns
 retain the full mouse request and have no artificial speed cap. Shift plus mouse
-steers a hand-held load; free look does not steer it. Latched boots turn through
-the feet with normal mouse yaw; free look leaves their heading unchanged.
+steers a hand-held load; free look does not steer it. While boots are latched, normal mouse movement freely looks in any yaw direction
+and up/down to ±85° without using resources. WASD follows the view along the surface;
+Z is unnecessary. Releasing boots centres the view and restores physical EVA turns.
 Escape and focus loss cancel active motors and tools, retaining passive
 hand/boot/seat attachments. A visual bump indicator gives feedback when the
 suit physically contacts its surroundings.

@@ -208,16 +208,24 @@ B arms magnetic boots; they keep checking for aligned sole contact with a design
 steel surface at low relative speed. Descend onto it with Ctrl to latch automatically.
 B again cancels while armed or releases while latched. Arming and rejected contact
 attempts cost no energy; engagement is charged only once on success. A broken or
-overloaded latch switches off and requires B to rearm. WASD then walks along the
-surface in the torso's forward/right directions; normal mouse yaw turns the torso
-through the feet. Free look moves the head
-without steering the feet and supplies vertical aiming while latched. Engagement
-costs 50 J; steps/turns spend battery, with equal reaction on the deck. Foot pivots
-have 250 N·m of motor torque and budget 500 J per commanded radian; they retain
-the complete turn request without a fixed speed cap. A switchable magnetic latch holds
-passively without idle draw; B mechanically releases even with an empty battery.
-Holding force and torque are limited; losing deck contact or an excessive load
-releases the soles. Boots supply no artificial gravity or remote attraction.
+overloaded latch switches off and requires B to rearm. WASD walks in the camera's
+forward/right directions projected onto the supporting surface. While latched,
+normal mouse movement freely aims the camera through unlimited yaw and ±85° pitch,
+without a modifier or any battery, fuel or wheel momentum cost. Z does not change
+this walking view. Releasing the boots centres the camera on the torso and restores
+physical EVA turning.
+
+Engagement costs 50 J. Powered walking has a provisional 5,000 W rated draw at full
+input, covering bounded walking and lift work, with equal reaction on the deck.
+The passive latch has no idle draw; B mechanically releases even with an empty
+battery. Provisional holding limits are 3,000 N and 2,000 N·m. Looking around does
+not drive the old powered foot-yaw motor. A walking assist handles small floor
+obstacles up to 0.30 m on the same supporting body. It probes ahead, checks capsule
+headroom, and lifts through finite forces without resetting pose or velocity.
+Steel doorway sills are valid supports. Larger obstructions stop commanded steps instead of letting
+the walking target run away and topple the suit. Losing support or an excessive
+external load still releases the soles. Boots supply no artificial gravity or
+remote attraction.
 
 ## Extraction: the core trade-off
 

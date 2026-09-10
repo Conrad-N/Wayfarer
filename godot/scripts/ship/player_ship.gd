@@ -160,7 +160,10 @@ func _frame(label: String, z: float, width: float, system: String, color: Color)
 	var side_width: float = (3.8 - width) * 0.5
 	for side: float in [-1.0, 1.0]:
 		_add_box(label + str(side), Vector3(side_width, 2.8, 0.2), Vector3(side * (width * 0.5 + side_width * 0.5), 0, z), system, color, true)
-		_add_box(label + "Lintel" + str(side), Vector3(width, 0.3, 0.2), Vector3(0, side * 1.25, z), system, color)
+		var sill: CollisionShape3D = _add_box(label + "Lintel" + str(side), Vector3(width, 0.3, 0.2), Vector3(0, side * 1.25, z), system, color)
+
+		if side < 0.0:
+			sill.set_meta("magnetic_surface", true)
 
 
 func _door(id: String, z: float, width: float, color: Color) -> void:

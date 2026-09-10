@@ -338,6 +338,25 @@ Verification: `./check.sh` passes 2,884 checks with zero failures. The final foc
 boot suite, including the added seat and power-retry cases, passes 82 checks.
 The main scene boots headless without errors or node-leak warnings.
 
+### Boot walking playability revision
+
+- [x] Free latched mouse view in both axes, without resources or a modifier.
+- [x] Stronger finite adhesion: 3,000 N / 2,000 N·m.
+- [x] Physical step assist for 0.30 m steel floor obstacles, with headroom checks.
+- [x] Tall obstacles stop walking rather than pulling the suit off its feet.
+
+Actual ship threshold traversal works in both directions while attached and
+upright; the capsule rises approximately 0.30 m and settles onto the floor again.
+Latched camera yaw/pitch uses no battery, fuel or wheel momentum. Walking follows
+the projected view; release restores physical EVA turning. Regression coverage
+includes high obstacles, low ceilings, and retained contact momentum transfer.
+Fullscreen captures are under ignored `godot/build/screens/boots-playable-*.png`.
+
+Verification: `./check.sh` passes **2,936 checks, zero failures**, with no script
+errors or node-leak warnings. The main scene boots headless cleanly. Fullscreen
+exercise verified a free 120° yaw / 60° pitch view, both-way threshold traversal
+with upright alignment maintained, fuel-free walking, and release back to EVA.
+
 ## M5 — Loop
 
 Goal: the whole job, once.

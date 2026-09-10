@@ -79,20 +79,55 @@ func test_normal_look_requires_power_and_respects_grip_authority() -> void:
 	held.free()
 
 
-## Surface yaw/pitch belongs to the boots, and modifier look never reaches their queue.
-func test_surface_look_is_separate_and_consumed_once() -> void:
+## Latched mouse freely aims in both axes, without commanding feet or suit wheels.
+func test_surface_mouse_aim_is_free_unrestricted_and_persistent() -> void:
 	var player: Player = _spawn(Vector3.ZERO)
 	player.surface_motion_active = true
-	player.queue_mouse_look(Vector2(-120.0, 80.0))
-	check_near(player.take_surface_look().distance_to(Vector2(0.3, -0.2)), 0.0, 1e-6, "boots receive normal yaw and pitch in radians")
-	check_eq(player.take_surface_look(), Vector2.ZERO, "surface mouse motion is consumed once")
-	player.set_freelooking(true)
-	player.queue_mouse_look(Vector2(-120.0, 80.0))
-	check_eq(player.take_surface_look(), Vector2.ZERO, "free head look cannot rotate latched boots")
 	await _steps(3)
-	check_near(player.head_angles_rad.distance_to(Vector2(0.3, -0.2)), 0.0, 1e-6, "surface modifier look reaches the camera")
+	player.queue_mouse_look(Vector2(-PI * 1.5 / player.mouse_sensitivity, -PI / player.mouse_sensitivity))
+	await _steps(3)
+	check_near(player.head_angles_rad.x, -PI * 0.5, 1e-5, "walking yaw keeps the full three-quarter turn and wraps naturally")
+	check_near(player.head_angles_rad.y, Player.SURFACE_PITCH_LIMIT_RAD, 1e-5, "walking view looks up to eighty-five degrees")
+	check_eq(player.take_surface_look(), Vector2.ZERO, "free camera aim requests no boot pivot")
+	var aimed: Vector2 = player.head_angles_rad
+	await _steps(15)
+	check_eq(player.head_angles_rad, aimed, "latched view stays aimed when the mouse stops")
+	check(player.global_basis.is_equal_approx(Basis.IDENTITY), "camera aiming does not turn the physical suit")
+	check_near(player.angular_velocity.length(), 0.0, 1e-6, "latched aiming adds no angular momentum")
+	check_eq(player.suit.battery_energy_j, SuitResources.BATTERY_CAPACITY_J, "latched aiming spends no electricity")
+	check_eq(player.suit.propellant_kg, SuitResources.PROPELLANT_CAPACITY_KG, "latched aiming spends no propellant")
+	player.set_freelooking(true)
 	player.set_freelooking(false)
-	check_eq(player.take_surface_look(), Vector2.ZERO, "releasing modifier adds no surface turn")
+	check_eq(player.head_angles_rad, aimed, "EVA modifier transitions leave walking aim intact")
+	player.suit.battery_energy_j = 0.0
+	player.suit.propellant_kg = 0.0
+	player.queue_mouse_look(Vector2(-PI * 2.0 / player.mouse_sensitivity, PI * 2.0 / player.mouse_sensitivity))
+	await _steps(3)
+	check_near(player.head_angles_rad.x, aimed.x, 1e-5, "empty suit can look all the way around while latched")
+	check_near(player.head_angles_rad.y, -Player.SURFACE_PITCH_LIMIT_RAD, 1e-5, "empty suit can freely look down while latched")
+	check_eq(player.suit.battery_energy_j, 0.0, "free surface view cannot create charge")
+	player.free()
+
+
+## Leaving a surface centres the view immediately and restores powered EVA mouse turns.
+func test_surface_release_centres_view_and_discards_stale_aim() -> void:
+	var player: Player = _spawn(Vector3.ZERO)
+	player.surface_motion_active = true
+	player.queue_mouse_look(Vector2(-800.0, -200.0))
+	await _steps(3)
+	check(player.head_angles_rad.length() > 1.0, "walking camera begins aimed away from torso")
+	player.queue_mouse_look(Vector2(-400, 100))
+	player.surface_motion_active = false
+	check_eq(player.head_angles_rad, Vector2.ZERO, "surface release immediately centres the view")
+	check((player.get_node("Camera3D") as Camera3D).basis.is_equal_approx(Basis.IDENTITY), "released camera faces the physical torso")
+	await _steps(15)
+	check_near(player.angular_velocity.length(), 0.0, 1e-6, "queued walking aim cannot become a surprise EVA turn")
+	check_eq(player.suit.battery_energy_j, SuitResources.BATTERY_CAPACITY_J, "release starts no wheel motor")
+	player.queue_mouse_look(Vector2(-0.5 / player.mouse_sensitivity, 0.0))
+	await _steps(12)
+	check(player.angular_velocity.y > 0.01, "normal mouse resumes physical EVA steering after release")
+	check_eq(player.head_angles_rad, Vector2.ZERO, "EVA camera stays centred during powered steering")
+	check(player.suit.battery_energy_j < SuitResources.BATTERY_CAPACITY_J, "restored EVA steering pays electrical work")
 	player.free()
 
 
