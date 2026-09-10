@@ -61,3 +61,5 @@ decide something the docs did not cover.
 - 2026-09-10 — M1 generates convex collision for the existing hull at runtime and
   preserves its imported transform and mass metadata. This exercises the current
   asset now; the Blender `-convcol` pipeline change remains part of M2.
+- 2026-09-10 — Conrad changed the suit brake binding from X to Alt. Hold behavior
+  and braking physics are unchanged.

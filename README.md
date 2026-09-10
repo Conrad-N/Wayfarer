@@ -30,14 +30,14 @@ part scripts. Setup details in [AGENTS.md](AGENTS.md).
 - **Q / E:** roll left/right. Roll keeps going when released; counter it with the
   opposite key.
 - **Mouse:** turn the whole suit, including past vertical and upside down.
-- **Hold X:** brake drift and spin. This overrides thrust and roll while held;
+- **Hold Alt:** brake drift and spin. This overrides thrust and roll while held;
   mouse look stays available. The HUD shows `RCS BRAKE` and the spin rate.
 - **Escape:** release the mouse. **Left click:** capture it again. Losing window
   focus also releases controls; the world continues moving.
 
 Releasing thrust leaves you coasting. Braking settles ordinary movement in about
 a second; high speeds and extra mass need longer because suit braking thrust is
-limited. Releasing X restores coasting or any thrust controls you still hold.
+limited. Releasing Alt restores coasting or any thrust controls you still hold.
 
 The suit starts with **8 kg of propellant** and a **200 Wh tool battery**. Thrust,
 roll, and braking use propellant; coasting and mouse aiming use none. Fuel leaving

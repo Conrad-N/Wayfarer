@@ -137,12 +137,14 @@ func test_stationary_brake_allows_mouse_look() -> void:
 	player.free()
 
 
-## The documented physical X key remains bound to the hold-to-brake action.
-func test_brake_uses_physical_x_key() -> void:
+## The documented physical Alt key remains bound to the hold-to-brake action.
+func test_brake_uses_physical_alt_key() -> void:
 	var event: InputEventKey = InputEventKey.new()
-	event.physical_keycode = KEY_X
+	event.physical_keycode = KEY_ALT
 	event.pressed = true
-	check(InputMap.event_is_action(event, "brake"), "physical X activates brake")
+	check(InputMap.event_is_action(event, "brake"), "physical Alt activates brake")
+	event.physical_keycode = KEY_X
+	check(not InputMap.event_is_action(event, "brake"), "X no longer activates brake")
 
 
 func _spawn_player(at: Vector3, orientation: Basis = Basis.IDENTITY) -> Player:
