@@ -18,7 +18,7 @@ upside down without meaning to and have to think to fix it.
 
 - [x] `Player` as a `RigidBody3D` capsule with 6DOF thrust: forward/back, left/right,
       up/down, roll. Mouse look rotates the body freely (no up vector, no clamping).
-- [ ] Brake key: kills linear and angular velocity over about a second (suit RCS).
+- [x] Brake key: kills linear and angular velocity over about a second (suit RCS).
 - [ ] Suit propellant and battery as numbers on a debug HUD.
 - [ ] A test scene: a big box room with a dozen rigid bodies of different masses
       (use `hull_segment_a` and primitives). Bumping into things transfers momentum.
@@ -38,6 +38,15 @@ coasting, roll, mouse look, Escape/click capture, and wall contact. The room lig
 control text, and rotated views were inspected in screenshots under
 `godot/build/screens/m1-movement-*.png` (ignored, generated locally).
 The full debris room and the five-minute movement-feel milestone remain unfinished.
+
+Brake progress (2026-09-10): hold X to counter drift and spin with limited suit
+thrust and torque; release to coast. Mouse look remains available. Eight new Jolt
+tests cover convergence, gradual stopping without reversal, force/torque limits,
+mass response, release, control priority, mouse look, and the X binding.
+`./check.sh` passes 100 checks and the main scene boots headless. A windowed exercise
+verified the brake through input polling, settling, release/coasting, and Escape
+cancellation. The braking indicator, speed/spin readouts, and stable rotated view
+were inspected in `godot/build/screens/m1-brake-*.png` (ignored local captures).
 
 ## M2 — Cut
 

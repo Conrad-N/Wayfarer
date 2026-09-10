@@ -28,7 +28,11 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	var capture_hint: String = "Esc releases mouse" if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED else "Click to fly"
-	_readout.text = "WAYFARER / SUIT MOVEMENT TEST\n%.2f m/s  |  %s" % [_player.linear_velocity.length(), capture_hint]
+	var brake_hint: String = "RCS BRAKE" if _player.is_braking() else "FREE FLIGHT"
+	_readout.text = "WAYFARER / SUIT MOVEMENT TEST\n%.2f m/s  |  %.1f deg/s  |  %s  |  %s" % [
+		_player.linear_velocity.length(), rad_to_deg(_player.angular_velocity.length()),
+		brake_hint, capture_hint
+	]
 
 
 func _add_box(label: String, size: Vector3, at: Vector3, colour: Color) -> void:

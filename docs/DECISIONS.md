@@ -37,3 +37,9 @@ decide something the docs did not cover.
 - 2026-09-10 — The headless runner now awaits test methods so movement tests can
   measure actual Jolt physics over fixed steps. Synchronous data tests still use
   the same runner and require no dependencies.
+- 2026-09-10 — Holding X gives suit braking priority over translation/roll commands,
+  while keeping mouse aiming available. Braking counters velocity in the local
+  scene's frame and targets 99% reduction in one second, capped at 600 N and
+  60 N·m. These tunable limits keep ordinary movement quick to stop while making
+  high speed and extra mass take longer. Releasing X returns to coasting or the
+  thrust commands still held; releasing mouse capture also cancels braking.

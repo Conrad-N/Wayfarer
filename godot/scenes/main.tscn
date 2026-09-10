@@ -48,7 +48,7 @@ grow_horizontal = 2
 grow_vertical = 0
 mouse_filter = 2
 theme_override_font_sizes/font_size = 20
-text = "WASD thrust  |  Space / Ctrl up / down  |  Q / E roll  |  Mouse look\nRelease thrust to coast. Use opposite thrust to slow down; brakes are next."
+text = "WASD thrust  |  Space / Ctrl up / down  |  Q / E roll  |  Mouse look\nHold X to brake drift and spin. Release to coast; mouse look stays free."
 
 [node name="Reticle" type="Label" parent="HUD"]
 anchors_preset = 8
