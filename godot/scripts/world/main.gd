@@ -25,6 +25,7 @@ var _screenshot_notice_seconds: float = 0.0
 
 
 func _ready() -> void:
+	_apply_startup_window_mode()
 	_screenshot.capture_started.connect(_on_capture_started)
 	_screenshot.capture_finished.connect(_on_capture_finished)
 	if salvage_practice:
@@ -60,6 +61,13 @@ func _ready() -> void:
 	_add_box("ForwardMarker", Vector3(5, 0.25, 0.15), Vector3(0, 1.8, -21.95), cyan)
 	_add_box("ForwardMarker", Vector3(0.25, 3.5, 0.15), Vector3(0, 0.2, -21.95), cyan)
 	print("Wayfarer M3: ship, terminals, tablet, and physical cargo. F terminal / Tab tablet.")
+
+
+func _apply_startup_window_mode() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	# Some window managers ignore the initial fullscreen hint before the window exists.
+	get_window().set_deferred("mode", ProjectSettings.get_setting("display/window/size/mode", Window.MODE_WINDOWED))
 
 
 func _process(delta: float) -> void:

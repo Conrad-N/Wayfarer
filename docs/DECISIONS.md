@@ -167,3 +167,7 @@ decide something the docs did not cover.
   in session memory, preserving drift, spin, damage, scans and exhausted reservoirs
   on revisit. Disk persistence remains M5. Planet/moon discs use a procedural sky
   to preserve camera precision for the ship interior and salvage tools.
+- 2026-09-10 — Conrad requested borderless fullscreen at startup. The project uses
+  Godot's regular fullscreen window mode, preserving the desktop display mode;
+  the existing GNOME launcher inherits this setting. The main scene reapplies it
+  after window creation for desktops that ignore the initial hint.
