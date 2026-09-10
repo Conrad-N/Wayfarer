@@ -1,7 +1,9 @@
-node_modules/
-dist/
+# Root ignores. The Godot project has its own .gitignore in godot/.
+# Local agent settings and secrets
+.claude/
 .env
 *.log
-
-# Local Claude Code settings
-.claude/
+# Legacy web version (reference only)
+legacy/web/node_modules/
+legacy/web/dist/
+legacy/web/.env

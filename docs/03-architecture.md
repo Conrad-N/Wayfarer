@@ -1,185 +1,99 @@
 # 03 — Architecture
 
-This is the most important document. The aesthetic and the feature list can change;
-this is the load-bearing structure.
+## Two layers, one truth
 
-## Keystone 1 — One API, three clients
+### Orbital layer (`godot/scripts/sim/`)
+
+Pure data, no nodes, no rendering. Every object in the solar system (bodies, stations,
+derelicts, the player ship, debris clusters) has an orbital state around a parent
+body. Positions and velocities are **64-bit floats stored as separate scalars or
+`PackedFloat64Array`**, never `Vector3` (which is 32-bit). Propagation is analytic
+Kepler for coasting and fixed-step integration for burns, ported from the previous
+version (see `11-legacy-sim-port-notes.md`, which lists the verification numbers
+the port must reproduce).
+
+The `Sim` autoload owns sim time, the warp rate, and the list of objects. It steps in
+whole fixed quanta of sim time. It never reads the wall clock.
+
+### Local layer (`godot/scripts/world/`)
+
+A Godot scene with Jolt physics and zero gravity. It exists only while the player is
+within `LOCAL_RADIUS` (default 10 km) of another object. It is centred on a
+**reference object** (the derelict or station) and everything in it is expressed
+relative to that object.
+
+Entering: the orbital layer computes the player's position and velocity relative to
+the reference object, instantiates the reference object's scene at the origin, and
+places the player ship at that offset with that velocity.
+
+Inside: Jolt handles motion. Gravity differences across 10 km are ignored (tidal
+effects are far below anything the player could notice at these scales). Warp is
+capped at 1x while local.
+
+Recentring (floating origin): when the player is more than `RECENTRE_DISTANCE`
+(default 2 km) from the origin, every node is shifted by minus the player's position
+in one step. Nothing visibly moves because everything moves together.
+
+Leaving: when the player passes `LOCAL_RADIUS` (with hysteresis), the local position
+and velocity are added to the reference object's orbital state to produce the
+player's new orbital state, the scene is freed, and the orbital layer continues.
+Free-floating cut parts left behind are collapsed into a debris-cluster object in the
+orbital layer so they are still there on return.
+
+### Handoff tests (must exist and stay green)
+
+- Enter local, exit immediately: the player's orbital elements match within 1e-6
+  relative.
+- Enter, translate 1 km along a known axis at a known velocity, exit: the new
+  orbital state equals the reference object's state plus that offset and velocity.
+- Recentre once mid-scene: relative positions of all bodies unchanged within float
+  precision.
+
+## One ship API
+
+`ShipApi` (`godot/scripts/ship/ship_api.gd`) is the only door into the player's ship.
+It exposes:
+
+- **Telemetry:** orbital elements, relative state to a target, propellant, oxygen,
+  power, system health, cargo manifest, mass and volume totals.
+- **Commands:** throttle, attitude target, RCS translate, create and execute a maneuver
+  node, toggle a system, open the cargo door, request rescue.
+- **Calculators:** transfer planner, rendezvous solver, delta-v and mass budget, oxygen
+  and time budget. Pure functions over telemetry; the same code the screens show.
+
+Clients: the in-world terminal screens, the tablet, and the optional AI. None of them
+touch sim internals. If you find yourself reaching past `ShipApi`, add to `ShipApi`.
+
+## Scene tree (target shape)
 
 ```
-                    ┌─────────────────────────────┐
-                    │   Authoritative simulation   │
-                    │   (deterministic physics)    │
-                    └──────────────┬──────────────┘
-                                   │
-                    ┌──────────────┴──────────────┐
-                    │        THE SHIP API          │   ← the single contract
-                    │  reads (telemetry) +         │
-                    │  commands (control)          │
-                    └───┬───────────┬───────────┬──┘
-                        │           │           │
-              ┌─────────┴──┐  ┌─────┴─────┐  ┌──┴─────────┐
-              │  Panels    │  │  Ship AI  │  │  Routines  │
-              │ (buttons,  │  │ (LLM, NL  │  │ (player    │
-              │  switches, │  │  ↔ API)   │  │  code)     │
-              │  readouts) │  │           │  │            │
-              └────────────┘  └───────────┘  └────────────┘
-                  human          natural         automated
-                  hands          language        scripts
+Main (Node3D)
+  Sim            autoload: orbital layer, time, warp
+  Game           autoload: session state, save/load, settings
+  LocalScene     present only when near something; reference object at origin
+    Reference    the derelict / station (RigidBody3D compound or StaticBody3D)
+    Debris...    free bodies produced by cuts
+    PlayerShip   RigidBody3D; owns ShipApi, systems, interior, terminals
+    Player       RigidBody3D 6DOF controller (inside ship or on EVA)
+  UI             tablet and screen viewports; settings (the only out-of-world UI)
 ```
 
-The three clients are **peers**. None has private access to the simulation. The
-button that fires a thruster, the AI deciding to fire a thruster, and a routine
-firing a thruster all go through the same API call. Build that API once, well, and
-the entire rest of the game is clients of it.
+## Frames and units
 
-**Practical consequence:** the API is the central design artifact. Define it as a
-set of typed commands and telemetry reads — e.g. `get_orbital_state()`,
-`plan_maneuver(constraints)`, `execute_maneuver(plan, confirm)`, `scan()`,
-`set_throttle()`, `dock()`, `mine()`. That one definition drives the UI bindings,
-the AI's tool schema, and the routine standard library simultaneously.
+- Godot: -Z is forward, +Y is up, right-handed. Blender +Y exports to Godot -Z.
+- SI units in sim and API. UI converts to km, km/s, minutes, tonnes at the edge.
+- Sim time is seconds since epoch as a 64-bit float. Displayed as DD:HH:MM:SS.
 
-## Keystone 2 — The AI is conversation, never physics
+## Save and load
 
-Hard sci-fi requires correct numbers. LLMs are unreliable at arithmetic. Therefore:
+One JSON file: orbital layer state (all objects), player ship state (systems, cargo,
+resources), economy state (money, debt, contracts, reputation, insurance), and, if a
+local scene is active, a snapshot of every rigid body (transform, velocities) and the
+cut state of the reference object. Saving is allowed anywhere except mid-burn.
 
-- **The deterministic solver owns all physics.** Orbits, transfers, burn results —
-  all computed by real code.
-- **The AI owns intent and language.** It maps "more aggressive burn" to a solver
-  call with a tighter time constraint, reads the result, and explains it.
+## Determinism
 
-The AI runs a standard tool-use loop: it's given the live ship state plus the ship
-API as its tool schema (Keystone 1), it calls read-tools and the solver, and it
-either reports back or proposes a write-action for you to confirm. Anthropic's
-tool-use does exactly this shape already, so the AI layer is mostly: a persona
-system prompt + the API exposed as tools + a confirmation gate on writes.
-
-### The review-before-execute gate
-Write-actions (anything that changes the world irreversibly or burns resources)
-return a **proposed plan** by default rather than executing. The human confirms.
-This is the same gate whether the action originated from a panel, the AI, or a
-routine — it lives in the API, not in any one client. Standing authorizations
-("you may make minor corrections without asking") relax it during a session.
-
-## Keystone 3 — Time is shared, event-driven, never gated on the real world
-
-The hardest tension in a shared world is time: with real orbital mechanics one player
-faces a 600-day transfer while another wants to do twenty things in-system. The
-resolution is **one law and one mechanism.**
-
-**The law:** never gate a player's in-game intent on real-world time. A time-skip is
-something a player *pulls* ("I'm leaving" / "I don't want to sit through this"), never
-something the game *pushes* ("to do X, wait real hours").
-
-**The mechanism** (for a small cooperative group — the target is ~4 friends): one
-shared, consistent timeline advanced by a **discrete-event scheduler.** The world
-sleeps until the next moment some participant actually has business, jumps there, and
-emulates silently through everything that's pure computation. Players (and AIs) declare
-when they next need to act; the clock advances to the soonest, whenever no one is
-mid-action. Nobody coordinates out-of-band — the negotiation is implicit. One shared
-clock (not per-player time bubbles) is what keeps the world both mutable and
-paradox-free. Full design: [08](08-simulation-and-time.md) Part B.
-
-This is why **routines belong in the architecture from the start even though they ship
-last**: a skip is only meaningful if you've delegated what your ship does meanwhile, so
-the routine layer and the time model are two halves of one thing. The *away-game* (log
-off, let a routine run, return to consequences) is the pull-direction case of that — not
-the time machine itself.
-
-## The simulation
-
-### Server-authoritative from day one — even in single-player
-The simulation is the authority. In single-player it runs in-process (a "server" on
-localhost); in multiplayer it runs on your hosted server. **Same code, same API.**
-Building it this way from Milestone 0 means multiplayer is a deployment change, not a
-rewrite. The client never computes truth; it reads telemetry and sends commands.
-
-### Physics model — patched conics + secular perturbations *(decided)*
-
-> **Authoritative detail** (the full fidelity menu, the analytic-vs-numerical
-> trade-off, perturbations, and burns) is in
-> [08-simulation-and-time.md](08-simulation-and-time.md) Part A. Summary below.
-
-Two realistic options:
-
-- **Patched conics (recommended).** Each ship is under the influence of exactly one
-  body at a time, on a clean Keplerian orbit, switching at sphere-of-influence
-  boundaries. This is what KSP does. It is "real enough" for hard sci-fi and has a
-  killer property below.
-- **Full n-body.** Truer, but no closed-form orbits, harder to plan, harder to keep
-  deterministic across machines, and far more expensive to fast-forward.
-
-**Why patched conics is more than a shortcut:** a Keplerian orbit can be *propagated
-analytically*. You can compute "where is this ship at time T" in closed form without
-simulating every intermediate tick. That makes time-warp and event-clock skips cheap:
-the server can compute the state hours into the future instantly, and can resolve
-"what did your routine do over 6 hours" without grinding every frame — cost scales with
-the number of events, not the elapsed duration. This single property is worth a lot —
-see *Time*.
-
-### Determinism
-The sim must be deterministic: same inputs → same outputs, on every machine. Required
-for multiplayer consistency and for replaying/resolving routines headlessly.
-
-## Time
-
-> **Authoritative detail** — the governing law, single-player warp / jump-to-event, and
-> the multiplayer **shared event-clock** — is in
-> [08-simulation-and-time.md](08-simulation-and-time.md) Part B. Summary below.
-
-- The world has its own **sim-time**, decoupled from wall-clock.
-- **Analytic propagation** (from patched conics) lets the server jump sim-time forward
-  cheaply — cost scales with the *number of events*, not the *duration* — including
-  resolving any routines that ran during the jump.
-- **Single-player:** time control is trivial — set a rate, or jump to the next event
-  (next burn node, SOI change, arrival).
-- **Multiplayer (small cooperative group):** one shared, consistent timeline advanced by
-  a **discrete-event scheduler** (Keystone 3). Agents declare when they next need to act;
-  the world fast-forwards to the soonest such moment whenever no one is mid-action, and
-  emulates silently through pure-compute events (SOI handoffs, etc.). **No out-of-band
-  coordination.** Per-player time bubbles are explicitly *not* the model — they reintroduce
-  cross-time paradoxes ([08-simulation-and-time.md](08-simulation-and-time.md) Part B).
-- **Governing law:** no player is ever gated on real-world time to do what they want.
-
-## The AI integration layer
-
-A service sitting between the player's chat panel and the API:
-
-1. Receives player message + a snapshot of relevant ship state.
-2. Calls the LLM with: the ship-AI **persona** system prompt + the ship **API as
-   tools**.
-3. Runs the tool-use loop (reads, solver calls), gating write-actions behind
-   confirmation.
-4. Returns narration to the chat panel and any proposed action to the review UI.
-
-**Provider:** the prototype tied into a Claude Max subscription. For a friends
-server the open question is whether the server holds one shared key, or each player
-**brings their own Claude credentials** (your AI = your account, your rate limits,
-your bill). The latter is elegant and scales socially. See
-[06-open-questions.md](06-open-questions.md).
-
-## The routine / automation layer
-
-Routines are player code that calls the same API. Because they run unattended and
-(in multiplayer) on shared infrastructure, **arbitrary host code is not acceptable**.
-Options, roughly in order of effort:
-
-- **Constrained scripting (start here).** A sandboxed scripting language (e.g. Lua
-  in a locked-down sandbox) or a small purpose-built DSL whose only capabilities are
-  API calls. Easy to meter and reason about.
-- **WASM (robust long-term).** Compile-to-WASM lets players write "arbitrary code"
-  in real languages while staying sandboxed, deterministic, and resource-limited.
-  This is the principled answer to "arbitrary code that's still safe."
-
-Either way the routine is **metered** — CPU/steps, API-call rate, wall-time — and the
-budget can be tied to the ship's **compute** resource (see
-[02-gameplay.md](02-gameplay.md)). A routine can never exceed its own ship's
-authority; it's just a third client of the API, with a leash.
-
-The AI helps author and debug routines — naturally, because the AI already knows the
-API (it's the AI's own toolset) and can read the routine's behavior through the same
-telemetry.
-
-## What to nail down first
-The **API surface** for Milestone 0 (orbital telemetry reads + the AI's tool schema
-for reading it). Everything else clips onto that. See
-[05-roadmap.md](05-roadmap.md).
+Same save plus same inputs must give the same result on Linux and Windows. Sim steps
+in fixed quanta; throttle decisions happen only on quantum boundaries; no wall-clock
+reads in `scripts/sim/`. Jolt is deterministic on the same build and platform, which
+is enough for single-player.

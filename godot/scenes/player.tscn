@@ -1,0 +1,32 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/player.gd" id="1_player"]
+
+[sub_resource type="CapsuleShape3D" id="Capsule_suit"]
+radius = 0.35
+height = 1.8
+
+[sub_resource type="PhysicsMaterial" id="Material_suit"]
+friction = 0.2
+bounce = 0.0
+
+[node name="Player" type="RigidBody3D"]
+mass = 100.0
+physics_material_override = SubResource("Material_suit")
+gravity_scale = 0.0
+continuous_cd = true
+can_sleep = false
+linear_damp_mode = 1
+linear_damp = 0.0
+angular_damp_mode = 1
+angular_damp = 0.0
+script = ExtResource("1_player")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("Capsule_suit")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+position = Vector3(0, 0.55, 0)
+current = true
+fov = 85.0
+near = 0.05

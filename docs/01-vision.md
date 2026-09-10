@@ -1,66 +1,47 @@
 # 01 — Vision
 
-## The fantasy
+**Working title:** Wayfarer. **Genre:** first-person hard sci-fi salvage.
+**Platform:** PC (Steam). **Players:** one.
 
-You are alone (or with friends) in a small ship, deep in a quiet, lethal place.
-You don't see the universe through a cinematic cockpit window. You see it the way a
-real crew would: through **instruments**. Numbers, scopes, gauges, blinking
-annunciators. The romance is in reading the machine correctly and trusting it with
-your life.
+## The pitch
 
-You are not a fighter pilot. You are an operator. The drama is competence: did you
-plan the burn right, did you bring enough fuel, did you read the orbit correctly,
-did you trust the right judgment — yours or the AI's.
+You own a small, tired ship and a debt. You take contracts to strip derelicts in
+orbit: fly out on a real transfer orbit, match velocity with a wreck you have never
+seen before, float around it in zero-g with a cutter and a grapple, and take it apart
+in whatever order its shape and its hazards allow. Haul what fits, tow what doesn't,
+get home, sell, fix your ship, pay down the loan, repeat. Physics is the antagonist.
+Nothing saves you but planning, execution, and the insurance you remembered to buy.
 
-## The ship's AI
+## Pillars
 
-There is a real intelligence aboard. You talk to it like a crewmate. It can:
+1. **Physics is the difficulty.** No skill trees. What you can salvage depends on
+   mass, size, reach, momentum, fuel, oxygen, and what is in the way. Getting better
+   means understanding the game, buying better tools, and executing well.
+2. **Everything is in the world.** You play in first person. Ship controls are
+   physical screens inside your ship, or the tablet on your arm. The menus are
+   in-universe. Only the settings screen sits outside the fiction.
+3. **Getting stuck is real.** You can disable your own ship, drift out of reach, or
+   run out of fuel on the wrong side of a transfer. The game gives you in-world ways
+   out: insurance, paid rescue, improvisation. It never hands you a free reset.
+4. **Every wreck is new.** Derelicts are assembled from a kit of parts by a generator,
+   so you are always reading a new shape and working out the best way to take it apart.
+5. **The ship is home and tool.** Your own ship has systems that wear, break, and need
+   parts. Maintaining it is part of the job, and its cargo door size, fuel, and power
+   are the limits you salvage within.
 
-- read every instrument you can read,
-- explain what the numbers mean,
-- propose plans and lay out the trade-offs,
-- and, with your go-ahead, operate the ship itself.
+## Touchstones
 
-Crucially, it is a **peer operator, not a wizard**. It pulls the same levers you
-can pull. You can watch it work and learn to do the same things by hand — or hand
-it the helm entirely and supervise. The relationship is the point: it's the
-difference between flying a ship and flying a ship *with someone*.
+| Game | Take | Leave |
+|---|---|---|
+| Hardspace: Shipbreaker | 6DOF zero-g movement where you end up upside down without meaning to. Beam tools (cutter, grapple, tractor). Quick, gamified teardown. Hazards that punish careless cuts. Simple readable graphics. | The fixed shipyard. The corporate story. The rigid shift timer. |
+| Ostranauts | Salvage as a living. Ship maintenance with real systems. Stations with different prices. Contracts. Debt and insurance. | Skill stats. Top-down view. Crew management. |
+| The previous Wayfarer prototype | Real orbital mechanics, maneuver planning, time warp. The idea of one ship API that panels and an AI both use. | Multiplayer. Shared world time. Panels as web pages. |
 
-## Design pillars
+## Non-goals (decided)
 
-1. **Hard sci-fi rigor.** Real orbital mechanics. Real trade-offs (delta-v, fuel,
-   time, mass). If a number appears on a screen, it is physically meaningful. No
-   magic, no hand-waving, no "press W to fly forward."
-
-2. **Operate through instruments.** The interface *is* the ship. No floating modern
-   HUD. Everything is diegetic — a panel, a readout, a switch. (See
-   [04-aesthetic.md](04-aesthetic.md).)
-
-3. **Three ways to do everything.** Every action is available by hand, by asking
-   the AI, and by automated routine. None is privileged. (See
-   [03-architecture.md](03-architecture.md).)
-
-4. **Time is real, so respect it — but never waste the player's.** Transfers take
-   hours or months; the game leans into that with deep time control rather than
-   pretending space is fast. But the waiting is never *real*-world waiting: a shared,
-   event-driven clock fast-forwards through the dead time to the next moment that
-   matters, and no player is ever gated on the wall clock to do what they want.
-   Patience is a mechanic; tedium is a bug. (See [03](03-architecture.md) Keystone 3.)
-
-5. **A shared, persistent place.** A small universe a few friends actually live in,
-   that keeps turning when you log off.
-
-## What this game is not
-
-- Not an arcade space shooter. Combat, if it ever exists, is a slow logistics and
-  positioning problem, not a dogfight.
-- Not Kerbal with funny faces. The tone is serious, lonely, and a little reverent —
-  closer to *2001*, *The Expanse*, or a submarine film than to a cartoon.
-- Not a chatbot with a spaceship skin. The AI earns its place by actually operating
-  a rigorous simulation, not by improvising flavor text.
-
-## Tone touchstones
-
-Submarine and aerospace procedure. Cold War mission control. *2001: A Space
-Odyssey*'s patience and silence. *The Expanse*'s "the math doesn't care about you."
-Apollo-era hardware that looks like it was built to survive being kicked.
+- No multiplayer, ever, in this design. Single-player only.
+- No base building. No crew to manage.
+- No procedural galaxy. One solar system, starting with one planet and its moon.
+- No player character stats.
+- No dependence on an LLM. The talking ship AI is optional and is a convenience,
+  not a mechanic.
