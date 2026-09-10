@@ -1,4 +1,4 @@
-## M1 movement space. Fixed walls and coloured ribs make drift and free roll visible.
+## M1 debris room. Fixed walls and coloured ribs make drift and free roll visible.
 extends Node3D
 
 @onready var _player: Player = $Player
@@ -24,8 +24,7 @@ func _ready() -> void:
 		_add_box("StarboardRib", Vector3(0.15, 14, 0.15), Vector3(11.95, 0, z), cyan)
 	_add_box("ForwardMarker", Vector3(5, 0.25, 0.15), Vector3(0, 1.8, -14.95), cyan)
 	_add_box("ForwardMarker", Vector3(0.25, 3.5, 0.15), Vector3(0, 0.2, -14.95), cyan)
-	_add_box("ReferenceBlock", Vector3(2, 2, 2), Vector3(3, -3, -5), amber)
-	print("Wayfarer M1: free thrust, roll and mouse look. Escape releases mouse.")
+	print("Wayfarer M1: twelve loose bodies, suit thrust and braking. Escape releases mouse.")
 
 
 func _process(_delta: float) -> void:
@@ -33,7 +32,7 @@ func _process(_delta: float) -> void:
 	var brake_hint: String = "RCS BRAKE" if _player.is_braking() else "FREE FLIGHT"
 	if _player.suit.propellant_kg <= 0.0:
 		brake_hint = "RCS EMPTY"
-	_readout.text = "WAYFARER / SUIT MOVEMENT TEST\n%.2f m/s  |  %.1f deg/s  |  %s  |  %s" % [
+	_readout.text = "WAYFARER / DEBRIS ROOM\n%.2f m/s  |  %.1f deg/s  |  %s  |  %s" % [
 		_player.linear_velocity.length(), rad_to_deg(_player.angular_velocity.length()),
 		brake_hint, capture_hint
 	]

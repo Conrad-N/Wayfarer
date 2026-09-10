@@ -54,3 +54,10 @@ decide something the docs did not cover.
   Empty propellant disables translation, roll jets, and braking without changing
   existing motion. The debug HUD shows low warnings at 10% and explicit empty
   warnings. Powered tools, oxygen, and ship refilling remain later work.
+- 2026-09-10 — The M1 debris field is a reusable scene with a fixed, clear layout
+  of eleven box props and the existing 4,200 kg hull. Equal-sized 20/100/1,000 kg
+  crates isolate the effect of mass. Debris starts at rest with zero damping and
+  debug mass labels, making player-caused motion easy to read and repeat.
+- 2026-09-10 — M1 generates convex collision for the existing hull at runtime and
+  preserves its imported transform and mass metadata. This exercises the current
+  asset now; the Blender `-convcol` pipeline change remains part of M2.

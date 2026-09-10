@@ -20,7 +20,7 @@ upside down without meaning to and have to think to fix it.
       up/down, roll. Mouse look rotates the body freely (no up vector, no clamping).
 - [x] Brake key: kills linear and angular velocity over about a second (suit RCS).
 - [x] Suit propellant and battery as numbers on a debug HUD.
-- [ ] A test scene: a big box room with a dozen rigid bodies of different masses
+- [x] A test scene: a big box room with a dozen rigid bodies of different masses
       (use `hull_segment_a` and primitives). Bumping into things transfers momentum.
 - [ ] Grapple tool: raycast, tether visual, reel in/out, pulls the lighter body.
 - [ ] Debug screenshot key F12 saves to `godot/build/screens/`.
@@ -37,7 +37,8 @@ the main scene boots headless. A windowed input exercise verified forward thrust
 coasting, roll, mouse look, Escape/click capture, and wall contact. The room lighting,
 control text, and rotated views were inspected in screenshots under
 `godot/build/screens/m1-movement-*.png` (ignored, generated locally).
-The full debris room and the five-minute movement-feel milestone remain unfinished.
+At this stage the debris room was still pending; the full five-minute
+movement-feel milestone remains unfinished.
 
 Brake progress (2026-09-10): hold X to counter drift and spin with limited suit
 thrust and torque; release to coast. Mouse look remains available. Eight new Jolt
@@ -57,6 +58,17 @@ partial tick. `./check.sh` passes 175 checks; the main scene boots headless.
 A windowed exercise verified live consumption and stopping with fuel, then used
 explicit low/empty test fixtures to inspect warnings and depletion behavior.
 Captures: `godot/build/screens/m1-supplies-*.png` (ignored).
+
+Debris room progress (2026-09-10): twelve loose bodies span 20 to 4,200 kg,
+including the generated hull with its imported mass and runtime convex collision.
+Equal-sized 20/100/1,000 kg crates near the spawn make mass effects easy to compare;
+debug labels identify every object's mass. All start at rest, clear of the suit,
+walls, and one another. Six new Jolt tests cover the layout, hull collision/mass,
+suit impacts, total linear momentum, and undamped drift/spin. `./check.sh` passes
+250 checks and the main scene boots headless. A windowed exercise bumped the
+20 kg crate, 1,000 kg crate, and hull from the same 2 m/s approach and inspected
+their different responses, labels, and the room layout. Captures:
+`godot/build/screens/m1-debris-*.png` (ignored).
 
 ## M2 — Cut
 
