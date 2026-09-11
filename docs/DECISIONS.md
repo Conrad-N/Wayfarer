@@ -316,3 +316,15 @@ decide something the docs did not cover.
   and depth writes disabled; the display draws after its frame. Each screen owns
   its material copy so fixed terminals retain normal world occlusion. The tablet
   keeps its existing viewport apps, camera-relative placement and pointer mapping.
+
+- 2026-09-11 — The wreck gyroscopic correction changes from a per-tick torque
+  to a per-tick rotation. The old correction (anti omega-cross-L torque in
+  `WreckBody._physics_process`) was needed because Jolt omits the gyroscopic
+  term, but applied as a straight-line step it inflated the angular momentum
+  magnitude by a chord error (~dt²·|ω×L|²/2 per tick), which scales with the
+  fourth power of spin: measured +23% momentum and +50% energy per 30 s at
+  ~3 rad/s. `WreckBody` now rotates L back about the mean spin axis (Heun
+  midpoint refinement) and writes angular velocity directly, making |L| exact
+  by construction. The fast-tumble stress test in
+  `tests/test_wreck_rotation.gd` holds to machine precision; slow-spin
+  precession behaviour is unchanged.

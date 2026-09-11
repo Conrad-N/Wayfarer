@@ -99,6 +99,15 @@ Measured 2026-09-11: it does gain energy. Over 1800 frames at ~3.1 rad/s:
 angular momentum magnitude +23.3%, rotational energy +50.7%. Committing the
 failing test as measurement, per the task; `wreck_body.gd` untouched.
 
+Fixed 2026-09-11 (Conrad asked for the fix after seeing the numbers). The old
+correction was a per-tick torque, a chord step along the arc, which inflated
+|L| by ~dt²·|ω×L|²/2 every tick; the effect scales with spin⁴, invisible at
+slow spin and violent at fast. `WreckBody` now rotates L back about the mean
+spin axis each tick (Heun midpoint refinement) and writes angular velocity
+directly, so |L| is exact by construction. Same stress test now: momentum
+magnitude +0.00005, energy +0.0007 over 1800 frames. The old slow-spin
+precession test still passes unchanged.
+
 **Why:** the wreck rotation code applies a small correction every frame
 (`godot/scripts/salvage/wreck_body.gd` around line 74). We want to know, not guess,
 whether that stays stable at high spin. **This task only measures. Do not fix

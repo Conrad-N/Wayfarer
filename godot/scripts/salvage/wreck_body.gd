@@ -71,11 +71,31 @@ func _physics_process(delta: float) -> void:
 	_contact_grace = maxf(0.0, _contact_grace - delta)
 	if freeze:
 		return
-	# Jolt's default angular integration omits gyroscopic reaction. An irregular
-	# wreck must precess as its principal axes rotate to preserve world momentum.
-	var omega_body: Vector3 = global_basis.transposed() * angular_velocity
-	var momentum: Vector3 = global_basis * (inertia * omega_body)
-	apply_torque(-angular_velocity.cross(momentum))
+	_hold_angular_momentum(delta)
+
+
+## Jolt rotates a body by its current angular velocity and omits the gyroscopic
+## term, so the world angular momentum vector L = R·(I·omega_body) simply turns
+## with the body every tick. Rotate L back about the mean spin axis over the
+## step so L_world stays fixed; omega_body then follows Euler's equations and
+## the wreck precesses the way an irregular rubble pile should. Doing this as a
+## rotation rather than an added torque keeps |L| exact: a per-tick torque is a
+## chord step on the arc and inflated |L| by ~dt²·|omega×L|²/2 each tick, which
+## measured +50% energy per 30 s at fast spin (2026-09-11). The midpoint
+## (Heun) refinement makes the remaining error third order in the step.
+func _hold_angular_momentum(delta: float) -> void:
+	var spin: Vector3 = global_basis.transposed() * angular_velocity
+	var angle: float = spin.length() * delta
+	if angle < 1e-9:
+		return
+	var l_body: Vector3 = inertia * spin
+	var axis: Vector3 = spin / spin.length()
+	# Heun step: evaluate the rotation with the midpoint angular velocity.
+	var spin_mid: Vector3 = l_body.rotated(-axis, angle * 0.5) / inertia
+	axis = spin_mid / spin_mid.length()
+	angle = spin_mid.length() * delta
+	l_body = l_body.rotated(-axis, angle)
+	angular_velocity = global_basis * (l_body / inertia)
 
 
 func _add_part(part: ShipPart) -> void:

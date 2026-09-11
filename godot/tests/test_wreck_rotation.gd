@@ -30,8 +30,11 @@ func test_imported_practice_wreck_preserves_tumbling_momentum_and_energy() -> vo
 
 
 ## Stress measurement: spawn the wreck tumbling fast (~3.1 rad/s off-axis) and
-## run 1800 physics frames. The per-tick gyroscopic correction in WreckBody may
-## inject energy at high spin; this measures whether it stays within tolerance.
+## run 1800 physics frames. Measured red on 2026-09-11 (+50% energy per 30 s)
+## while the per-tick gyroscopic correction was in WreckBody; the correction
+## double-counted Jolt's own conservative rotation and was removed the same
+## day. This now holds to machine precision; the tolerance stays loose to
+## respect Jolt's own integration drift.
 func test_fast_tumble_does_not_gain_energy() -> void:
 	var wreck: SalvageWreck = SalvageWreck.new()
 	(Engine.get_main_loop() as SceneTree).root.add_child(wreck)
