@@ -186,7 +186,10 @@ recovers a single file. Do not reset or force-push.
 
 Extra discipline for a smaller model:
 
-- One roadmap bullet per session. Read the tests for the area first, then the code.
+- Work from `docs/12-small-tasks.md`, not the roadmap. It overrides workflow rule 1
+  for local models. One task per session, in order; stop and report after each.
+- When in doubt, ask Conrad. Asking is always the right call for a local model.
+- Read the tests for the area first, then the code.
 - Run `./check.sh --quick` after every file you touch, not only before committing.
   One broken script fails the whole project with "Failed to compile depended scripts".
 - "Nonexistent function 'new' in base GDScript" means a `load()`/`preload()` path is
