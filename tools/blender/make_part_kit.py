@@ -1,4 +1,4 @@
-"""Generate the twelve-part M2 kit using the shared glTF conventions.
+"""Generate the fourteen-part M2 kit using the shared glTF conventions.
 
 Run from the repository root:
   blender -b -P tools/blender/make_part_kit.py -- --out godot/assets/models/parts
@@ -111,6 +111,13 @@ def hull_small(name):
     socket(body, "instrument", (0, -.6, .8), (0, 0, 1), "S", cut_point=(.42, -.6, .7))
 
 
+def hull_long(name):
+    body = build_hull_segment(name, 9.0, 2.0)
+    body["mass_kg"] = 6300.0
+    body["value_cr"] = 1350.0
+    return body
+
+
 def cap(name, nose):
     length = 1.0 if nose else .25
     body = revolved([(-length / 2, .8), (length / 2, .12 if nose else .8)])
@@ -174,6 +181,7 @@ def plating(name):
 BUILDERS = {
     "hull_segment_a": lambda n: build_hull_segment(n, 6.0, 2.0),
     "hull_segment_b": hull_small,
+    "hull_segment_c": hull_long,
     "cap_nose_a": lambda n: cap(n, True),
     "cap_tail_a": lambda n: cap(n, False),
     "tank_fuel_a": lambda n: tank(n, True),
@@ -182,6 +190,7 @@ BUILDERS = {
     "engine_ion_a": lambda n: engine(n, False),
     "radiator_panel_a": lambda n: radiator(n, 2.0, 1.0, 8),
     "radiator_panel_b": lambda n: radiator(n, 1.2, 1.6, 6),
+    "radiator_panel_c": lambda n: radiator(n, 3.0, 1.0, 12),
     "sensor_mast_a": mast,
     "plating_panel_a": plating,
 }

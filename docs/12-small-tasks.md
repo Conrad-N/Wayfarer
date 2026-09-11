@@ -47,7 +47,7 @@ No other files are touched.
 
 ## T2 — Add two hull variants to the part kit
 
-- [ ] Done
+- [x] Done
 
 **Why:** M6 wants a larger part kit. These two are copies of existing parts with
 different dimensions, so there is nothing to design.

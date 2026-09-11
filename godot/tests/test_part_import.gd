@@ -7,6 +7,7 @@ const PART := "res://assets/models/parts/hull_segment_a.glb"
 const KIT: Dictionary = {
 	"hull_segment_a": ["hull", Vector3(4, 4, 6)],
 	"hull_segment_b": ["hull", Vector3(1.6, 1.6, 2)],
+	"hull_segment_c": ["hull", Vector3(4, 4, 9)],
 	"cap_nose_a": ["cap", Vector3(1.6, 1.6, 1)],
 	"cap_tail_a": ["cap", Vector3(1.6, 1.6, .25)],
 	"tank_fuel_a": ["tank", Vector3(.84, .84, 1.5)],
@@ -15,6 +16,7 @@ const KIT: Dictionary = {
 	"engine_ion_a": ["engine", Vector3(1, 1, .8)],
 	"radiator_panel_a": ["radiator", Vector3(2, 1, .12)],
 	"radiator_panel_b": ["radiator", Vector3(1.2, 1.6, .12)],
+	"radiator_panel_c": ["radiator", Vector3(3, 1, .12)],
 	"sensor_mast_a": ["mast", Vector3(.65, .4, 2)],
 	"plating_panel_a": ["plating", Vector3(2, 1.8, .1)],
 }
@@ -70,7 +72,7 @@ func test_part_loads_with_sockets_and_meta() -> void:
 
 ## Every kit model retains physical metadata, small geometry, and convex collision.
 func test_whole_kit_imports_with_collision_and_physical_metadata() -> void:
-	check_eq(KIT.size(), 12, "the first kit has twelve parts")
+	check_eq(KIT.size(), 14, "the kit has fourteen parts")
 	var kinds: Dictionary = {}
 	for part_name: String in KIT:
 		var packed: PackedScene = load("res://assets/models/parts/%s.glb" % part_name)
@@ -115,7 +117,7 @@ func test_whole_kit_imports_with_collision_and_physical_metadata() -> void:
 			if size_code in ["S", "M", "L"]:
 				socket_name = socket_name.left(socket_name.length() - 2)
 			else:
-				check_eq(part_name, "hull_segment_a", "only original hull omits default M suffix")
+				check(part_name in ["hull_segment_a", "hull_segment_c"], "only the big hulls omit the default M suffix")
 			check(_find(root, "CUT_" + socket_name) is Node3D, "%s socket has a matching cut marker" % part_name)
 			var socket_pose: Transform3D = _relative_pose(marker, root)
 			check_near(socket_pose.basis.determinant(), 1.0, .0001, "%s socket keeps a unit right-handed basis" % part_name)
