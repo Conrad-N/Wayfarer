@@ -390,6 +390,20 @@ Verification: `./check.sh` passes **3,064 checks, zero failures**, with no scrip
 errors or node-leak warnings. The main scene boots headless cleanly. Tests cover
 free seated aim, terminal/tablet exits, preserved motion and harness-loss cleanup.
 
+### Tablet visibility revision
+
+- [x] Render the handheld display and frame over nearby world geometry.
+
+The tablet keeps its existing size, apps and pointer mapping. Fixed terminal
+materials retain normal depth testing. Visual comparison places a solid object
+between the camera and tablet: the ordinary depth-tested control is obscured,
+while all 589 sampled protected display pixels match the unobstructed view.
+Captures are under ignored `godot/build/screens/tablet-overlay-*.png`. Native
+pointer input still activates tablet controls through the occluding object.
+
+Verification: `./check.sh` passes **3,064 checks, zero failures**, without script
+errors or node-leak warnings. The main scene boots headless cleanly.
+
 ## M5 — Loop
 
 Goal: the whole job, once.

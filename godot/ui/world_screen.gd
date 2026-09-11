@@ -5,6 +5,12 @@ extends Node3D
 const SIZE_M: Vector2 = Vector2(1.6, 1.0)
 const PIXELS: Vector2 = Vector2(640.0, 400.0)
 
+@export var render_on_top: bool = false:
+	set(enabled):
+		render_on_top = enabled
+		if is_node_ready():
+			_update_render_order()
+
 var api: ShipApi
 var uses_ship_power: bool = true
 var panel: ShipPanel:
@@ -19,6 +25,10 @@ func _ready() -> void:
 	material.albedo_texture = get_viewport_texture()
 	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	($Display as MeshInstance3D).material_override = material
+	var frame: MeshInstance3D = $Frame
+	# The shared scene material must not change the ship's fixed terminals.
+	frame.material_override = frame.material_override.duplicate() as Material
+	_update_render_order()
 	panel.configure(api, _initial_app)
 	_update_power()
 
@@ -82,3 +92,13 @@ func get_viewport_texture() -> ViewportTexture:
 
 func _update_power() -> void:
 	($Display as MeshInstance3D).visible = is_available()
+
+
+func _update_render_order() -> void:
+	for part: String in ["Frame", "Display"]:
+		var material: BaseMaterial3D = (get_node(part) as MeshInstance3D).material_override as BaseMaterial3D
+		material.no_depth_test = render_on_top
+		material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED if render_on_top else BaseMaterial3D.DEPTH_DRAW_OPAQUE_ONLY
+		# Alpha rendering places even fully opaque tablet pixels after world geometry.
+		material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA if render_on_top else BaseMaterial3D.TRANSPARENCY_DISABLED
+		material.render_priority = (127 if part == "Display" else 126) if render_on_top else 0

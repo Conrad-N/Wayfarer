@@ -29,6 +29,7 @@ func configure(suit_player: Player, owner_ship: PlayerShip) -> void:
 	_seat_restraint.max_grip_torque_nm = 50000.0
 	tablet = preload("res://ui/world_screen.tscn").instantiate() as WorldScreen
 	tablet.name = "Tablet"
+	tablet.render_on_top = true
 	tablet.configure(ship.api, "SHIP", false)
 	_camera.add_child(tablet)
 	tablet.position = Vector3(0, -0.06, -1.0)

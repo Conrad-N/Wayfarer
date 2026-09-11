@@ -28,6 +28,9 @@ Terminals go dark when the ship has no power. The tablet does not.
 The same app scenes rendered onto a handheld quad in front of the camera, toggled
 with the tablet key. Works on EVA and inside the ship. It talks to `ShipApi` over
 "radio", which in the first version means no range limit inside the local scene.
+The handheld display and its frame render over world geometry, so nearby walls
+and equipment cannot obscure the interface. Fixed terminals retain ordinary
+world occlusion. Both keep the same viewport apps and pointer mapping.
 When you are away from the ship, this is how you fire the ship's RCS to hold
 station, open the cargo door, or call rescue.
 

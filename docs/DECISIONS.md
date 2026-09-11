@@ -310,3 +310,9 @@ decide something the docs did not cover.
   restores standing eye height and centres the EVA view while preserving motion.
   F retains its contextual behavior. Unexpected harness release also restores
   the seated camera state to EVA.
+
+- 2026-09-10 — Conrad requests that nearby geometry never cover the tablet GUI.
+  The handheld screen and frame render after world geometry with depth testing
+  and depth writes disabled; the display draws after its frame. Each screen owns
+  its material copy so fixed terminals retain normal world occlusion. The tablet
+  keeps its existing viewport apps, camera-relative placement and pointer mapping.
