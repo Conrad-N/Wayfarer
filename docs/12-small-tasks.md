@@ -93,7 +93,11 @@ def hull_long(name):
 
 ## T3 — Stress test: a fast-spinning wreck must not gain energy
 
-- [ ] Done
+- [x] Done
+
+Measured 2026-09-11: it does gain energy. Over 1800 frames at ~3.1 rad/s:
+angular momentum magnitude +23.3%, rotational energy +50.7%. Committing the
+failing test as measurement, per the task; `wreck_body.gd` untouched.
 
 **Why:** the wreck rotation code applies a small correction every frame
 (`godot/scripts/salvage/wreck_body.gd` around line 74). We want to know, not guess,
