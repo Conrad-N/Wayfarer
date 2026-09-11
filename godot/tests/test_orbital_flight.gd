@@ -102,6 +102,16 @@ func test_warp_eva_and_local_guards() -> void:
 	fixture.root.free()
 
 
+## Warp rate membership is judged with is_equal_approx (T5), so a control that
+## hands over a slightly-off float is accepted and a genuinely wrong rate is not.
+func test_warp_rate_accepts_rounding() -> void:
+	var fixture: Dictionary = _fixture()
+	var api: ShipApi = fixture.ship.api
+	check(api.set_warp(10.0 + 1e-9), "warp rate a hair above ten is accepted")
+	check(not api.set_warp(11.0), "unlisted warp rate is still rejected")
+	fixture.root.free()
+
+
 ## Local arrival preserves both momenta and physical departure fits a changed orbit.
 func test_arrival_departure_state_and_burn_continuity() -> void:
 	var fixture: Dictionary = _fixture()

@@ -154,7 +154,7 @@ scene, and the exact error text.
 
 ## T5 — Accept warp rates that are equal within rounding
 
-- [ ] Done
+- [x] Done
 
 **Why:** `godot/scripts/world/orbital_flight.gd` line ~343 compares floats with exact
 equality: `value not in [1.0, 10.0, 100.0, 1000.0]`. Works today, fragile later.

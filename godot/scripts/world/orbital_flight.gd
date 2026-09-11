@@ -340,7 +340,7 @@ func _command(command: String, args: Dictionary) -> Dictionary:
 	match command:
 		"set_warp":
 			var value: float = args.get("rate", NAN)
-			if not is_finite(value) or value not in [1.0, 10.0, 100.0, 1000.0]:
+			if not is_finite(value) or not _is_allowed_warp(value):
 				return _result(false, "SELECT 1, 10, 100 OR 1000× WARP")
 			if value > 1.0 and _seated() and _needs_inertial_interior():
 				return _result(false, "HOLD C TO UNLOAD SUIT WHEELS, THEN RELEASE AND LET THE HARNESS SETTLE BEFORE WARP")
@@ -618,3 +618,13 @@ func _needs_inertial_interior() -> bool:
 	# Even coasting collisions and walking must exchange momentum with a live hull.
 	# Only the strapped pilot permits analytic transit; free suits always use Jolt.
 	return not _seated()
+
+
+## Warp rates come from UI controls that may pass a value computed elsewhere
+## (a dial, a save file, a keybind macro), so membership of the allowed set is
+## judged with is_equal_approx instead of exact float equality.
+func _is_allowed_warp(value: float) -> bool:
+	for allowed: float in [1.0, 10.0, 100.0, 1000.0]:
+		if is_equal_approx(value, allowed):
+			return true
+	return false
