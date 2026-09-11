@@ -240,6 +240,11 @@ the walking target run away and topple the suit. Losing support or an excessive
 external load still releases the soles. Boots supply no artificial gravity or
 remote attraction.
 
+Seated camera aiming is also always free, using the same yaw/pitch limits as boot
+walking. V releases the pilot harness regardless of where the camera is aimed,
+closes any active screen, and restores standing eye height and centred EVA view
+without changing physical motion.
+
 ## Extraction: the core trade-off
 
 Your ship has a cargo door of a fixed size and a bay of a fixed volume. A part goes in

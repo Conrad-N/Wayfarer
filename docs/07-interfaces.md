@@ -136,6 +136,11 @@ the head/camera; while seated F opens an aimed terminal,
 or unstraps when looking away with Z held. Use that modifier
 to aim at other terminals while restrained. Closing a screen leaves the harness
 fastened.
+While seated, mouse movement always freely aims the camera (unrestricted yaw,
+±85° pitch) without holding Z or spending suit resources. V unstraps regardless
+of aim or an open terminal/tablet, closes screen input, restores standing eye
+height, and centres the view for EVA. Existing momentum is preserved. F retains
+its contextual seat/terminal behavior.
 The Tab tablet works in either state. A loose suit is affected by ship maneuvers;
 warp and event warp require the seat and remain unavailable near objects.
 

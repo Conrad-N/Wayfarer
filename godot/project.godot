@@ -156,6 +156,11 @@ freelook={
 "events": [Object(InputEventKey,"physical_keycode":90)]
 }
 
+unstrap={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"physical_keycode":86)]
+}
+
 [physics]
 
 3d/physics_engine="Jolt Physics"

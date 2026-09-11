@@ -375,6 +375,21 @@ errors or node-leak warnings; the main scene boots headless cleanly. Native B
 press/hold/release was exercised fullscreen, including alignment from sideways
 flight, automatic ship-floor contact, and a held release that stays detached.
 
+### Seat view and exit revision
+
+- [x] Always-on free seated mouse view without Z or resource cost.
+- [x] Dedicated V unstrap action, including while facing NAV or using either screen.
+
+Unstrapping closes screen input, restores standing camera height and centred EVA
+view, and preserves the suit's existing motion. Physical harness loss performs
+the same camera cleanup. Seated HUD hints advertise V and automatic free look.
+Fullscreen native mouse and V input verified free cabin view and exit from the
+tablet. Captures are under ignored `godot/build/screens/seat-view-*.png`.
+
+Verification: `./check.sh` passes **3,064 checks, zero failures**, with no script
+errors or node-leak warnings. The main scene boots headless cleanly. Tests cover
+free seated aim, terminal/tablet exits, preserved motion and harness-loss cleanup.
+
 ## M5 — Loop
 
 Goal: the whole job, once.

@@ -188,7 +188,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _update_head() -> void:
-	if surface_motion_active:
+	if has_automatic_freelook():
 		head_angles_rad -= _pending_look * mouse_sensitivity
 		head_angles_rad.x = wrapf(head_angles_rad.x, -PI, PI)
 		head_angles_rad.y = clampf(head_angles_rad.y, -SURFACE_PITCH_LIMIT_RAD, SURFACE_PITCH_LIMIT_RAD)
@@ -262,13 +262,18 @@ func centre_head() -> void:
 		camera.basis = Basis.IDENTITY
 
 
-## Hold EVA head-only aiming; walking already permits free camera aim.
+## Hold EVA head-only aiming; walking and seating already permit free camera aim.
 func set_freelooking(enabled: bool) -> void:
 	if _freelooking == enabled:
 		return
 	_freelooking = enabled
-	if not surface_motion_active:
+	if not has_automatic_freelook():
 		centre_head()
+
+
+## Report always-on free camera aiming supplied by boots or the pilot seat.
+func has_automatic_freelook() -> bool:
+	return surface_motion_active or bool(get_meta("seated", false))
 
 
 ## Report whether the EVA head-look modifier is held.
@@ -293,7 +298,7 @@ func set_motion_input(translation: Vector3, roll: float) -> void:
 func queue_mouse_look(relative: Vector2) -> void:
 	if not relative.is_finite():
 		return
-	if surface_motion_active or _freelooking:
+	if has_automatic_freelook() or _freelooking:
 		_pending_look += relative
 	elif not freeze and not bool(get_meta("seated", false)) and body_follow_enabled and not _braking and not _wheel_braking and not _wheel_dumping:
 		if not _body_follow:

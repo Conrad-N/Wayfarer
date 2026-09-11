@@ -170,6 +170,111 @@ func test_power_failure_releases_terminal_but_tablet_can_restore_power() -> void
 	(fixture.root as Node).free()
 
 
+## A strapped pilot can freely inspect the cabin without turning the suit or firing motors.
+func test_seated_mouse_look_is_free_and_keeps_physical_restraint() -> void:
+	var fixture: Dictionary = _fixture()
+	var player: Player = fixture.player
+	var ship: PlayerShip = fixture.ship
+	var interaction: ShipInteraction = fixture.interaction
+	player.position = PlayerShip.SEAT_POSITION
+	await _frames(3)
+	check(interaction.strap_in(), "pilot straps in for cabin look")
+	await _frames(3)
+	var relative: Transform3D = ship.global_transform.affine_inverse() * player.global_transform
+	var battery: float = player.suit.battery_energy_j
+	var propellant: float = player.suit.propellant_kg
+	player.queue_mouse_look(Vector2(-PI * 1.5 / player.mouse_sensitivity, -PI / player.mouse_sensitivity))
+	await _frames(12)
+	check_near(player.head_angles_rad.x, -PI * 0.5, 1e-5, "seated yaw permits a full three-quarter turn without Z")
+	check_near(player.head_angles_rad.y, deg_to_rad(85.0), 1e-5, "seated view can look almost straight up")
+	check(interaction.is_seated(), "looking around never releases the seat restraint")
+	var moved: Transform3D = ship.global_transform.affine_inverse() * player.global_transform
+	check(moved.origin.distance_to(relative.origin) < 0.01, "head aim does not move the restrained body")
+	check(moved.basis.z.distance_to(relative.basis.z) < 0.001, "head aim does not turn the restrained body")
+	check_near(player.angular_velocity.length(), 0.0, 0.001, "free seated aim produces no body spin")
+	check_eq(player.suit.battery_energy_j, battery, "seated camera aim uses no electrical charge")
+	check_eq(player.suit.propellant_kg, propellant, "seated camera aim uses no propellant")
+	var aimed: Vector2 = player.head_angles_rad
+	player.set_freelooking(true)
+	player.set_freelooking(false)
+	check_eq(player.head_angles_rad, aimed, "Z transitions preserve the seated view")
+	await _frames(6)
+	check_eq(player.head_angles_rad, aimed, "seated view stays aimed when the mouse stops")
+	interaction.unstrap()
+	check_eq(player.head_angles_rad, Vector2.ZERO, "unstrapping centres view on the physical suit")
+	check((player.get_node("Camera3D") as Camera3D).basis.is_equal_approx(Basis.IDENTITY), "unstrapped camera restores ordinary EVA orientation")
+	(fixture.root as Node).free()
+
+
+## V always releases the harness, even when looking at NAV or when a screen owns input.
+func test_dedicated_unstrap_key_overrides_nav_tablet_and_terminal() -> void:
+	var event: InputEventKey = InputEventKey.new()
+	event.physical_keycode = KEY_V
+	event.pressed = true
+	check(InputMap.event_is_action(event, "unstrap"), "physical V is the dedicated unstrap action")
+	for mode: String in ["looking at NAV", "terminal", "tablet"]:
+		var fixture: Dictionary = _fixture()
+		var player: Player = fixture.player
+		var ship: PlayerShip = fixture.ship
+		var interaction: ShipInteraction = fixture.interaction
+		var camera: Camera3D = player.get_node("Camera3D") as Camera3D
+		var standing_camera_position: Vector3 = camera.position
+		player.position = PlayerShip.SEAT_POSITION
+		await _frames(3)
+		check(interaction.strap_in(), mode + ": pilot straps in")
+		ship.apply_central_impulse(Vector3(2000, 0, 0))
+		ship.apply_torque_impulse(Vector3(0, 0, 1000))
+		await _frames(15)
+		if mode == "looking at NAV":
+			# The headless fixture disables live input while stepping physics.
+			# A pilot looking at NAV has normal suit input until a screen opens.
+			player.input_enabled = true
+			check(interaction._aimed_screen() == fixture.screen, "unstrap test actually faces the NAV terminal")
+		elif mode == "terminal":
+			check(interaction.open_terminal(fixture.screen), "terminal owns input before V")
+		else:
+			interaction.open_tablet()
+			check(interaction.active_screen == interaction.tablet, "tablet owns input before V")
+		var was_open: bool = interaction.is_open()
+		event.echo = true
+		interaction._input(event)
+		check(interaction.is_seated(), mode + ": key repeat cannot release the harness")
+		check_eq(interaction.is_open(), was_open, mode + ": key repeat leaves current UI alone")
+		event.echo = false
+		var velocity: Vector3 = player.linear_velocity
+		var spin: Vector3 = player.angular_velocity
+		check(velocity.length() > 0.1 and spin.length() > 0.001, mode + ": restrained pilot has real inherited motion")
+		interaction._input(event)
+		check(not interaction.is_seated() and not bool(player.get_meta("seated", true)), mode + ": V releases the physical restraint")
+		check(not interaction.is_open(), mode + ": V closes any screen before returning to EVA")
+		check(player.input_enabled and not player.freeze, mode + ": V restores live suit controls")
+		check(camera.position.is_equal_approx(standing_camera_position), mode + ": V restores standing eye height")
+		check(camera.basis.is_equal_approx(Basis.IDENTITY) and player.head_angles_rad == Vector2.ZERO, mode + ": V restores centred EVA view")
+		check_near(player.linear_velocity.distance_to(velocity), 0.0, 0.0001, mode + ": V preserves linear momentum")
+		check_near(player.angular_velocity.distance_to(spin), 0.0, 0.0001, mode + ": V preserves angular momentum")
+		interaction._input(event)
+		check(not interaction.is_seated() and not interaction.is_open(), mode + ": repeated V cannot reseat or reopen a screen")
+		(fixture.root as Node).free()
+
+
+## Losing the physical harness also restores the seated camera and screen ownership.
+func test_broken_harness_restores_eva_camera() -> void:
+	var fixture: Dictionary = _fixture()
+	var player: Player = fixture.player
+	var interaction: ShipInteraction = fixture.interaction
+	player.position = PlayerShip.SEAT_POSITION
+	await _frames(3)
+	check(interaction.strap_in(), "pilot seated before restraint loss")
+	interaction.open_tablet()
+	interaction._seat_restraint.release()
+	await _frames(3)
+	check(not player.has_automatic_freelook(), "lost harness clears forced seated view")
+	check(not interaction.is_open() and player.input_enabled, "lost harness returns screen input to suit")
+	check_near((player.get_node("Camera3D") as Camera3D).position.y, 0.55, 0.0001, "lost harness restores ordinary eye height")
+	check_eq(player.head_angles_rad, Vector2.ZERO, "lost harness centres view")
+	(fixture.root as Node).free()
+
+
 func _fixture() -> Dictionary:
 	var root: Node3D = Node3D.new()
 	(Engine.get_main_loop() as SceneTree).root.add_child(root)

@@ -10,6 +10,7 @@ var hint: String = "Tab tablet | F use terminal"
 var _camera: Camera3D
 var _standing_camera_position: Vector3
 var _seat_restraint: PhysicalGrip
+var _seat_pose_active: bool = false
 
 
 
@@ -65,6 +66,7 @@ func strap_in() -> bool:
 		player.global_transform = approach_pose
 		return false
 	_standing_camera_position = _camera.position
+	_seat_pose_active = true
 	_camera.position = Vector3(0, 0.35, 0)
 	player.centre_head()
 	for child_name: String in ["PhysicalGrip", "MagneticBoots"]:
@@ -86,8 +88,11 @@ func is_seated() -> bool:
 
 ## Unbuckle without changing the actual momentum solved by the seat constraint.
 func unstrap() -> void:
-	if is_seated():
+	if _seat_pose_active:
+		close_screen()
 		_camera.position = _standing_camera_position
+		player.centre_head()
+		_seat_pose_active = false
 	if is_instance_valid(_seat_restraint):
 		_seat_restraint.release()
 	if is_instance_valid(player):
@@ -128,13 +133,15 @@ func _begin_input(screen: WorldScreen) -> void:
 func _physics_process(_delta: float) -> void:
 	if not is_instance_valid(player):
 		return
+	if _seat_pose_active and not is_seated():
+		unstrap()
 	player.set_meta("seated", is_seated())
 	if is_open():
-		hint = "Esc / F close screen | Tab tablet" + (" | HARNESS SECURED" if is_seated() else " | UNRESTRAINED")
+		hint = "Esc / F close screen | Tab tablet" + (" | HARNESS SECURED | V unstrap" if is_seated() else " | UNRESTRAINED")
 		if not active_screen.is_available():
 			close_screen()
 	elif is_seated():
-		hint = "HARNESS SECURED | F use terminal" if _aimed_screen() != null else "HARNESS SECURED | F unstrap | Tab flight controls"
+		hint = "HARNESS SECURED | Mouse look | V unstrap | F use terminal | Tab tablet"
 	else:
 		var target: WorldScreen = _aimed_screen()
 		hint = "F strap into pilot seat | Tab tablet" if _aimed_seat() else ("F use %s terminal | Tab tablet" % target.panel.current_app if target != null else "Tab tablet | F use terminal / pilot seat")
@@ -142,6 +149,11 @@ func _physics_process(_delta: float) -> void:
 
 func _input(event: InputEvent) -> void:
 	if not is_instance_valid(player):
+		return
+	if is_seated() and event.is_action("unstrap"):
+		if event.is_pressed() and not event.is_echo():
+			unstrap()
+		get_viewport().set_input_as_handled()
 		return
 	if event.is_action_pressed("tablet") and not event.is_echo():
 		if active_screen == tablet:

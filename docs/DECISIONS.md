@@ -302,3 +302,11 @@ decide something the docs did not cover.
   Reject initial sole anchors whose spring load already consumes more than half
   the holding-force budget before charging engagement power. Held approaches
   wait for close sole alignment and low relative angular speed before latching.
+
+- 2026-09-10 — Conrad requests forced free look while seated and a dedicated exit
+  button. Seated mouse aim uses the boots' free camera mode (unrestricted yaw,
+  ±85° pitch), with no Z modifier or resource cost. V releases the harness even
+  while aimed at a terminal or using a terminal/tablet, closes screen input,
+  restores standing eye height and centres the EVA view while preserving motion.
+  F retains its contextual behavior. Unexpected harness release also restores
+  the seated camera state to EVA.
