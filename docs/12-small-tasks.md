@@ -22,7 +22,7 @@ Ground rules for every task here:
 
 ## T1 — Test that every input action used in code exists in the input map
 
-- [ ] Done
+- [x] Done
 
 **Why:** a typo in an action name fails silently in Godot. This test catches it.
 
