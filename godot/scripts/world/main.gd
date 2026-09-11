@@ -94,9 +94,10 @@ func _process(delta: float) -> void:
 		_player.linear_velocity.length(), rad_to_deg(_player.angular_velocity.length()),
 		brake_hint, capture_hint
 	]
-	_supplies.text = "PROPELLANT  %.3f kg / %.1f kg  |  BATTERY  %.1f Wh / %.0f Wh" % [
+	_supplies.text = "PROPELLANT  %.3f kg / %.1f kg  |  BATTERY  %.1f Wh / %.0f Wh  |  FPS %d" % [
 		_player.suit.propellant_kg, SuitResources.PROPELLANT_CAPACITY_KG,
-		_player.suit.battery_energy_j / 3600.0, SuitResources.BATTERY_CAPACITY_J / 3600.0
+		_player.suit.battery_energy_j / 3600.0, SuitResources.BATTERY_CAPACITY_J / 3600.0,
+		Engine.get_frames_per_second()
 	]
 	var warnings: PackedStringArray = []
 	if _player.suit.propellant_kg <= 0.0:

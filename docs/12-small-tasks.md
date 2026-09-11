@@ -186,7 +186,7 @@ condition and the new helper.
 
 ## T6 — Frame-rate line on the debug HUD
 
-- [ ] Done
+- [x] Done
 
 **Edit only:** `godot/scripts/world/main.gd`, the single line that sets
 `_supplies.text` (around line 97, the PROPELLANT / BATTERY readout). Append
