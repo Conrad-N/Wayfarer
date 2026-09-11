@@ -126,7 +126,7 @@ Conrad the exact numbers. Do not change `wreck_body.gd`.
 
 ## T4 — Test that every scene file loads headless and frees cleanly
 
-- [ ] Done
+- [x] Done
 
 **Edit only:** create `godot/tests/test_scenes_load.gd`.
 
