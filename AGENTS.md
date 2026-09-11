@@ -177,6 +177,28 @@ ticked, and any new decision is logged.
 Conrad is learning as he goes. Explain choices in a sentence or two of plain words,
 lead with the outcome, and avoid engine jargon in reports.
 
+## Working from a checkpoint (smaller or local models)
+
+Git tag `checkpoint-2026-09-11` is a known-good state: M0 to M4 done, 3064 checks
+green. If the tree gets confusing, `git diff checkpoint-2026-09-11 --stat` shows
+what changed since; `git stash` or `git checkout checkpoint-2026-09-11 -- <file>`
+recovers a single file. Do not reset or force-push.
+
+Extra discipline for a smaller model:
+
+- One roadmap bullet per session. Read the tests for the area first, then the code.
+- Run `./check.sh --quick` after every file you touch, not only before committing.
+  One broken script fails the whole project with "Failed to compile depended scripts".
+- "Nonexistent function 'new' in base GDScript" means a `load()`/`preload()` path is
+  wrong and returned null. Check the path before anything else.
+- The two hardest files are `godot/scripts/sim/orbital_world.gd` (the orbital core)
+  and `godot/scripts/world/orbital_flight.gd` (the orbital-to-local handoff). Read
+  them before editing anything that touches flight, warp, or encounters. In
+  `orbital_flight.gd` the `_approaching` and `_rcs_direction` resets are repeated in
+  several places; if you touch one, check them all.
+- Do not start a large refactor. If a file is too big to hold in your head, add a
+  small helper next to it rather than rewriting it.
+
 ## Machine notes
 
 Desktop: Ubuntu 24.04, Ryzen 5 7600, 32 GB RAM, RTX 5060 Ti 16 GB + RTX 3060 12 GB.

@@ -19,3 +19,10 @@ it here.
   salvaged parts using the same graph? Probably yes, later. Not before M6.
 - **Q8 resolved (2026-09-10).** Conrad approved magnetic boots, physical grips,
   a restrained pilot seat, and bounded suit reaction wheels before M5. See DECISIONS.
+- **Q9 Unstrapped warp (asked 2026-09-10, unanswered).** Conrad asked whether the
+  player may be left unstrapped during warp. Today `orbital_flight.gd` refuses warp
+  above 1x unless the player is seated, because under warp the interior is carried
+  by the orbital layer and a free-floating body would not be simulated honestly.
+  Options: (a) keep the rule; (b) also allow warp when the boots are latched, since
+  a latched player is rigid with the ship; (c) allow free-floating warp and freeze
+  the player relative to the ship, accepting the fudge. Leaning (b). Conrad decides.
