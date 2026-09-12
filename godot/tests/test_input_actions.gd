@@ -17,6 +17,10 @@ func test_input_actions_exist_in_map() -> void:
 	for name: String in action_names:
 		# Built-in ui_* actions exist in the InputMap from engine start.
 		check(InputMap.has_action(name), "action %s exists" % name)
+	# player.gd builds these names from a template, so the regex scan misses them.
+	for slot: int in range(1, 5):
+		var slot_action: String = "tool_slot_%d" % slot
+		check(InputMap.has_action(slot_action), "action %s exists" % slot_action)
 
 
 ## Recursively lists .gd files under [dir_path], appending paths to [out].

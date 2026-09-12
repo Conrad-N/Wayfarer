@@ -225,7 +225,7 @@ comment lines only.
 
 ## T8 — Input-action test: also check the four tool-slot actions
 
-- [ ] Done
+- [x] Done
 
 **Edit only:** `godot/tests/test_input_actions.gd`.
 
