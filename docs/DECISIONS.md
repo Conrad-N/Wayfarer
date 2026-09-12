@@ -328,3 +328,12 @@ decide something the docs did not cover.
   by construction. The fast-tumble stress test in
   `tests/test_wreck_rotation.gd` holds to machine precision; slow-spin
   precession behaviour is unchanged.
+
+- 2026-09-12 — Warp no longer requires the pilot seat (Q9). Conrad decided the
+  player may move freely inside the ship while time warp runs, and may not leave
+  it. Rationale: the ship coasts during warp (thrust is only applied in local mode
+  at 1x; rotation and burns cap warp at 10x), so the interior is a still room and
+  Jolt can simulate a free player against the frozen hull honestly. Airlock doors
+  refuse to move above 1x. Warp still drops to 1x near objects, and the local-mode
+  handoff must hand an unseated player the same velocity offset as the seated
+  pilot. Not yet implemented; assigned to GPT at the start of M5.
