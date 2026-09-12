@@ -7,6 +7,9 @@ box, report to Conrad in a few plain sentences, and **stop**. Conrad starts the 
 
 Ground rules for every task here:
 
+- When Conrad names a task, open this file and read that task's section before
+  doing anything else. Never work from memory of what a task said: a task you
+  remember but cannot find in this file does not exist.
 - Touch only the files the task names. If you believe another file must change,
   stop and ask Conrad instead of changing it.
 - Run `./check.sh --quick` after every edit. Run the full `./check.sh` before committing.
