@@ -198,6 +198,82 @@ saved under `godot/build/screens/`) shows the FPS value. Tell Conrad the screens
 
 ---
 
+## T7 — Fix a misleading comment in the wreck spin test
+
+- [ ] Done
+
+**Edit only:** `godot/tests/test_wreck_rotation.gd`, the comment block above
+`test_fast_tumble_does_not_gain_energy` (around lines 32–37).
+
+The comment says the old gyroscopic correction "double-counted Jolt's own
+conservative rotation and was removed the same day". That is wrong: it was
+**replaced**, not removed. Change those two lines so the block reads:
+
+```
+## Stress measurement: spawn the wreck tumbling fast (~3.1 rad/s off-axis) and
+## run 1800 physics frames. Measured red on 2026-09-11 (+50% energy per 30 s)
+## while the correction was a per-tick torque; that torque was replaced the
+## same day by a per-tick rotation of the momentum vector (see WreckBody).
+## This now holds to machine precision; the tolerance stays loose to
+## respect Jolt's own integration drift.
+```
+
+No code changes. **Done when:** `./check.sh --quick` is green and the diff is
+comment lines only.
+
+---
+
+## T8 — Input-action test: also check the four tool-slot actions
+
+- [ ] Done
+
+**Edit only:** `godot/tests/test_input_actions.gd`.
+
+**Why:** `player.gd:101` builds the action name from a template,
+`"tool_slot_%d" % (slot + 1)`, so the regex scan never sees `tool_slot_1..4`.
+They are defined in `project.godot` today, but a rename there would slip past
+the test.
+
+**Change:** inside `test_input_actions_exist_in_map`, after the existing `for`
+loop, add:
+
+```gdscript
+	# player.gd builds these names from a template, so the regex scan misses them.
+	for slot: int in range(1, 5):
+		var slot_action: String = "tool_slot_%d" % slot
+		check(InputMap.has_action(slot_action), "action %s exists" % slot_action)
+```
+
+Nothing else changes. **Done when:** `./check.sh --quick` is green and the
+test's check count went up by exactly 4.
+
+---
+
+## T9 — Style guard: narrow one pattern and drop a dead one
+
+- [ ] Done
+
+**Edit only:** `godot/tests/test_gdscript_idioms.gd`, two entries in the
+pattern list near the top of the file.
+
+1. Line 21, the `.instance()` entry. Its pattern `\\.instance\\s*\\(` matches *any*
+   method called `instance(`, which a legitimate Godot 4 script might have.
+   Replace the entry with one that only fires when the receiver looks like a
+   scene being spawned, i.e. `.instance()` with **no arguments**:
+   ```
+   [".instance() (use .instantiate())", "\\.instance\\s*\\(\\s*\\)", false],
+   ```
+2. Line 29, the "Godot 3 math helpers" entry. It includes `rad2rad`, which was
+   never a Godot function, so that alternative can never match. Remove
+   `\\brad2rad\\s*\\(|` from the pattern. Leave `rad2deg`, `deg2rad`,
+   `linear2db`, `db2linear` in place.
+
+Do not add new patterns. Do not change the comment/string blanking code.
+**Done when:** `./check.sh --quick` is green and `git diff` shows exactly two
+changed lines.
+
+---
+
 ## Not for the local model (leave for GPT)
 
 Docking, market, insurance, save/load, the derelict generator, anything in the
