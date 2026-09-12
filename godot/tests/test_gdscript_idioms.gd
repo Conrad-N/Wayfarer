@@ -18,7 +18,7 @@ func _patterns() -> Array[Dictionary]:
 	var entries: Array[Dictionary] = []
 	var defs: Array = [
 		["yield( (Godot 3 coroutine)", "\\byield\\s*\\(", false],
-		[".instance() (use .instantiate())", "\\.instance\\s*\\(", false],
+		[".instance() (use .instantiate())", "\\.instance\\s*\\(\\s*\\)", false],
 		["KinematicBody (use CharacterBody/RigidBody3D)", "\\bKinematicBody", false],
 		["RigidBody bare (use RigidBody3D)", "\\bRigidBody\\b", false],
 		["CollisionShape bare (use CollisionShape3D)", "\\bCollisionShape\\b", false],
@@ -26,7 +26,7 @@ func _patterns() -> Array[Dictionary]:
 		["bare export var (use @export var)", "\\bexport var\\b", true],
 		["bare onready var (use @onready var)", "\\bonready var\\b", true],
 		["bare export() (use @export)", "\\bexport\\s*\\(", true],
-		["Godot 3 math helpers", "\\brad2deg\\s*\\(|\\brad2rad\\s*\\(|\\bdeg2rad\\s*\\(|\\blinear2db\\s*\\(|\\bdb2linear\\s*\\(", false],
+		["Godot 3 math helpers", "\\brad2deg\\s*\\(|\\bdeg2rad\\s*\\(|\\blinear2db\\s*\\(|\\bdb2linear\\s*\\(", false],
 		["connect(\"s\", self, \"m\") (Godot 3 form)", "\\bconnect\\s*\\(\\s*\"[^\"]*\"\\s*,\\s*self\\s*,", false],
 	]
 	for def: Array in defs:

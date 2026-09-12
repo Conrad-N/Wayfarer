@@ -251,7 +251,7 @@ test's check count went up by exactly 4.
 
 ## T9 — Style guard: narrow one pattern and drop a dead one
 
-- [ ] Done
+- [x] Done
 
 **Edit only:** `godot/tests/test_gdscript_idioms.gd`, two entries in the
 pattern list near the top of the file.
