@@ -200,7 +200,7 @@ saved under `godot/build/screens/`) shows the FPS value. Tell Conrad the screens
 
 ## T7 — Fix a misleading comment in the wreck spin test
 
-- [ ] Done
+- [x] Done
 
 **Edit only:** `godot/tests/test_wreck_rotation.gd`, the comment block above
 `test_fast_tumble_does_not_gain_energy` (around lines 32–37).
