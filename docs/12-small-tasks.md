@@ -274,6 +274,100 @@ changed lines.
 
 ---
 
+## T10 — New part family: lattice truss segments (three lengths)
+
+- [ ] Done
+
+**Why:** M6 wants the kit at 30+ parts with parametric generators. T2 reused
+existing generators with new numbers. This task adds a generator that does not
+exist yet: an open lattice truss (four corner rails, end frames, diagonal
+braces). It is a new `part_kind`, so the tests that list kinds grow by one.
+
+**Edit only:** `tools/blender/make_part_kit.py`, `godot/tests/test_part_import.gd`,
+`godot/tests/test_part_catalog.gd`.
+**Generated output:** three new `.glb` files under `godot/assets/models/parts/`
+plus their `.import` sidecars (Godot writes those when `./check.sh` runs).
+Do not touch `tools/blender/make_part.py` or any game script.
+
+**Parts, exact numbers (Blender axes: X = width, Y = length/forward, Z = height):**
+
+| name | length (Y) | cross-section (X × Z) | mass_kg | value_cr |
+|---|---|---|---|---|
+| `truss_segment_a` | 2.0 m | 1.0 × 1.0 m | 120.0 | 180.0 |
+| `truss_segment_b` | 4.0 m | 1.0 × 1.0 m | 240.0 | 360.0 |
+| `truss_segment_c` | 6.0 m | 1.0 × 1.0 m | 360.0 | 540.0 |
+
+All three: `part_kind` `"truss"`, material `"aluminium"`, colour `ALUMINIUM`,
+`thickness_mm` 5.0, `volume_m3` = 1.0 × 1.0 × length (the envelope, same idea
+as the radiator).
+
+**Geometry, built only from the existing `box()` and `join()` helpers:**
+
+1. **Four rails.** Boxes of size `(0.10, length, 0.10)` centred at
+   `(±0.45, 0, ±0.45)`. Their outer faces sit exactly on ±0.5, which is what
+   gives the part its bounds. Nothing else may reach further out than the rails.
+2. **Two end frames.** At each end (`y = ±(length/2 − 0.05)`), four boxes of
+   thickness 0.10 closing the square between the rails: two along X
+   (size `(0.80, 0.10, 0.10)` at `z = ±0.45`) and two along Z
+   (size `(0.10, 0.10, 0.80)` at `x = ±0.45`).
+3. **Diagonal braces.** Divide the length into 1.0 m bays (2, 4 or 6 bays).
+   In every bay, put one diagonal on each of the four faces, alternating
+   direction from bay to bay so the pattern zig-zags. A diagonal is a bar of
+   thickness 0.08 m running between two points. For a side face at `x = ±0.45`,
+   the endpoints are `(x, bay_start + 0.10, −0.40)` and `(x, bay_end − 0.10, +0.40)`
+   (or mirrored in Z on the alternate bay). Top and bottom faces are the same
+   with X and Z swapped. The 0.10 and 0.40 insets are there so the rotated
+   bar's corners stay inside the ±0.5 envelope; do not enlarge them.
+
+   Write a new helper for this, `bar(start, end, thickness)`, next to `box()`.
+   It should make a box of size `(thickness, distance, thickness)`, rotate it so
+   its local +Y points from `start` to `end`, move it to the midpoint, and apply
+   the transform. Hint: `socket()` already turns a direction into an Euler
+   rotation with `Vector((0, 1, 0)).rotation_difference(direction).to_euler()`;
+   set that on `body.rotation_euler`, set `body.location`, then call
+   `bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)`.
+   Test `bar()` on its own first: `bar((0, 0, 0), (0, 2, 0), 0.1)` must give the
+   same shape as `box((0.1, 2, 0.1))`, and `bar((0, 0, 0), (0, 0, 2), 0.1)` must
+   stand upright along Z.
+4. **Join** everything into one mesh and `finish()` it.
+5. **Sockets:** `fore` at `(0, length/2, 0)` facing `(0, 1, 0)` and `aft` at
+   `(0, −length/2, 0)` facing `(0, −1, 0)`, default size M. Put the cut points on
+   the top-starboard rail, not in the empty middle: `cut_point=(.45, ±(length/2 − .35), .45)`.
+
+**Triangle budget:** the import test refuses parts of 2000 triangles or more.
+Each bevelled box is 44 triangles. The 6 m truss has 4 rails + 8 frame bars +
+24 diagonals = 36 boxes ≈ 1584 triangles, so it fits, but only just. Do not add
+intermediate frames or extra bars. If a part still comes out over budget, drop
+the top and bottom diagonals and keep the side ones.
+
+**Register** in `BUILDERS` as `"truss_segment_a": lambda n: truss(n, 2.0)` and
+so on, next to the radiator entries. Change the docstring's "fourteen-part" to
+"seventeen-part".
+
+**Steps:**
+1. Write `bar()` and `truss(name, length)`; add the three `BUILDERS` entries.
+2. Regenerate: `blender -b -P tools/blender/make_part_kit.py -- --out godot/assets/models/parts`
+   (the same command T2 used; it rewrites every part, and the existing ones must
+   come out byte-identical apart from the three new files).
+3. In `test_part_import.gd`: add to `KIT`
+   `"truss_segment_a": ["truss", Vector3(1, 1, 2)]`,
+   `"truss_segment_b": ["truss", Vector3(1, 1, 4)]`,
+   `"truss_segment_c": ["truss", Vector3(1, 1, 6)]`
+   (Blender Y becomes Godot Z, so length is the last number). Change the
+   kit-size check from 14 to 17 and its message to "seventeen". Change the
+   kinds check from 7 to 8 and add "truss" to its message.
+4. In `test_part_catalog.gd`: add `"truss"` to `KNOWN_KINDS`; change the count
+   from 14 to 17 and its message to "seventeen".
+5. `./check.sh` (the full one, it runs the import).
+
+**Done when:** `./check.sh` is green with 17 kit parts, the three `.glb` files
+and their `.import` sidecars are committed, and `git status` shows no changes to
+the other fourteen `.glb` files. If the bounds check fails for a truss, the
+diagonal insets are wrong; fix the geometry, do not loosen the test. Do not
+delete or rename any existing part. Commit and stop.
+
+---
+
 ## Not for the local model (leave for GPT)
 
 Docking, market, insurance, save/load, the derelict generator, anything in the
