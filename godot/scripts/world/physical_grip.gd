@@ -5,6 +5,9 @@ extends Node3D
 
 signal attachment_changed()
 
+## Every grip joins this group so frame handoffs can rebase the overload estimate.
+const FRAME_GROUP: StringName = &"physical_grips"
+
 @export var max_reach_m: float = 2.0
 @export var max_catch_speed_mps: float = 3.0
 @export var max_grip_force_n: float = 2500.0
@@ -32,6 +35,7 @@ func configure(player: RigidBody3D, camera: Camera3D = null) -> void:
 	_player = player
 	_camera = camera
 	process_physics_priority = -20
+	add_to_group(FRAME_GROUP)
 
 
 ## Attempt a handhold on the first solid surface within arm's reach of the camera.
@@ -108,6 +112,14 @@ func release() -> void:
 	attachment_changed.emit()
 
 
+## Forget the last measured suit motion. A reference-frame handoff adds the same
+## velocity to suit and carrier at once; that bookkeeping jump is not a load.
+func rebase_motion() -> void:
+	if is_instance_valid(_player):
+		_last_velocity = _player.linear_velocity
+		_last_spin = _player.angular_velocity
+
+
 ## Report whether the grip currently has a live physical carrier.
 func is_attached() -> bool:
 	return is_instance_valid(_target) and (_rebuilding or is_instance_valid(_joint))
@@ -158,6 +170,8 @@ func _physics_process(delta: float) -> void:
 	_last_spin = _player.angular_velocity
 	var error: float = anchor_position().distance_to(_player.to_global(_player_anchor))
 	if error > 0.3 or (_settle_seconds <= 0.0 and (force > max_grip_force_n or torque > max_grip_torque_nm)):
+		DebugLog.event("grip " + name, "let go of %s: anchor error %.3f m, force %.0f N (max %.0f), torque %.0f N m (max %.0f)"
+			% [_target.name, error, force, max_grip_force_n, torque, max_grip_torque_nm])
 		release()
 		status = "GRIP LOST: LOAD TOO HIGH"
 

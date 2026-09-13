@@ -10,6 +10,10 @@ if ! command -v "$GODOT" >/dev/null; then
   echo "godot not found on PATH. See AGENTS.md > Setup." >&2
   exit 2
 fi
+# Headless runs get their own user:// so they never rotate away the real game's
+# logs and state dumps (~/.local/share/godot/app_userdata/Wayfarer).
+export XDG_DATA_HOME="${TMPDIR:-/tmp}/wayfarer-check/share"
+mkdir -p "$XDG_DATA_HOME"
 if [[ "${1:-}" != "--quick" ]]; then
   echo "== import"
   "$GODOT" --headless --path godot --import >/dev/null 2>godot-import.log || { cat godot-import.log; exit 1; }

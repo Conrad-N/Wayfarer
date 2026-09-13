@@ -22,6 +22,8 @@ var _interaction: ShipInteraction
 var _grip: PhysicalGrip
 var _boots: MagneticBoots
 var _flight: OrbitalFlight
+var _dump: DebugDump
+var _logged_states: Dictionary = {}
 
 var _screenshot_notice_seconds: float = 0.0
 
@@ -50,6 +52,8 @@ func _ready() -> void:
 		add_child(_flight)
 		_flight.configure(get_node("/root/Sim") as OrbitalSession, _ship, _player, _wreck, _hazards)
 		print("Wayfarer M4: orbital flight. F terminal / Tab tablet / PLAN transfer.")
+	_install_debug_dump()
+	if not salvage_practice:
 		return
 	var wall: Color = Color(0.12, 0.16, 0.20)
 	var deck: Color = Color(0.22, 0.26, 0.29)
@@ -116,7 +120,12 @@ func _process(delta: float) -> void:
 	_grapple_status.text += "\n" + _grip.status + " | " + _boots.status
 	_supplies.text += " | WHEELS %.0f%%" % (_player.attitude.utilization() * 100.0)
 	if _player.attitude.utilization() >= 0.98:
-		_supply_warning.text += " | WHEELS FULL: C dumps into body / Alt unloads with jets"
+		# Both unloading paths spin the wheels down with the suit battery.
+		if _player.suit.battery_energy_j > 0.0:
+			_supply_warning.text += " | WHEELS FULL: C dumps into body" + (" / Alt unloads with jets" if _player.suit.propellant_kg > 0.0 else "")
+		else:
+			_supply_warning.text += " | WHEELS FULL: suit battery empty, cannot unload"
+	_log_state_changes()
 	_target_status.text = _interaction.hint + "\n" + _player.salvage_tools.target_readout
 	var in_ship: Vector3 = _ship.to_local(_player.global_position)
 	if in_ship.z < -1.8 and in_ship.z > -12.0 and absf(in_ship.x) < 4.0 and absf(in_ship.y) < 3.0:
@@ -134,6 +143,89 @@ func _process(delta: float) -> void:
 			if _wreck.bodies.is_empty():
 				_salvage_status.text = "%s / %.1f km | %.1f m/s relative | %.0f× time" % [str(flight.target.name), float(flight.target.range_m) / 1000.0, float(flight.target.relative_speed_mps), float(flight.warp)]
 
+
+
+## F11 (or any logged anomaly) writes the whole play state to user://debug/.
+func _install_debug_dump() -> void:
+	_dump = DebugDump.new()
+	_dump.name = "DebugDump"
+	add_child(_dump)
+	_dump.dump_finished.connect(_on_dump_finished)
+	_dump.add_section("player", _debug_player_state)
+	_dump.add_section("seat", _debug_seat_state)
+	_dump.add_section("flight", _debug_flight_state)
+	_dump.add_section("ship", func() -> Dictionary: return _ship.api.get_telemetry() if is_instance_valid(_ship) else {})
+
+
+func _debug_player_state() -> Dictionary:
+	var in_ship: Transform3D = _ship.global_transform.affine_inverse() * _player.global_transform if is_instance_valid(_ship) else _player.global_transform
+	var state: Dictionary = {
+		"position_in_ship_m": in_ship.origin,
+		"velocity_mps": _player.linear_velocity,
+		"velocity_relative_to_ship_mps": _player.linear_velocity - _ship.linear_velocity if is_instance_valid(_ship) else _player.linear_velocity,
+		"angular_velocity_radps": _player.angular_velocity,
+		"wheel_momentum_nms": _player.attitude.momentum_body,
+		"wheel_limit_nms": SuitAttitude.MOMENTUM_LIMIT_NMS,
+		"wheel_utilization": _player.attitude.utilization(),
+		"battery_j": _player.suit.battery_energy_j,
+		"propellant_kg": _player.suit.propellant_kg,
+		"input_enabled": _player.input_enabled,
+		"mouse_captured": Input.mouse_mode == Input.MOUSE_MODE_CAPTURED,
+		"seated_meta": bool(_player.get_meta("seated", false)),
+		"boots_walking": _player.surface_motion_active,
+		"wheel_dumping": _player.is_wheel_dumping(),
+		"freeze": _player.freeze,
+		"grapple_attached": _player.grapple.is_attached(),
+	}
+	if is_instance_valid(_grip):
+		state["grip_attached"] = _grip.is_attached()
+		state["grip_target"] = str(_grip.target_body().name) if _grip.is_attached() and _grip.target_body() != null else ""
+	if is_instance_valid(_boots):
+		state["boots_attached"] = _boots.is_attached()
+		state["boots_armed"] = _boots.is_armed()
+	return state
+
+
+func _debug_seat_state() -> Dictionary:
+	if not is_instance_valid(_interaction):
+		return {}
+	return {
+		"seated": _interaction.is_seated(),
+		"seat_pose_active": _interaction._seat_pose_active,
+		"screen_open": _interaction.is_open(),
+		"active_screen": str(_interaction.active_screen.name) if _interaction.is_open() else "",
+		"hint": _interaction.hint,
+		"seat_within_reach": _interaction._seat_within_reach(),
+		"aimed_seat": _interaction._aimed_seat(),
+	}
+
+
+func _debug_flight_state() -> Dictionary:
+	if not is_instance_valid(_flight) or _flight.session == null or _flight.session.world == null:
+		return {"present": false}
+	return {
+		"present": true,
+		"enabled": _flight.enabled,
+		"ship_is_local": _flight.ship_is_local,
+		"reference_id": _flight.reference_id,
+		"requested_warp": _flight.requested_warp,
+		"pending_warp": _flight._pending_warp,
+		"dump_settle_s": _flight._suit_dump_settle_s,
+		"world_rate": _flight.session.world.rate,
+		"world_time_s": _flight.session.world.time,
+		"aboard": _flight.is_aboard(),
+		"needs_inertial_interior": _flight._needs_inertial_interior(),
+		"ship_freeze": _ship.freeze,
+		"ship_collision_layer": _ship.collision_layer,
+		"sun_direction": -(get_node("DirectionalLight3D") as DirectionalLight3D).global_basis.z if has_node("DirectionalLight3D") else Vector3.ZERO,
+	}
+
+
+func _on_dump_finished(path: String, error: Error) -> void:
+	_screenshot_status.text = "Saved state dump: " + path.get_file() if error == OK else "State dump failed: " + error_string(error)
+	_screenshot_status.modulate = Color(0.4, 0.85, 0.95) if error == OK else Color(1, 0.35, 0.25)
+	_screenshot_notice_seconds = 4.0
+	_screenshot_status.visible = true
 
 
 func _on_capture_started() -> void:
@@ -211,3 +303,19 @@ func _build_contacts() -> void:
 	contacts.name = "SuitContacts"
 	_player.add_child(contacts)
 	contacts.configure(_player, _grip, _boots)
+
+
+## Record flips of what the HUD shows, so an F11 dump says when each one happened.
+func _log_state_changes() -> void:
+	var telemetry: Dictionary = _ship.api.get_telemetry()
+	var states: Dictionary = {
+		"ship power": bool(telemetry.power_available),
+		"suit battery empty": _player.suit.battery_energy_j <= 0.0,
+		"suit wheels full": _player.attitude.utilization() >= 0.98,
+		"seated": _interaction.is_seated(),
+	}
+	for key: String in states:
+		if _logged_states.has(key) and _logged_states[key] != states[key]:
+			DebugLog.event("state", "%s -> %s (ship battery %.0f J, power system health %.2f, suit battery %.0f J)" % [
+				key, states[key], float(telemetry.battery_energy_j), float(telemetry.systems.power.health), _player.suit.battery_energy_j])
+		_logged_states[key] = states[key]

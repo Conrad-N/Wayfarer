@@ -144,6 +144,7 @@ func _physics_process(_delta: float) -> void:
 	if not is_instance_valid(player):
 		return
 	if _seat_pose_active and not is_seated():
+		DebugLog.anomaly("seat", "harness let go without V (%s)" % _seat_restraint.status)
 		unstrap(false)
 	player.set_meta("seated", is_seated())
 	if is_open():
@@ -191,9 +192,9 @@ func _input(event: InputEvent) -> void:
 			var hit: Variant = plane.intersects_ray(origin, direction)
 			if hit is Vector3:
 				active_screen.forward_input(event, hit)
-		elif not event.is_action_pressed("debug_screenshot"):
+		elif not _is_debug_key(event):
 			active_screen.forward_input(event, active_screen.global_position)
-		if not event.is_action_pressed("debug_screenshot"):
+		if not _is_debug_key(event):
 			get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("interact") and not event.is_echo():
 		if is_seated():
@@ -233,6 +234,10 @@ func _pose_is_clear(pose: Transform3D) -> bool:
 	query.exclude = [player.get_rid()]
 	query.collision_mask = player.collision_mask
 	return player.get_world_3d().direct_space_state.intersect_shape(query, 1).is_empty()
+
+
+func _is_debug_key(event: InputEvent) -> bool:
+	return event.is_action_pressed("debug_screenshot") or event.is_action_pressed("debug_dump")
 
 
 func _aimed_seat() -> bool:

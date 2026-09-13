@@ -104,6 +104,36 @@ func test_warp_request_unloads_suit_wheels_automatically() -> void:
 	main.free()
 
 
+## Arriving near a wreck hands suit and hull their real speed in one step. The
+## harness must not read that jump as a crash, and physics must keep the speed.
+func test_seated_arrival_keeps_the_harness() -> void:
+	for speed: float in [300.0, 1500.0]:
+		var main: Node3D = await _main()
+		var player: Player = main.get_node("Player") as Player
+		var ship: PlayerShip = main.get_node("PlayerShip") as PlayerShip
+		var interaction: ShipInteraction = main.get_node("ShipInteraction") as ShipInteraction
+		var flight: OrbitalFlight = main.get_node("OrbitalFlight") as OrbitalFlight
+		var world: OrbitalWorld = flight.session.world
+		player.global_transform = ship.global_transform * Transform3D(Basis(Vector3.UP, PI / 2.0), PlayerShip.SEAT_POSITION)
+		await _frames(3)
+		check(interaction.strap_in(), "pilot straps in before the arrival")
+		await _frames(10)
+		var wreck_state: Dictionary = flight.session.object_state("kestrel", world.time)
+		var parent: Dictionary = world.system.body_state_in_root(world.central_body_id, world.time)
+		var arrival_position: SimVector = SimVector.add(wreck_state.position, SimVector.new(LocalOrbitFrame.LOCAL_RADIUS_M + speed * 0.1, 0, 0))
+		var arrival_velocity: SimVector = SimVector.add(wreck_state.velocity, SimVector.new(-speed, 0, 0))
+		world.replace_state(SimVector.sub(arrival_position, parent.position), SimVector.sub(arrival_velocity, parent.velocity))
+		for step: int in 60:
+			await _frames(1)
+			if flight.reference_id == "kestrel":
+				break
+		check(flight.reference_id == "kestrel" and flight.ship_is_local, "ship arrives near the wreck at %.0f m/s" % speed)
+		await _frames(10)
+		check(interaction.is_seated(), "harness holds through the arrival at %.0f m/s" % speed)
+		check(absf(ship.linear_velocity.length() - speed) < 5.0, "physics keeps the full %.0f m/s closing speed" % speed)
+		main.free()
+
+
 func _main() -> Node3D:
 	var main: Node3D = preload("res://scenes/main.tscn").instantiate() as Node3D
 	(main.get_node("Player") as Player).input_enabled = false

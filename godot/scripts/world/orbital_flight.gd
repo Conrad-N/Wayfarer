@@ -254,6 +254,7 @@ func _enter_encounter(id: String) -> void:
 		_make_station()
 	_enter_local_ship()
 	ship.api.set_cargo_message("ARRIVED NEAR " + str(session.objects[id].name).to_upper())
+	DebugLog.event("flight", "entered %s near %s at %.1f m/s" % [str(session.objects[id].kind), id, ship.linear_velocity.length()])
 
 
 func _enter_local_ship() -> void:
@@ -268,6 +269,8 @@ func _enter_local_ship() -> void:
 	ship.linear_velocity = frame.to_local_velocity(state.velocity)
 	var simulation_basis: Basis = ship.global_basis * LocalOrbitFrame.GODOT_TO_SIM_BODY.transposed()
 	ship.angular_velocity = simulation_basis * LocalOrbitFrame.native(session.world.angular_vel)
+	_rebase_grips()
+	DebugLog.event("flight", "ship physics on (reference %s)" % reference_id)
 
 
 func _leave_local_ship() -> void:
@@ -288,6 +291,14 @@ func _leave_local_ship() -> void:
 	ship.collision_mask = ship.collision_layer
 	_approaching = false
 	_rcs_direction = Vector3.ZERO
+	_rebase_grips()
+	DebugLog.event("flight", "ship physics off (reference %s)" % reference_id)
+
+
+## Frame handoffs change suit and carrier velocity together. Tell every grip so
+## its overload estimate does not read the bookkeeping jump as a crushing load.
+func _rebase_grips() -> void:
+	get_tree().call_group(PhysicalGrip.FRAME_GROUP, "rebase_motion")
 
 
 func _leave_encounter() -> void:

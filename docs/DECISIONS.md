@@ -375,3 +375,21 @@ decide something the docs did not cover.
   the pending rate meanwhile. The only remaining refusals are not seated / not
   aboard / parked near an object, and holding a handhold, boots or the grapple,
   which the ship cannot release for the pilot.
+
+- 2026-09-13 — Arrival ejected the seated pilot (Conrad's Kestrel incident).
+  Entering an object's 10 km bubble switches the ship to Jolt and adds the real
+  closing speed to suit and hull in the same frame. `PhysicalGrip` estimates load
+  from the suit's velocity change per frame, so it read that bookkeeping jump as
+  a multi-MN crash and let go. Every grip now joins `PhysicalGrip.FRAME_GROUP`,
+  and `OrbitalFlight` calls `rebase_motion()` on the group after each handoff
+  (`_enter_local_ship`, `_leave_local_ship`). Separately, Jolt's default 500 m/s
+  speed cap silently took up to kilometres per second off arrivals; the project
+  now sets `jolt_physics_3d/limits/max_linear_velocity` to 20000 m/s. With the
+  pilot out of the seat, the intercept course then carried the ship through the
+  wreck at ~800 m/s: one hit zeroes the power system (screens dark), the ship
+  tumbles, and the suit drains its battery fighting the spin, with no recharge.
+  That crash is still possible when strapped in; there is no collision warning.
+  Debug tooling added: `DebugLog` (event ring buffer, `EVENT`/`ANOMALY` lines in
+  the game log) and `DebugDump` (F11 or any anomaly writes a JSON state dump to
+  `user://debug`); `check.sh` isolates `XDG_DATA_HOME` so test runs no longer
+  rotate the real game's logs out; the game keeps 20 logs.
