@@ -356,8 +356,9 @@ decide something the docs did not cover.
   same day at Conrad's request; the harness catch speed moved with it); otherwise an aimed seat shows a
   "move closer and slow down" hint. Before, the prompt fired from the 2.5 m aim
   ray while the gate was 1.5 m, so F looked dead. (2) A deliberate unstrap stands
-  the pilot at `PlayerShip.SEAT_EXIT_POSITION` (0.35, 0, 1.0), the clear centre
-  passage past the seat back, keeping their facing and solved velocity, after a
+  the pilot at `PlayerShip.SEAT_EXIT_POSITION` (1.0, 0, 1.0), a full step behind
+  the seat back in the clear centre passage (moved out from 0.35 the same day:
+  beside the backrest the step-out was too subtle to notice), keeping their facing and solved velocity, after a
   capsule overlap check; a harness that simply broke leaves them in place. The
   seated capsule overlaps the harness bars by a few centimetres, which is what
   made climbing out finicky. (3) The `wheel_dump` action (C) now reaches the suit

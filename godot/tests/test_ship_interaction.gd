@@ -315,6 +315,8 @@ func test_unstrap_steps_out_beside_the_seat() -> void:
 	await _frames(10)
 	check(player.linear_velocity.length() < 0.01 and player.angular_velocity.length() < 0.01, "exit spot is clear: nothing shoves the freed pilot")
 	check(player.global_position.distance_to(exit_point) < 0.05, "freed pilot stays where they stood up")
+	check_eq(interaction.hint, ShipInteraction.SEAT_READY_HINT, "standing behind the seat, the pilot is offered F again")
+	check(interaction.strap_in(), "the seat can be entered from behind, straight from the exit spot")
 	(fixture.root as Node).free()
 
 
