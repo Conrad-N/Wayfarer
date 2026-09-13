@@ -52,10 +52,10 @@ func test_seat_requires_near_slow_approach_and_snaps_to_forward_pose() -> void:
 	var fixture: Dictionary = _fixture()
 	var player: Player = fixture.player
 	var interaction: ShipInteraction = fixture.interaction
-	player.position = Vector3(1, 0, 1)
+	player.position = Vector3(1.5, 0, 1)
 	check(not interaction.strap_in(), "seat cannot pull pilot from across the hab")
 	player.position = PlayerShip.SEAT_POSITION
-	player.linear_velocity = Vector3.RIGHT
+	player.linear_velocity = Vector3.RIGHT * 1.5
 	check(not interaction.strap_in(), "fast approach rejected")
 	player.linear_velocity = Vector3.ZERO
 	player.position += Vector3(0.5, 0.15, 0.1)
@@ -280,16 +280,16 @@ func test_seat_prompt_matches_strap_in_reach() -> void:
 	var fixture: Dictionary = _fixture()
 	var player: Player = fixture.player
 	var interaction: ShipInteraction = fixture.interaction
-	player.position = PlayerShip.SEAT_POSITION + Vector3(2.0, 0, 0)
+	player.position = PlayerShip.SEAT_POSITION + Vector3(2.4, 0, 0)
 	player.basis = Basis(Vector3.UP, PI / 2.0)
 	await _frames(2)
-	check(interaction._aimed_seat(), "pilot two metres away is looking at the seat")
+	check(interaction._aimed_seat(), "pilot beyond reach is still looking at the seat")
 	check_eq(interaction.hint, ShipInteraction.SEAT_APPROACH_HINT, "distant pilot is told to close in, not offered F")
-	check(not interaction.strap_in(), "F at two metres is rejected, matching the prompt")
+	check(not interaction.strap_in(), "F from beyond reach is rejected, matching the prompt")
 	player.position = PlayerShip.SEAT_POSITION + Vector3(1.2, 0, 0)
 	await _frames(2)
 	check_eq(interaction.hint, ShipInteraction.SEAT_READY_HINT, "pilot within reach is offered F")
-	player.linear_velocity = Vector3(0, 0, 1.0)
+	player.linear_velocity = Vector3(0, 0, 1.5)
 	await _frames(1)
 	check_eq(interaction.hint, ShipInteraction.SEAT_APPROACH_HINT, "a fast pilot is told to slow down")
 	player.linear_velocity = Vector3.ZERO

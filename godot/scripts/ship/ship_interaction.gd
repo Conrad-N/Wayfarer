@@ -2,10 +2,10 @@
 class_name ShipInteraction
 extends Node
 
-const STRAP_REACH_M: float = 1.5
-const STRAP_MAX_SPEED_MPS: float = 0.5
+const STRAP_REACH_M: float = 2.0
+const STRAP_MAX_SPEED_MPS: float = 1.0
 const SEAT_READY_HINT: String = "F strap into pilot seat | Tab tablet"
-const SEAT_APPROACH_HINT: String = "Move within 1.5 m of the pilot seat and slow below 0.5 m/s to strap in | Tab tablet"
+const SEAT_APPROACH_HINT: String = "Move within 2 m of the pilot seat and slow below 1 m/s to strap in | Tab tablet"
 
 var player: Player
 var ship: PlayerShip
@@ -29,7 +29,7 @@ func configure(suit_player: Player, owner_ship: PlayerShip) -> void:
 	add_child(_seat_restraint)
 	_seat_restraint.configure(player, _camera)
 	_seat_restraint.max_reach_m = 2.5
-	_seat_restraint.max_catch_speed_mps = 0.5
+	_seat_restraint.max_catch_speed_mps = STRAP_MAX_SPEED_MPS
 	_seat_restraint.max_grip_force_n = 200000.0
 	_seat_restraint.max_grip_torque_nm = 50000.0
 	tablet = preload("res://ui/world_screen.tscn").instantiate() as WorldScreen

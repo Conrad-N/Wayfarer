@@ -352,7 +352,8 @@ decide something the docs did not cover.
 
 - 2026-09-13 — Seat: three interaction fixes from play. (1) The "F strap into
   pilot seat" prompt now appears only when `strap_in()` would accept it (within
-  1.5 m and under 0.5 m/s relative to the ship); otherwise an aimed seat shows a
+  2 m and under 1 m/s relative to the ship, loosened from 1.5 m / 0.5 m/s the
+  same day at Conrad's request; the harness catch speed moved with it); otherwise an aimed seat shows a
   "move closer and slow down" hint. Before, the prompt fired from the 2.5 m aim
   ray while the gate was 1.5 m, so F looked dead. (2) A deliberate unstrap stands
   the pilot at `PlayerShip.SEAT_EXIT_POSITION` (0.35, 0, 1.0), the clear centre
