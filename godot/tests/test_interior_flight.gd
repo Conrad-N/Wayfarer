@@ -78,6 +78,32 @@ func test_unstrap_inherits_rotation_and_retains_hull_collision() -> void:
 	main.free()
 
 
+## A seated warp request unloads the suit wheels itself instead of refusing.
+func test_warp_request_unloads_suit_wheels_automatically() -> void:
+	var main: Node3D = await _main()
+	var player: Player = main.get_node("Player") as Player
+	var ship: PlayerShip = main.get_node("PlayerShip") as PlayerShip
+	var interaction: ShipInteraction = main.get_node("ShipInteraction") as ShipInteraction
+	var flight: OrbitalFlight = main.get_node("OrbitalFlight") as OrbitalFlight
+	player.global_transform = ship.global_transform * Transform3D(Basis(Vector3.UP, PI / 2.0), PlayerShip.SEAT_POSITION)
+	await _frames(3)
+	check(interaction.strap_in(), "pilot straps in")
+	player.attitude.momentum_body = Vector3(0, 8.0, 0) # about ten frames of unloading at the suit's 50 N m
+	await _frames(3)
+	check(flight.ship_is_local, "loaded suit wheels keep the interior physical")
+	check(ship.api.set_warp(10.0), "warp request is accepted with loaded wheels")
+	check_near(float(ship.api.get_telemetry().flight.requested_warp), 10.0, 1e-6, "panel shows the chosen warp while the wheels unload")
+	await _frames(2)
+	check(player.is_wheel_dumping(), "the flight controller unloads the wheels for the pilot")
+	await _frames(100)
+	check(player.attitude.momentum_body.length() < 1e-4, "wheels are unloaded")
+	check(not player.is_wheel_dumping(), "automatic unloading stops once the wheels are empty")
+	check(not flight.ship_is_local, "interior returns to analytic coasting")
+	check_near(flight.requested_warp, 10.0, 1e-6, "the requested warp engages on its own")
+	interaction.unstrap()
+	main.free()
+
+
 func _main() -> Node3D:
 	var main: Node3D = preload("res://scenes/main.tscn").instantiate() as Node3D
 	(main.get_node("Player") as Player).input_enabled = false

@@ -51,6 +51,7 @@ var _pending_look: Vector2 = Vector2.ZERO
 var _braking: bool = false
 var _wheel_braking: bool = false
 var _wheel_dumping: bool = false
+var _auto_wheel_dumping: bool = false
 
 
 func _ready() -> void:
@@ -154,7 +155,7 @@ func _physics_process(delta: float) -> void:
 	if inverse_inertia.determinant() > 0.0:
 		var inverse_body: Basis = global_basis.transposed() * inverse_inertia * global_basis
 		apply_torque(global_basis * GyroscopicMotion.torque(omega_body, inverse_body.inverse(), attitude.momentum_body, delta))
-	if _wheel_dumping:
+	if _wheel_dumping or _auto_wheel_dumping:
 		_body_follow = false
 		# Only the suit receives this motor reaction. Joints/contact carry it to
 		# anything held, whose own attitude controller may respond independently.
@@ -333,9 +334,15 @@ func set_wheel_dumping(enabled: bool) -> void:
 	_wheel_dumping = enabled
 
 
-## Report deliberate unloading, including in a seat or while wearing latched boots.
+## Let the ship's flight controller unload the rotors on the pilot's behalf (warp).
+## Independent of the held C key so per-frame input polling cannot cancel it.
+func set_automatic_wheel_dump(enabled: bool) -> void:
+	_auto_wheel_dumping = enabled
+
+
+## Report unloading, held or automatic, including in a seat or latched boots.
 func is_wheel_dumping() -> bool:
-	return _wheel_dumping
+	return _wheel_dumping or _auto_wheel_dumping
 
 
 func _wheel_brake_torque(delta: float, inverse_inertia: Basis) -> Vector3:

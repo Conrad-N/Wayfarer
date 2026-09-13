@@ -18,6 +18,8 @@ var _approaching: bool = false
 var _publish_elapsed: float = 1.0
 var _wheel_energy_before_j: float = 0.0
 var _suit_dump_settle_s: float = 0.0
+## Warp a seated pilot asked for while the suit wheels still had to be unloaded.
+var _pending_warp: float = 1.0
 const EVA_REFERENCE_ID: String = "__eva_coast_reference"
 const ATTITUDE_TORQUE_NM: float = 5500.0
 
@@ -54,6 +56,7 @@ func _physics_process(delta: float) -> void:
 		return
 	_sync_mass()
 	_sync_attitude_authority()
+	_drive_pending_warp()
 	_suit_dump_settle_s = 0.3 if player.is_wheel_dumping() else maxf(0.0, _suit_dump_settle_s - delta)
 	if reference_id.is_empty() and (not is_aboard() or _needs_inertial_interior()):
 		_begin_open_space_eva()
@@ -342,10 +345,12 @@ func _command(command: String, args: Dictionary) -> Dictionary:
 			var value: float = args.get("rate", NAN)
 			if not is_finite(value) or not _is_allowed_warp(value):
 				return _result(false, "SELECT 1, 10, 100 OR 1000× WARP")
-			if value > 1.0 and _seated() and _needs_inertial_interior():
-				return _result(false, "HOLD C TO UNLOAD SUIT WHEELS, THEN RELEASE AND LET THE HARNESS SETTLE BEFORE WARP")
-			if value > 1.0 and (not reference_id.is_empty() or not is_aboard() or not _seated()):
+			if value > 1.0 and not _warp_seat_ready():
 				return _result(false, "STRAP INTO THE PILOT SEAT TO WARP; 1× NEAR OBJECTS")
+			if value > 1.0 and _suit_holding_on():
+				return _result(false, "LET GO OF HANDHOLDS, BOOTS AND GRAPPLE BEFORE WARP")
+			# Loaded suit wheels are unloaded for the pilot; warp follows once settled.
+			_pending_warp = value if value > 1.0 and _needs_inertial_interior() else 1.0
 			requested_warp = value
 			if value > 1.0 and not world.executor_on:
 				world.set_attitude_mode("kill")
@@ -398,12 +403,13 @@ func _command(command: String, args: Dictionary) -> Dictionary:
 			_approaching = false
 			_rcs_direction = Vector3.ZERO
 		"next_event":
-			if _seated() and _needs_inertial_interior():
-				return _result(false, "UNLOAD SUIT WHEELS WITH C AND LET THE HARNESS SETTLE BEFORE EVENT WARP")
-			if not reference_id.is_empty() or not is_aboard() or not _seated():
+			if not _warp_seat_ready():
 				return _result(false, "STRAP INTO THE PILOT SEAT FOR EVENT WARP; UNAVAILABLE NEAR OBJECTS")
+			if _suit_holding_on():
+				return _result(false, "LET GO OF HANDHOLDS, BOOTS AND GRAPPLE BEFORE EVENT WARP")
 			if world.nodes.is_empty():
 				return _result(false, "NO MANEUVER EVENT QUEUED")
+			_pending_warp = 1000.0 if _needs_inertial_interior() else 1.0
 			requested_warp = 1000.0
 		"rcs_translate":
 			if not ship_is_local:
@@ -490,7 +496,7 @@ func _publish() -> void:
 	for entry: Dictionary in world.targets:
 		targets.append({"id": entry.id, "name": entry.name, "kind": entry.kind})
 	var data: Dictionary = ship.api.get_telemetry()
-	var snapshot: Dictionary = {"available": true, "time_s": world.time, "warp": world.rate, "requested_warp": requested_warp,
+	var snapshot: Dictionary = {"available": true, "time_s": world.time, "warp": world.rate, "requested_warp": maxf(requested_warp, _pending_warp),
 		"local": not reference_id.is_empty(), "reference_name": str(session.objects[reference_id].name) if not reference_id.is_empty() else "OPEN SPACE",
 		"body_name": world.get_body().name, "body_radius_m": world.get_body().radius,
 		"orbit": {"altitude_m": state.altitude, "periapsis_altitude_m": state.periapsis_altitude, "apoapsis_altitude_m": state.apoapsis_altitude,
@@ -605,15 +611,43 @@ func _seated() -> bool:
 	return bool(player.get_meta("seated", false))
 
 
+## Seated, aboard, and not parked near an object: the only state that may warp.
+## The free-flight reference is allowed because a seated pilot is only there while
+## the interior waits for the suit wheels to unload.
+func _warp_seat_ready() -> bool:
+	return _seated() and is_aboard() and (reference_id.is_empty() or reference_id == EVA_REFERENCE_ID)
+
+
+## Whether the suit is physically attached to anything besides the seat harness.
+func _suit_holding_on() -> bool:
+	var grip: PhysicalGrip = player.get_node_or_null("PhysicalGrip") as PhysicalGrip
+	var boots: MagneticBoots = player.get_node_or_null("MagneticBoots") as MagneticBoots
+	return (grip != null and grip.is_attached()) or (boots != null and boots.is_attached()) or player.grapple.is_attached()
+
+
+## Unload the seated pilot's suit wheels for a pending warp request, then engage
+## it once the harness has settled and the interior is analytic again.
+func _drive_pending_warp() -> void:
+	if _pending_warp <= 1.0:
+		player.set_automatic_wheel_dump(false)
+		return
+	if not _warp_seat_ready() or _suit_holding_on():
+		_pending_warp = 1.0
+		player.set_automatic_wheel_dump(false)
+		return
+	player.set_automatic_wheel_dump(player.attitude.momentum_body.length_squared() > 1e-8)
+	if reference_id.is_empty() and not _needs_inertial_interior():
+		requested_warp = _pending_warp
+		_pending_warp = 1.0
+
+
 func _needs_inertial_interior() -> bool:
 	# A live joint must transmit the suit motor's impulse. Keep physical ownership
 	# while its spinning rotors can react against the carrier, and briefly after
 	# unloading so the constraint solver finishes transmitting the last impulse.
 	if player.is_wheel_dumping() or _suit_dump_settle_s > 0.0 or player.attitude.momentum_body.length_squared() > 1e-8:
 		return true
-	var grip: PhysicalGrip = player.get_node_or_null("PhysicalGrip") as PhysicalGrip
-	var boots: MagneticBoots = player.get_node_or_null("MagneticBoots") as MagneticBoots
-	if (grip != null and grip.is_attached()) or (boots != null and boots.is_attached()) or player.grapple.is_attached():
+	if _suit_holding_on():
 		return true
 	# Even coasting collisions and walking must exchange momentum with a live hull.
 	# Only the strapped pilot permits analytic transit; free suits always use Jolt.

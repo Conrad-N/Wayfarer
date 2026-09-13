@@ -363,3 +363,14 @@ decide something the docs did not cover.
   made climbing out finicky. (3) The `wheel_dump` action (C) now reaches the suit
   while a terminal or tablet owns input, because the warp refusal message on that
   very screen asks for it; focus loss clears it so a held key cannot stick.
+
+- 2026-09-13 — Warp unloads the suit wheels itself (Conrad, from play). A seated
+  pilot's warp or event-warp request used to be refused with "HOLD C TO UNLOAD
+  SUIT WHEELS" whenever the reaction wheels held any momentum. Now `OrbitalFlight`
+  keeps the request as `_pending_warp`, drives `Player.set_automatic_wheel_dump()`
+  (a flag separate from the held C key, so per-frame input polling cannot cancel
+  it) until the wheels are empty, waits the existing 0.3 s harness settle, lets
+  the interior return to analytic coasting, then applies the warp. The panel shows
+  the pending rate meanwhile. The only remaining refusals are not seated / not
+  aboard / parked near an object, and holding a handhold, boots or the grapple,
+  which the ship cannot release for the pilot.
