@@ -349,3 +349,16 @@ decide something the docs did not cover.
   centre, so `truss()` bakes that offset into the vertices with
   `transform_apply(location=True)` before `finish()`. Volume is the envelope
   (1 × 1 × length), same convention as the radiator.
+
+- 2026-09-13 — Seat: three interaction fixes from play. (1) The "F strap into
+  pilot seat" prompt now appears only when `strap_in()` would accept it (within
+  1.5 m and under 0.5 m/s relative to the ship); otherwise an aimed seat shows a
+  "move closer and slow down" hint. Before, the prompt fired from the 2.5 m aim
+  ray while the gate was 1.5 m, so F looked dead. (2) A deliberate unstrap stands
+  the pilot at `PlayerShip.SEAT_EXIT_POSITION` (0.35, 0, 1.0), the clear centre
+  passage past the seat back, keeping their facing and solved velocity, after a
+  capsule overlap check; a harness that simply broke leaves them in place. The
+  seated capsule overlaps the harness bars by a few centimetres, which is what
+  made climbing out finicky. (3) The `wheel_dump` action (C) now reaches the suit
+  while a terminal or tablet owns input, because the warp refusal message on that
+  very screen asks for it; focus loss clears it so a held key cannot stick.

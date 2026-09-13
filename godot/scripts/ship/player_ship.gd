@@ -3,6 +3,8 @@ class_name PlayerShip
 extends RigidBody3D
 
 const SEAT_POSITION: Vector3 = Vector3(-0.85, 0.0, 1.0)
+## Where an unstrapping pilot stands up: the clear centre passage past the seat back.
+const SEAT_EXIT_POSITION: Vector3 = Vector3(0.35, 0.0, 1.0)
 const CARGO_BOUNDS: AABB = AABB(Vector3(-1.8, -1.4, -7.0), Vector3(3.6, 2.8, 5.0))
 const DAMAGE_THRESHOLD_J: float = 2000.0
 const SECTION_DAMAGE_ENERGY_J: float = 300000.0

@@ -65,12 +65,15 @@ func test_unstrap_inherits_rotation_and_retains_hull_collision() -> void:
 	flight.session.world.angular_vel = SimVector.new(0, 0.2, 0)
 	flight._advance_orbit(0.1)
 	var spin: Vector3 = ship.global_basis * LocalOrbitFrame.GODOT_TO_SIM_BODY.transposed() * LocalOrbitFrame.native(flight.session.world.angular_vel)
-	var expected_velocity: Vector3 = player.linear_velocity + spin.cross(player.global_position - ship.to_global(ship.center_of_mass))
 	var expected_spin: Vector3 = player.angular_velocity + spin
 	interaction.unstrap()
+	# Unstrapping stands the pilot up beside the seat, so the tangential
+	# velocity they inherit belongs to that point, not the cushion.
+	check(player.global_position.is_equal_approx(ship.to_global(PlayerShip.SEAT_EXIT_POSITION)), "unstrap stands the pilot at the seat exit point")
+	var expected_velocity: Vector3 = player.linear_velocity + spin.cross(player.global_position - ship.to_global(ship.center_of_mass))
 	flight._begin_open_space_eva()
 	check(player.angular_velocity.distance_to(expected_spin) < 0.00001, "unstrap inherits actual orbital carrier spin")
-	check(player.linear_velocity.distance_to(expected_velocity) < 0.0001, "unstrap inherits tangential seat velocity")
+	check(player.linear_velocity.distance_to(expected_velocity) < 0.0001, "unstrap inherits tangential velocity where the pilot stands up")
 	check(flight.ship_is_local and not player.freeze, "released pilot is physically free")
 	main.free()
 

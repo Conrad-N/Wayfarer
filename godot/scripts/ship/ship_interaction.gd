@@ -2,6 +2,11 @@
 class_name ShipInteraction
 extends Node
 
+const STRAP_REACH_M: float = 1.5
+const STRAP_MAX_SPEED_MPS: float = 0.5
+const SEAT_READY_HINT: String = "F strap into pilot seat | Tab tablet"
+const SEAT_APPROACH_HINT: String = "Move within 1.5 m of the pilot seat and slow below 0.5 m/s to strap in | Tab tablet"
+
 var player: Player
 var ship: PlayerShip
 var tablet: WorldScreen
@@ -56,9 +61,8 @@ func strap_in() -> bool:
 	if is_seated() or not is_instance_valid(ship):
 		return false
 	var seat_position: Vector3 = ship.to_global(PlayerShip.SEAT_POSITION)
-	var carrier_velocity: Vector3 = ship.linear_velocity + ship.angular_velocity.cross(player.global_position - ship.to_global(ship.center_of_mass))
-	if player.global_position.distance_to(seat_position) > 1.5 or (player.linear_velocity - carrier_velocity).length() > 0.5:
-		hint = "Approach the pilot seat and slow down before strapping in"
+	if not _seat_within_reach():
+		hint = SEAT_APPROACH_HINT
 		return false
 	# The requested seating shortcut changes pose once; the live harness owns motion afterward.
 	var approach_pose: Transform3D = player.global_transform
@@ -88,7 +92,10 @@ func is_seated() -> bool:
 
 
 ## Unbuckle without changing the actual momentum solved by the seat constraint.
-func unstrap() -> void:
+## A deliberate release also stands the pilot up beside the seat; a harness that
+## simply broke (step_out false) leaves them wherever physics put them.
+func unstrap(step_out: bool = true) -> void:
+	var was_posed: bool = _seat_pose_active
 	if _seat_pose_active:
 		close_screen()
 		_camera.position = _standing_camera_position
@@ -98,6 +105,8 @@ func unstrap() -> void:
 		_seat_restraint.release()
 	if is_instance_valid(player):
 		player.set_meta("seated", false)
+		if step_out and was_posed and is_instance_valid(ship):
+			_step_out_of_seat()
 
 
 ## Use a nearby terminal without providing an implicit physical restraint.
@@ -135,7 +144,7 @@ func _physics_process(_delta: float) -> void:
 	if not is_instance_valid(player):
 		return
 	if _seat_pose_active and not is_seated():
-		unstrap()
+		unstrap(false)
 	player.set_meta("seated", is_seated())
 	if is_open():
 		hint = "Esc / F close screen | Tab tablet" + (" | HARNESS SECURED | V unstrap" if is_seated() else " | UNRESTRAINED")
@@ -145,7 +154,11 @@ func _physics_process(_delta: float) -> void:
 		hint = "HARNESS SECURED | Mouse look | V unstrap | F use terminal | Tab tablet"
 	else:
 		var target: WorldScreen = _aimed_screen()
-		hint = "F strap into pilot seat | Tab tablet" if _aimed_seat() else ("F use %s terminal | Tab tablet" % target.panel.current_app if target != null else "Tab tablet | F use terminal / pilot seat")
+		if _aimed_seat():
+			# Offer F only when strap_in() would actually accept it.
+			hint = SEAT_READY_HINT if _seat_within_reach() else SEAT_APPROACH_HINT
+		else:
+			hint = ("F use %s terminal | Tab tablet" % target.panel.current_app) if target != null else "Tab tablet | F use terminal / pilot seat"
 
 
 func _input(event: InputEvent) -> void:
@@ -166,6 +179,10 @@ func _input(event: InputEvent) -> void:
 	if is_open():
 		if event.is_action_pressed("ui_cancel") or (event.is_action_pressed("interact") and not event.is_echo()):
 			close_screen()
+		elif event.is_action("wheel_dump"):
+			# The terminal's own warp refusal asks the pilot to hold C, so the
+			# key has to reach the suit while a screen owns the other input.
+			player.set_wheel_dumping(event.is_pressed())
 		elif event is InputEventMouse:
 			var mouse: InputEventMouse = event as InputEventMouse
 			var origin: Vector3 = _camera.project_ray_origin(mouse.position)
@@ -190,6 +207,32 @@ func _input(event: InputEvent) -> void:
 		else:
 			open_terminal(_aimed_screen())
 		get_viewport().set_input_as_handled()
+
+
+## Whether the pilot is close and slow enough for the harness to catch them.
+func _seat_within_reach() -> bool:
+	var seat_position: Vector3 = ship.to_global(PlayerShip.SEAT_POSITION)
+	var carrier_velocity: Vector3 = ship.linear_velocity + ship.angular_velocity.cross(player.global_position - ship.to_global(ship.center_of_mass))
+	return player.global_position.distance_to(seat_position) <= STRAP_REACH_M and (player.linear_velocity - carrier_velocity).length() <= STRAP_MAX_SPEED_MPS
+
+
+## Stand the released pilot in the clear passage beside the seat instead of inside it.
+func _step_out_of_seat() -> void:
+	var exit_pose: Transform3D = Transform3D(player.global_basis, ship.to_global(PlayerShip.SEAT_EXIT_POSITION))
+	if _pose_is_clear(exit_pose):
+		player.global_transform = exit_pose
+
+
+func _pose_is_clear(pose: Transform3D) -> bool:
+	var collision: CollisionShape3D = player.get_node_or_null("CollisionShape3D") as CollisionShape3D
+	if collision == null:
+		return true
+	var query: PhysicsShapeQueryParameters3D = PhysicsShapeQueryParameters3D.new()
+	query.shape = collision.shape
+	query.transform = pose * collision.transform
+	query.exclude = [player.get_rid()]
+	query.collision_mask = player.collision_mask
+	return player.get_world_3d().direct_space_state.intersect_shape(query, 1).is_empty()
 
 
 func _aimed_seat() -> bool:
@@ -224,3 +267,4 @@ func _aimed_screen() -> WorldScreen:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and is_open():
 		active_screen.panel.cancel_input()
+		player.set_wheel_dumping(false)

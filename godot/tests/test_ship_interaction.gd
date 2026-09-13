@@ -275,6 +275,73 @@ func test_broken_harness_restores_eva_camera() -> void:
 	(fixture.root as Node).free()
 
 
+## The strap-in prompt only appears once the harness can actually catch the pilot.
+func test_seat_prompt_matches_strap_in_reach() -> void:
+	var fixture: Dictionary = _fixture()
+	var player: Player = fixture.player
+	var interaction: ShipInteraction = fixture.interaction
+	player.position = PlayerShip.SEAT_POSITION + Vector3(2.0, 0, 0)
+	player.basis = Basis(Vector3.UP, PI / 2.0)
+	await _frames(2)
+	check(interaction._aimed_seat(), "pilot two metres away is looking at the seat")
+	check_eq(interaction.hint, ShipInteraction.SEAT_APPROACH_HINT, "distant pilot is told to close in, not offered F")
+	check(not interaction.strap_in(), "F at two metres is rejected, matching the prompt")
+	player.position = PlayerShip.SEAT_POSITION + Vector3(1.2, 0, 0)
+	await _frames(2)
+	check_eq(interaction.hint, ShipInteraction.SEAT_READY_HINT, "pilot within reach is offered F")
+	player.linear_velocity = Vector3(0, 0, 1.0)
+	await _frames(1)
+	check_eq(interaction.hint, ShipInteraction.SEAT_APPROACH_HINT, "a fast pilot is told to slow down")
+	player.linear_velocity = Vector3.ZERO
+	await _frames(1)
+	check(interaction.strap_in(), "the offered F succeeds")
+	(fixture.root as Node).free()
+
+
+## Unbuckling stands the pilot in the clear passage beside the seat, not inside its cushions.
+func test_unstrap_steps_out_beside_the_seat() -> void:
+	var fixture: Dictionary = _fixture()
+	var player: Player = fixture.player
+	var ship: PlayerShip = fixture.ship
+	var interaction: ShipInteraction = fixture.interaction
+	player.position = PlayerShip.SEAT_POSITION
+	await _frames(2)
+	check(interaction.strap_in(), "pilot straps in")
+	var facing: Basis = player.global_basis
+	interaction.unstrap()
+	var exit_point: Vector3 = ship.to_global(PlayerShip.SEAT_EXIT_POSITION)
+	check(player.global_position.is_equal_approx(exit_point), "release places the pilot at the seat exit spot")
+	check(player.global_basis.is_equal_approx(facing), "stepping out keeps the pilot's facing")
+	await _frames(10)
+	check(player.linear_velocity.length() < 0.01 and player.angular_velocity.length() < 0.01, "exit spot is clear: nothing shoves the freed pilot")
+	check(player.global_position.distance_to(exit_point) < 0.05, "freed pilot stays where they stood up")
+	(fixture.root as Node).free()
+
+
+## The terminal's warp refusal asks for C, so C must reach the suit while that screen is open.
+func test_wheel_dump_key_works_while_a_screen_is_open() -> void:
+	var fixture: Dictionary = _fixture()
+	var player: Player = fixture.player
+	var interaction: ShipInteraction = fixture.interaction
+	player.position = PlayerShip.SEAT_POSITION
+	await _frames(2)
+	check(interaction.strap_in(), "pilot straps in")
+	check(interaction.open_terminal(fixture.screen), "NAV owns input")
+	var event: InputEventKey = InputEventKey.new()
+	event.physical_keycode = KEY_C
+	event.pressed = true
+	check(InputMap.event_is_action(event, "wheel_dump"), "physical C is the wheel dump action")
+	interaction._input(event)
+	check(player.is_wheel_dumping() and interaction.is_open(), "holding C unloads the wheels without closing the terminal")
+	await _frames(2)
+	check(player.is_wheel_dumping(), "the suit keeps dumping while the screen owns the other input")
+	event.pressed = false
+	interaction._input(event)
+	check(not player.is_wheel_dumping(), "releasing C stops the dump")
+	interaction.close_screen()
+	(fixture.root as Node).free()
+
+
 func _fixture() -> Dictionary:
 	var root: Node3D = Node3D.new()
 	(Engine.get_main_loop() as SceneTree).root.add_child(root)
