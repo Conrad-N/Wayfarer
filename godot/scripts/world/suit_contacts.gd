@@ -49,7 +49,6 @@ func set_boot_input(pressed: bool) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	player.body_follow_enabled = not grip.is_attached() or Input.is_action_pressed("steer_held")
 	var active: bool = player.input_enabled and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED
 	if not active:
 		set_boot_input(false)

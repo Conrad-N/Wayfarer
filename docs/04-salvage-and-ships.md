@@ -199,8 +199,9 @@ inertia slows the shared spin. Holding Alt acts on both bodies through the suit'
 finite jets. Large loads can exceed the grip or exhaust the suit's fuel.
 
 The grip follows the selected part through cutting. Hold Z to aim the cutter
-while holding; Shift + mouse deliberately steers the combined
-load using reaction wheels, and Q/E rolls it. The carried part retains its collisions and
+while holding; normal mouse movement steers the combined
+load using reaction wheels, and Q/E rolls it. A heavy load turns slowly and
+fills the suit wheels; unload them before the next turn. The carried part retains its collisions and
 must fit through the cargo door. Release it inside the bay before clamps secure it.
 The grapple remains the longer-range tether; the tractor beam has been removed.
 

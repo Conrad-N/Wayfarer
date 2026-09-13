@@ -272,3 +272,30 @@ func _frames(count: int) -> void:
 
 func _vector(actual: Vector3, expected: Vector3, tolerance: float, message: String) -> void:
 	check(actual.distance_to(expected) <= tolerance, "%s expected %s got %s" % [message, expected, actual])
+
+
+## Normal mouse motion steers a held load through the suit wheels; no modifier key is needed.
+func test_mouse_steers_held_hull_without_a_modifier() -> void:
+	var main: Node3D = preload("res://scenes/main.tscn").instantiate() as Node3D
+	var player: Player = main.get_node("Player") as Player
+	player.input_enabled = false
+	(Engine.get_main_loop() as SceneTree).root.add_child(main)
+	await _frames(4)
+	var ship: PlayerShip = main.get_node("PlayerShip") as PlayerShip
+	var grip: PhysicalGrip = player.get_node("PhysicalGrip") as PhysicalGrip
+	ship.api.set_attitude_mode("manual")
+	ship.api.set_system_enabled("rcs", false)
+	player.global_transform = ship.global_transform * Transform3D(Basis.IDENTITY, Vector3(0.6, 0.0, 0.0))
+	await _frames(3)
+	check(grip.grab_body(ship, ship.to_global(Vector3(1.9, 0, 0))), "handhold catches the hull")
+	await _frames(3)
+	check(player.body_follow_enabled, "holding on leaves mouse steering enabled")
+	player.queue_mouse_look(Vector2(-0.5 / player.mouse_sensitivity, 0.0))
+	await _frames(30)
+	check(grip.is_attached(), "steering against the hull keeps the grip")
+	check(player.attitude.momentum_body.length() > 1.0, "wheels spin up against the held mass")
+	var hull_momentum: Vector3 = ship.get_inverse_inertia_tensor().inverse() * ship.angular_velocity
+	check(ship.angular_velocity.y > 1e-6, "the whole held load turns, not just the suit")
+	check_near(hull_momentum.y, -player.attitude.momentum_body.y, 0.1 * player.attitude.momentum_body.length(), "hull takes the wheels' reaction momentum")
+	_vector(player.angular_velocity, ship.angular_velocity, 0.001, "suit and hull turn together")
+	main.free()

@@ -161,8 +161,8 @@ resources and wheel saturation. Unload suit wheels before using orbital warp.
 During EVA, normal mouse motion requests a physical body turn; the camera remains centred
 on the torso. Hold Z for head-only aiming, then release it
 to snap back to centre. The head is limited to ±60° yaw / ±50° pitch; body turns
-retain the full mouse request and have no artificial speed cap. Shift plus mouse
-steers a hand-held load; free look does not steer it. While boots are latched, normal mouse movement freely looks in any yaw direction
+retain the full mouse request and have no artificial speed cap. The same mouse
+motion steers a hand-held load; Z free look does not steer it. While boots are latched, normal mouse movement freely looks in any yaw direction
 and up/down to ±85° without using resources. WASD follows the view along the surface;
 Z is unnecessary. Releasing boots centres the view and restores physical EVA turns.
 Escape and focus loss cancel active motors and tools, retaining passive
