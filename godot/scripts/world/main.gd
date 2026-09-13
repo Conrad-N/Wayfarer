@@ -274,7 +274,8 @@ func _build_ship() -> void:
 		screen.name = app + "Screen"
 		screen.configure(_ship.api, app)
 		_ship.get_node("NavTerminalMount" if app == "NAV" else "ShipTerminalMount").add_child(screen)
-	_player.global_transform = _ship.global_transform * Transform3D(Basis(Vector3.UP, PI / 2.0), Vector3(0, 0, 1))
+	# Start where a deliberate unstrap stands the pilot: clear of the seat back.
+	_player.global_transform = _ship.global_transform * Transform3D(Basis(Vector3.UP, PI / 2.0), PlayerShip.SEAT_EXIT_POSITION)
 	_cargo = CargoHold.new()
 	_cargo.name = "CargoHold"
 	add_child(_cargo)

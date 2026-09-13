@@ -387,3 +387,18 @@ func test_main_shares_ship_connection_and_retargets_after_cut() -> void:
 	check(is_instance_valid(ship.navigation_target), "NAV reference survives replacement")
 	check(float(ship.api.get_telemetry().motion.range_m) > 5.0, "NAV keeps real range after cut")
 	scene.free()
+
+
+## A new game starts the pilot standing clear of the seat back in both modes.
+func test_spawn_pose_is_clear_of_ship_geometry() -> void:
+	for practice: bool in [false, true]:
+		var scene: Node3D = preload("res://scenes/main.tscn").instantiate() as Node3D
+		scene.set("salvage_practice", practice)
+		(scene.get_node("Player") as Player).input_enabled = false
+		(Engine.get_main_loop() as SceneTree).root.add_child(scene)
+		await _frames(1)
+		var player: Player = scene.get_node("Player") as Player
+		var interaction: ShipInteraction = scene.get_node("ShipInteraction") as ShipInteraction
+		check(interaction._pose_is_clear(player.global_transform), "spawn capsule overlaps nothing (practice=%s)" % practice)
+		check(not interaction.is_seated(), "spawn leaves the pilot unstrapped (practice=%s)" % practice)
+		scene.free()
