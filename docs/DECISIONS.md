@@ -345,7 +345,7 @@ decide something the docs did not cover.
   reaches the 0.5 m envelope, so the bounds test is the proof the diagonal insets
   (0.10 / 0.40) were not enlarged; braces alternate direction per bay so the
   ladder zig-zags. `join()` keeps the first piece's origin, which for a truss is a
-  rail at (−0.45, 0, +0.45) and would slide every socket added afterwards off
+  rail at (−0.45, 0, −0.45) and would slide every socket added afterwards off
   centre, so `truss()` bakes that offset into the vertices with
   `transform_apply(location=True)` before `finish()`. Volume is the envelope
   (1 × 1 × length), same convention as the radiator.

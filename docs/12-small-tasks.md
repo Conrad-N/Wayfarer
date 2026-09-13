@@ -279,7 +279,7 @@ changed lines.
 
 ## T10 — New part family: lattice truss segments (three lengths)
 
-- [ ] Done
+- [x] Done
 
 **Why:** M6 wants the kit at 30+ parts with parametric generators. T2 reused
 existing generators with new numbers. This task adds a generator that does not
