@@ -337,3 +337,15 @@ decide something the docs did not cover.
   refuse to move above 1x. Warp still drops to 1x near objects, and the local-mode
   handoff must hand an unseated player the same velocity offset as the seated
   pilot. Not yet implemented; assigned to GPT at the start of M5.
+
+- 2026-09-13 — Kit: new `truss` part kind (T10). `make_part_kit.py` grew `bar()`
+  (a bevelled box turned to face from start to end, used for diagonal braces) and
+  `truss(name, length)` for `truss_segment_a/b/c` at 2, 4, 6 m. Design notes: the
+  four corner rails sit at (±0.45, 0, ±0.45) and are the only geometry that
+  reaches the 0.5 m envelope, so the bounds test is the proof the diagonal insets
+  (0.10 / 0.40) were not enlarged; braces alternate direction per bay so the
+  ladder zig-zags. `join()` keeps the first piece's origin, which for a truss is a
+  rail at (−0.45, 0, +0.45) and would slide every socket added afterwards off
+  centre, so `truss()` bakes that offset into the vertices with
+  `transform_apply(location=True)` before `finish()`. Volume is the envelope
+  (1 × 1 × length), same convention as the radiator.

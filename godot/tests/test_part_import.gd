@@ -17,6 +17,9 @@ const KIT: Dictionary = {
 	"radiator_panel_a": ["radiator", Vector3(2, 1, .12)],
 	"radiator_panel_b": ["radiator", Vector3(1.2, 1.6, .12)],
 	"radiator_panel_c": ["radiator", Vector3(3, 1, .12)],
+	"truss_segment_a": ["truss", Vector3(1, 1, 2)],
+	"truss_segment_b": ["truss", Vector3(1, 1, 4)],
+	"truss_segment_c": ["truss", Vector3(1, 1, 6)],
 	"sensor_mast_a": ["mast", Vector3(.65, .4, 2)],
 	"plating_panel_a": ["plating", Vector3(2, 1.8, .1)],
 }
@@ -72,7 +75,7 @@ func test_part_loads_with_sockets_and_meta() -> void:
 
 ## Every kit model retains physical metadata, small geometry, and convex collision.
 func test_whole_kit_imports_with_collision_and_physical_metadata() -> void:
-	check_eq(KIT.size(), 14, "the kit has fourteen parts")
+	check_eq(KIT.size(), 17, "the kit has seventeen parts")
 	var kinds: Dictionary = {}
 	for part_name: String in KIT:
 		var packed: PackedScene = load("res://assets/models/parts/%s.glb" % part_name)
@@ -123,7 +126,7 @@ func test_whole_kit_imports_with_collision_and_physical_metadata() -> void:
 			check_near(socket_pose.basis.determinant(), 1.0, .0001, "%s socket keeps a unit right-handed basis" % part_name)
 			check((-socket_pose.basis.z).dot(socket_pose.origin) > 0.0, "%s socket -Z faces out of part" % part_name)
 		root.free()
-	check_eq(kinds.size(), 7, "kit covers hull, cap, tank, engine, radiator, mast, and plating")
+	check_eq(kinds.size(), 8, "kit covers hull, cap, tank, engine, radiator, truss, mast, and plating")
 
 
 ## Volatile markers retain their kinds and local jet directions through glTF.

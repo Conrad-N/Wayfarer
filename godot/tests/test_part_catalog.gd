@@ -9,7 +9,7 @@ extends TestCase
 
 const PARTS_DIR: String = "res://assets/models/parts"
 const KNOWN_KINDS: Array[String] = [
-	"hull", "cap", "tank", "engine", "radiator", "mast", "plating",
+	"hull", "cap", "tank", "engine", "radiator", "truss", "mast", "plating",
 ]
 
 
@@ -31,7 +31,7 @@ func _part_names() -> PackedStringArray:
 
 func test_every_committed_part_builds_a_valid_definition() -> void:
 	var names: PackedStringArray = _part_names()
-	check_eq(names.size(), 14, "catalog sees all fourteen kit parts")
+	check_eq(names.size(), 17, "catalog sees all seventeen kit parts")
 	var total_cut_points: int = 0
 	for part_name: String in names:
 		var def: PartDefinition = PartCatalog.definition(part_name)

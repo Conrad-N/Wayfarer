@@ -1,4 +1,4 @@
-"""Generate the fourteen-part M2 kit using the shared glTF conventions.
+"""Generate the seventeen-part M2 kit using the shared glTF conventions.
 
 Run from the repository root:
   blender -b -P tools/blender/make_part_kit.py -- --out godot/assets/models/parts
@@ -56,6 +56,27 @@ def box(size, at=(0, 0, 0)):
     bevel.width = min(size) * 0.12
     bevel.segments = 1
     bpy.ops.object.modifier_apply(modifier=bevel.name)
+    return body
+
+
+def bar(start, end, thickness):
+    """Create a bevelled bar of `thickness` running from start to end along its +Y.
+
+    The bar is a box of (thickness, distance, thickness) whose local +Y axis is
+    turned to face from start to end, then parked on the midpoint, so a diagonal
+    brace leans the way it points instead of standing square. Keep the endpoints
+    inset from the part envelope: the rotated thickness axis pokes a little past
+    both ends.
+    """
+    a, b = Vector(start), Vector(end)
+    direction = b - a
+    body = box((thickness, direction.length, thickness))
+    body.rotation_euler = Vector((0, 1, 0)).rotation_difference(direction.normalized()).to_euler()
+    body.location = (a + b) / 2.0
+    bpy.ops.object.select_all(action="DESELECT")
+    body.select_set(True)
+    bpy.context.view_layer.objects.active = body
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     return body
 
 
@@ -166,6 +187,37 @@ def radiator(name, width, height, fins):
               (0, 0, math.pi / 2), body)
 
 
+def truss(name, length):
+    """Open lattice truss: four corner rails, closing end frames, zig-zag braces.
+
+    Rails are 0.10 m bars centred at (±0.45, 0, ±0.45) so their outer faces land
+    exactly on the 0.5 m envelope and nothing else may reach further out. Each
+    1.0 m bay carries one diagonal brace on every face, alternating direction so
+    the ladder zig-zags. Everything is a box() or a bar(); bevelled boxes cost
+    about 44 triangles each, and the 6 m truss is 36 of them.
+    """
+    pieces = [box((.10, length, .10), (x, 0, z)) for x in (-.45, .45) for z in (-.45, .45)]
+    for y in (-(length / 2 - .05), length / 2 - .05):
+        pieces += [box((.80, .10, .10), (0, y, z)) for z in (-.45, .45)]
+        pieces += [box((.10, .10, .80), (x, y, 0)) for x in (-.45, .45)]
+    for bay in range(int(round(length))):
+        start, stop = -length / 2 + bay + .10, -length / 2 + bay + 1 - .10
+        near, far = (-.40, .40) if bay % 2 == 0 else (.40, -.40)
+        for x in (-.45, .45):
+            pieces.append(bar((x, start, near), (x, stop, far), .08))
+        for z in (-.45, .45):
+            pieces.append(bar((near, start, z), (far, stop, z), .08))
+    body = join(pieces)
+    # join() keeps the first piece's origin, so the mesh would sit off-centre and
+    # shift every marker added afterwards. Bake the offset into the vertices so
+    # the part reads from the origin like the rest of the kit.
+    bpy.ops.object.transform_apply(location=True, rotation=False, scale=False)
+    finish(body, name, "truss", 60.0 * length, 90.0 * length,
+           "aluminium", 1.0 * 1.0 * length, 5.0, ALUMINIUM)
+    socket(body, "fore", (0, length / 2, 0), (0, 1, 0), cut_point=(.45, length / 2 - .35, .45))
+    socket(body, "aft", (0, -length / 2, 0), (0, -1, 0), cut_point=(.45, -(length / 2 - .35), .45))
+
+
 def mast(name):
     body = join([box((.16, 2.0, .16)), box((.65, .08, .4), (0, .85, 0))])
     finish(body, name, "mast", 18.0, 260.0, "aluminium", .65 * 2 * .4, 4.0, ALUMINIUM)
@@ -191,6 +243,9 @@ BUILDERS = {
     "radiator_panel_a": lambda n: radiator(n, 2.0, 1.0, 8),
     "radiator_panel_b": lambda n: radiator(n, 1.2, 1.6, 6),
     "radiator_panel_c": lambda n: radiator(n, 3.0, 1.0, 12),
+    "truss_segment_a": lambda n: truss(n, 2.0),
+    "truss_segment_b": lambda n: truss(n, 4.0),
+    "truss_segment_c": lambda n: truss(n, 6.0),
     "sensor_mast_a": mast,
     "plating_panel_a": plating,
 }
