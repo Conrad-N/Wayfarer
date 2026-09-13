@@ -419,6 +419,7 @@ Done when: a new player can take a contract, do it, and come back richer or poor
 
 ## M6 — Ships
 
+- [ ] Ship-scale clamps so a whole wreck can be carried home (Conrad, 2026-09-13).
 - [ ] Part kit to 30+ parts with parametric generators.
 - [ ] `DerelictGenerator` with six class templates and seeds; tests for validity.
 - [ ] All four hazards. Wreck-side power shutdown panels.

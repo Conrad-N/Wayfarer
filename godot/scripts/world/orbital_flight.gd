@@ -22,6 +22,8 @@ var _suit_dump_settle_s: float = 0.0
 var _pending_warp: float = 1.0
 const EVA_REFERENCE_ID: String = "__eva_coast_reference"
 const ATTITUDE_TORQUE_NM: float = 5500.0
+## Fastest closing speed the local approach will command, whatever the range.
+const APPROACH_SPEED_LIMIT_MPS: float = 20.0
 
 
 ## Start a session with the existing physical ship and tool scene as its local actors.
@@ -336,9 +338,13 @@ func _apply_rcs(delta: float) -> void:
 		var reference_point: Vector3 = frame.to_local_position(frame.reference_position)
 		var offset: Vector3 = ship.to_global(ship.center_of_mass) - reference_point
 		var stand_off: Vector3 = offset.normalized() * 30.0 if offset.length() > 0.001 else Vector3.BACK * 30.0
-		# The 40 kg RCS reserve gives a loaded ship about 2.5 m/s total delta-v.
-		# A 0.5 m/s approach leaves fuel to brake after the main drive matches velocity.
-		var desired_velocity: Vector3 = ((stand_off - offset) * 0.03).limit_length(0.5)
+		# Close as fast as the RCS can still cancel over the remaining distance
+		# (a quarter of the ideal stopping margin), easing to a proportional crawl.
+		var closing: Vector3 = stand_off - offset
+		var remaining: float = closing.length()
+		var acceleration: float = PlayerShip.BRAKE_FORCE_N / maxf(ship.mass, 1.0)
+		var speed: float = minf(remaining * 0.1, sqrt(0.5 * acceleration * remaining))
+		var desired_velocity: Vector3 = closing.normalized() * minf(speed, APPROACH_SPEED_LIMIT_MPS) if remaining > 0.001 else Vector3.ZERO
 		force = ((desired_velocity - ship.linear_velocity) * ship.mass / 2.0).limit_length(PlayerShip.BRAKE_FORCE_N)
 		if (offset - stand_off).length() < 1.0 and ship.linear_velocity.length() < 0.1:
 			_approaching = false

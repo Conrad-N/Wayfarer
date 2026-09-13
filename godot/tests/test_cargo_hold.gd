@@ -18,7 +18,7 @@ func test_actual_drift_through_open_door_secures_cargo_once() -> void:
 	check_eq((fixture.wreck as SalvageWreck).bodies.size(), 0, "secured part leaves loose simulation")
 	check_near(float(telemetry.cargo_mass_kg), 100.0, 0.0001, "manifest carries cargo mass")
 	check_near(float(telemetry.cargo_volume_m3), 1.0, 0.0001, "manifest carries occupied volume")
-	check_near(ship.mass, 8140.0, 0.0001, "cargo becomes physical ship mass")
+	check_near(ship.mass, ShipApi.DRY_MASS_KG + ShipApi.PROPELLANT_CAPACITY_KG + 100.0, 0.0001, "cargo becomes physical ship mass")
 	await _frames(5)
 	check_eq(ship.api.get_telemetry().cargo_manifest.size(), 1, "remaining ticks cannot register it twice")
 	(fixture.root as Node).free()

@@ -62,7 +62,7 @@ capped at 1x in the local scene while anything is loose.
 
 ## M3 implementation (2026-09-10)
 
-The starter ship has an 8,000 kg dry hull, 40 kg RCS propellant and a 2 kWh
+The starter ship has an 8,000 kg dry hull, 2,000 kg RCS propellant and a 2 kWh
 battery. Its kit-panel shell encloses a hab, an interlocked airlock and a cargo
 bay. The bay is 3.6 × 2.8 × 5 m (50.4 m³); its external opening is fixed at
 2.2 × 2.2 m. Doors refuse to close across a body. Each actual door movement
@@ -105,8 +105,11 @@ separate from the RCS section (see below). Local translation and station holding
 use the finite RCS tank.
 
 NAV's local controls provide six translation directions. Approach uses at most
-10 kN and 0.5 m/s to settle 30 m from the selected encounter reference, consuming
-the finite RCS store at a 2,000 m/s exhaust velocity. It requires relative speed
+10 kN to settle 30 m from the selected encounter reference. Its closing speed
+scales with range: the square root of half the RCS stopping margin, capped at
+20 m/s and easing to a proportional crawl inside about 15 m, so a kilometre takes
+a few minutes. The finite RCS store burns at a 2,900 m/s exhaust velocity
+(bipropellant class, about 300 s specific impulse). It requires relative speed
 below 10 m/s and a finished maneuver sequence. Closing the screen or losing focus
 releases held translation. Changing target or cutting off cancels approach.
 

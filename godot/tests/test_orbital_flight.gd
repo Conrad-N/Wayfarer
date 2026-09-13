@@ -9,7 +9,7 @@ func test_backend_resources_and_command_validation() -> void:
 	var api: ShipApi = fixture.ship.api
 	var world: OrbitalWorld = fixture.session.world
 	check(bool(api.get_telemetry().flight.available), "flight backend bound")
-	check_near(world.current_mass(), 32140.0, 1e-9, "main fuel, RCS and transported suit counted independently")
+	check_near(world.current_mass(), 34100.0, 1e-9, "main fuel, RCS and transported suit counted independently")
 	check(not api.set_throttle(NAN), "invalid throttle rejected")
 	check(not api.set_warp(1000000.0), "unsupported warp rejected")
 	check(not api.set_attitude_mode("teleport"), "unknown attitude rejected")
@@ -18,8 +18,8 @@ func test_backend_resources_and_command_validation() -> void:
 	check(api.register_cargo("test-plate", Vector3.ONE, 125.0, 1.0), "cargo ledger accepts fitting part")
 	api.consume_propellant(10.0)
 	flight._sync_mass()
-	check_near(world.structural_mass_kg(), 8255.0, 1e-9, "RCS and cargo are inert mass for main drive")
-	check_near(world.current_mass(), 32255.0, 1e-9, "all actual masses agree")
+	check_near(world.structural_mass_kg(), 10215.0, 1e-9, "RCS and cargo are inert mass for main drive")
+	check_near(world.current_mass(), 34215.0, 1e-9, "all actual masses agree")
 	var rcs_before: float = api.get_telemetry().propellant_kg
 	check(api.set_throttle(0.5), "manual main engine command accepted")
 	check_eq(api.get_telemetry().flight.burn_status, "MAIN THRUST", "manual thrust is not labelled coasting")
@@ -167,7 +167,7 @@ func test_local_rcs_resource_and_cutoff() -> void:
 		flight._advance_local(1.0 / float(Engine.physics_ticks_per_second))
 		await _frames(1)
 	check(fixture.ship.linear_velocity.length() > 0.02, "RCS pushes the physical ship")
-	check_near(rcs_before - float(api.get_telemetry().propellant_kg), 0.5, 0.001, "RCS fuel matches six 60 Hz impulses")
+	check_near(rcs_before - float(api.get_telemetry().propellant_kg), 1000.0 / PlayerShip.EXHAUST_VELOCITY_MPS, 0.001, "RCS fuel matches six 60 Hz impulses")
 	check_eq(api.get_telemetry().main_propellant_kg, main_before, "RCS preserves main tank")
 	check(api.flight_command("cutoff"), "cutoff accepted")
 	var rcs_after: float = api.get_telemetry().propellant_kg
@@ -257,7 +257,7 @@ func test_guided_transfer_arrives_through_live_jolt() -> void:
 	check(float(arrival.relative_speed_mps) < 5.0, "arrival relative speed suitable for local handling")
 	check(float(api.get_telemetry().main_propellant_kg) > 0.0, "arrival retains main fuel")
 	check(float(api.get_telemetry().main_propellant_kg) < 24000.0, "journey paid actual engine propellant")
-	check_near(api.get_telemetry().propellant_kg, 40.0, 0.001, "main-drive journey preserves RCS reserve")
+	check_near(api.get_telemetry().propellant_kg, ShipApi.PROPELLANT_CAPACITY_KG, 0.001, "main-drive journey preserves RCS reserve")
 	interaction.close_screen()
 	interaction.unstrap()
 	check(not fixture.player.get_collision_exceptions().has(fixture.ship), "releasing handhold restores suit/hull collisions")

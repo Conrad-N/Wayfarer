@@ -10,8 +10,8 @@ func test_default_state_and_independence() -> void:
 	var second: RefCounted = API_SCRIPT.new()
 	var state: Dictionary = first.get_telemetry()
 	check_eq(state["dry_mass_kg"], 8000.0, "dry mass")
-	check_eq(state["mass_kg"], 8040.0, "wet mass includes initial propellant")
-	check_eq(state["propellant_kg"], 40.0, "propellant in kilograms")
+	check_eq(state["mass_kg"], 10000.0, "wet mass includes initial propellant")
+	check_eq(state["propellant_kg"], ShipApi.PROPELLANT_CAPACITY_KG, "propellant in kilograms")
 	check_eq(state["battery_energy_j"], 7200000.0, "battery in joules")
 	check_eq(state["cargo_mass_kg"], 0.0, "empty cargo mass")
 	check_eq(state["cargo_volume_m3"], 0.0, "empty cargo volume")
@@ -23,7 +23,7 @@ func test_default_state_and_independence() -> void:
 	first.consume_propellant(1.0)
 	first.apply_damage("cargo", 0.5)
 	check_eq(second.get_telemetry()["battery_energy_j"], 7200000.0, "separate battery")
-	check_eq(second.get_telemetry()["propellant_kg"], 40.0, "separate tank")
+	check_eq(second.get_telemetry()["propellant_kg"], ShipApi.PROPELLANT_CAPACITY_KG, "separate tank")
 	check_eq(second.get_telemetry()["systems"]["cargo"]["health"], 1.0, "separate systems")
 
 
@@ -119,7 +119,7 @@ func test_power_switch_and_brake_dependencies() -> void:
 func test_resource_accounting_and_exhaustion() -> void:
 	var api: RefCounted = API_SCRIPT.new()
 	api.set_braking(true)
-	check_eq(api.consume_propellant(39.5), 39.5, "normal propellant draw")
+	check_eq(api.consume_propellant(1999.5), 1999.5, "normal propellant draw")
 	check_eq(api.get_telemetry()["mass_kg"], 8000.5, "expelled propellant leaves ship mass")
 	check_eq(api.consume_propellant(9.0), 0.5, "final partial fuel draw")
 	check_eq(api.consume_propellant(1.0), 0.0, "empty tank")
@@ -134,7 +134,7 @@ func test_resource_accounting_and_exhaustion() -> void:
 	powered.set_braking(true)
 	powered.consume_energy(7200000.0)
 	check(not powered.get_telemetry()["braking"], "battery exhaustion drops brake even with fuel")
-	check_eq(powered.get_telemetry()["propellant_kg"], 40.0, "battery consumption does not consume fuel")
+	check_eq(powered.get_telemetry()["propellant_kg"], ShipApi.PROPELLANT_CAPACITY_KG, "battery consumption does not consume fuel")
 
 
 ## Invalid consumption and damage cannot create resources, healing, or nonfinite values.
@@ -145,7 +145,7 @@ func test_invalid_resource_and_damage_requests() -> void:
 		check_eq(api.consume_energy(value), 0.0, "invalid energy ignored")
 		check_eq(api.apply_damage("cargo", value), 0.0, "invalid damage ignored")
 	check_eq(api.apply_damage("unknown", 0.5), 0.0, "unknown damage target ignored")
-	check_eq(api.get_telemetry()["propellant_kg"], 40.0, "fuel unchanged")
+	check_eq(api.get_telemetry()["propellant_kg"], ShipApi.PROPELLANT_CAPACITY_KG, "fuel unchanged")
 	check_eq(api.get_telemetry()["battery_energy_j"], 7200000.0, "energy unchanged")
 	check_eq(api.get_telemetry()["ship_health"], 1.0, "health unchanged")
 
@@ -226,7 +226,7 @@ func test_cargo_registration_duplicates_and_unloading() -> void:
 	check(api.register_cargo("battery", Vector3.ONE, 75.0, 0.8, {"part_kind": "battery"}), "battery secured")
 	check(api.register_cargo("panel", Vector3(2, 1, 1), 25.0, 1.2), "panel secured")
 	check(not api.register_cargo("battery", Vector3.ONE, 999.0, 2.0), "duplicate identity rejected")
-	check_eq(api.get_telemetry()["mass_kg"], 8140.0, "cargo changes wet ship mass")
+	check_eq(api.get_telemetry()["mass_kg"], ShipApi.DRY_MASS_KG + ShipApi.PROPELLANT_CAPACITY_KG + 100.0, "cargo changes wet ship mass")
 	check_eq(api.get_telemetry()["cargo_mass_kg"], 100.0, "mass ledger")
 	check_eq(api.get_telemetry()["cargo_volume_m3"], 2.0, "volume ledger")
 	check_eq(api.get_telemetry()["cargo_manifest"].size(), 2, "manifest has two unique parts")
@@ -236,7 +236,7 @@ func test_cargo_registration_duplicates_and_unloading() -> void:
 	check(not api.remove_cargo("battery"), "cannot release twice")
 	check(api.register_cargo("battery", Vector3.ONE, 75.0, 0.8), "released identity can reload")
 	api.consume_propellant(5.0)
-	check_eq(api.get_telemetry()["mass_kg"], 8135.0, "fuel and cargo accounting coexist")
+	check_eq(api.get_telemetry()["mass_kg"], ShipApi.DRY_MASS_KG + ShipApi.PROPELLANT_CAPACITY_KG + 100.0 - 5.0, "fuel and cargo accounting coexist")
 	check(api.remove_cargo("panel") and api.remove_cargo("battery"), "unload remaining parts")
 	check_eq(api.get_telemetry()["cargo_mass_kg"], 0.0, "unloaded mass exact zero")
 	check_eq(api.get_telemetry()["cargo_volume_m3"], 0.0, "unloaded volume exact zero")

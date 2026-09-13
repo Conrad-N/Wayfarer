@@ -393,3 +393,18 @@ decide something the docs did not cover.
   the game log) and `DebugDump` (F11 or any anomaly writes a JSON state dump to
   `user://debug`); `check.sh` isolates `XDG_DATA_HOME` so test runs no longer
   rotate the real game's logs out; the game keeps 20 logs.
+- 2026-09-13 — Conrad drops the Shift requirement for steering a held load: normal
+  mouse motion always requests a turn of the whole held body through the suit
+  wheels, so a salvor can point a caught part before a WASD burn. Z free look
+  still steers nothing. Against the hull the wheels mostly fill rather than turn
+  the ship; the pilot harness keeps restraining the torso.
+- 2026-09-13 — Conrad finds closing on a wreck tedious and the RCS tank
+  unrealistically small. Real ships that do their own rendezvous (Gemini, Crew
+  Dragon) carry 8–10 % of their mass as RCS propellant; Apollo's attitude-only
+  RCS was about 2 %. The starter ship now carries 2,000 kg (6 % of the 34 t
+  loaded ship) at a 2,900 m/s bipropellant exhaust velocity, about 180 m/s of
+  delta-v loaded and 650 m/s with the main tank empty. Approach speed now scales
+  with range (√(½·a·d), capped at 20 m/s, proportional crawl inside 15 m) instead
+  of a flat 0.5 m/s, so a kilometre takes about three minutes rather than half an
+  hour. Conrad also wants ship-scale clamps later so a whole wreck can be towed.
+

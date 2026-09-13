@@ -5,9 +5,9 @@ extends TestCase
 ## Initial practice ships stay light; a configured main drive joins the same mass ledger.
 func test_main_drive_mass_and_snapshot_ownership() -> void:
 	var api: ShipApi = ShipApi.new()
-	check_near(float(api.get_telemetry().mass_kg), 8040.0, 0.001, "practice mass remains compatible")
+	check_near(float(api.get_telemetry().mass_kg), 10000.0, 0.001, "practice mass remains compatible")
 	api.bind_flight(_accept)
-	check_near(float(api.get_telemetry().mass_kg), 32040.0, 0.001, "main propellant joins physical mass")
+	check_near(float(api.get_telemetry().mass_kg), 34000.0, 0.001, "main propellant joins physical mass")
 	var snapshot: Dictionary = {"available": true, "time_s": 12.0, "orbit": {"altitude_m": 400000.0}, "plan": {"nodes": [{"time_s": 60.0}]}}
 	api.publish_flight(snapshot, 23900.0)
 	snapshot.orbit.altitude_m = 0.0
@@ -15,7 +15,7 @@ func test_main_drive_mass_and_snapshot_ownership() -> void:
 	telemetry.flight.plan.nodes[0].time_s = 0.0
 	check_near(float(api.get_telemetry().flight.orbit.altitude_m), 400000.0, 0.0, "publisher cannot mutate cached orbit")
 	check_near(float(api.get_telemetry().flight.plan.nodes[0].time_s), 60.0, 0.0, "client cannot change maneuver through telemetry")
-	check_near(float(api.get_telemetry().mass_kg), 31940.0, 0.001, "burn fuel loss reaches physical mass")
+	check_near(float(api.get_telemetry().mass_kg), 33900.0, 0.001, "burn fuel loss reaches physical mass")
 	api.publish_flight({}, NAN)
 	check(bool(api.get_telemetry().flight.available), "invalid fuel update leaves snapshot intact")
 	api.publish_flight(snapshot, 50000.0)

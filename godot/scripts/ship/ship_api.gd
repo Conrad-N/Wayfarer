@@ -6,7 +6,7 @@ signal changed()
 signal command_requested(command: String, args: Dictionary)
 
 const DRY_MASS_KG: float = 8000.0
-const PROPELLANT_CAPACITY_KG: float = 40.0
+const PROPELLANT_CAPACITY_KG: float = 2000.0
 const BATTERY_CAPACITY_J: float = 7200000.0
 const CARGO_CAPACITY_M3: float = 50.4
 const DOOR_SIZE_M: Vector2 = Vector2(2.2, 2.2)

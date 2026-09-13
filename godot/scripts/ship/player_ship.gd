@@ -11,7 +11,7 @@ const DAMAGE_THRESHOLD_J: float = 2000.0
 const SECTION_DAMAGE_ENERGY_J: float = 300000.0
 const BRAKE_FORCE_N: float = 10000.0
 const BRAKE_TORQUE_NM: float = 6000.0
-const EXHAUST_VELOCITY_MPS: float = 2000.0
+const EXHAUST_VELOCITY_MPS: float = 2900.0
 const THRUSTER_LEVER_ARM_M: float = 2.0
 
 var api: ShipApi = ShipApi.new()

@@ -15,7 +15,7 @@ func test_interior_has_clear_centre_passages_and_terminal_mounts() -> void:
 	check(_ray(ship, Vector3(0, 0, -6.5), Vector3(0, 0, 5.5)).is_empty(), "cargo, hab and open inner airlock have no solid bounding hull")
 	check(not _ray(ship, Vector3.ZERO, Vector3(4, 0, 0)).is_empty(), "side wall remains physically solid")
 	check(not _ray(ship, Vector3.ZERO, Vector3(0, -3, 0)).is_empty(), "floor remains physically solid")
-	check_near(ship.mass, 8040.0, 0.001, "physical mass includes initial propellant")
+	check_near(ship.mass, 10000.0, 0.001, "physical mass includes initial propellant")
 	check_near(ship.gravity_scale, 0.0, 0.0, "ship has no local gravity")
 	ship.free()
 
@@ -109,7 +109,9 @@ func test_rcs_force_limit_fuel_cost_and_release() -> void:
 	var elapsed: float = 12.0 / float(Engine.physics_ticks_per_second)
 	check_near(before_speed - ship.linear_velocity.x, PlayerShip.BRAKE_FORCE_N * elapsed / ship.mass, 0.001, "finite force determines braking acceleration")
 	check_near(before_fuel - float(ship.api.get_telemetry().propellant_kg), PlayerShip.BRAKE_FORCE_N * elapsed / PlayerShip.EXHAUST_VELOCITY_MPS, 0.001, "fuel buys delivered linear impulse")
-	check_near(ship.mass, float(ship.api.get_telemetry().mass_kg), 0.0001, "burn updates physical mass")
+	# RigidBody3D.mass is float32, so at this ship's ~10 t mass the last decimal digit
+	# is not representable; loosen from the usual 0.0001 to stay within float32 precision.
+	check_near(ship.mass, float(ship.api.get_telemetry().mass_kg), 0.002, "burn updates physical mass")
 	ship.api.set_braking(false)
 	await _frames(3)
 	var released: Vector3 = ship.linear_velocity
@@ -121,7 +123,7 @@ func test_rcs_force_limit_fuel_cost_and_release() -> void:
 ## The final fraction of propellant delivers a partial impulse and then leaves drift.
 func test_empty_propellant_and_disabled_rcs_cannot_brake() -> void:
 	var ship: PlayerShip = _ship()
-	ship.api.consume_propellant(39.99)
+	ship.api.consume_propellant(1999.99)
 	ship.linear_velocity = Vector3.RIGHT * 20.0
 	ship.api.set_braking(true)
 	await _frames(6)
@@ -137,7 +139,7 @@ func test_empty_propellant_and_disabled_rcs_cannot_brake() -> void:
 	ship.api.set_braking(true)
 	await _frames(12)
 	check_near(ship.linear_velocity.x, 2.0, 0.0001, "disabled RCS cannot brake")
-	check_near(float(ship.api.get_telemetry().propellant_kg), 40.0, 0.0001, "disabled RCS spends no propellant")
+	check_near(float(ship.api.get_telemetry().propellant_kg), ShipApi.PROPELLANT_CAPACITY_KG, 0.0001, "disabled RCS spends no propellant")
 	ship.free()
 
 
@@ -166,7 +168,7 @@ func test_incoming_collision_damages_contacted_system() -> void:
 		await _frames(100)
 		check(ship.linear_velocity.x > 0.0, "collision transfers real momentum")
 		if speed > 3.0:
-			var energy: float = 0.5 * (8040.0 * 100.0 / 8140.0) * speed * speed
+			var energy: float = 0.5 * (10000.0 * 100.0 / 10100.0) * speed * speed
 			check_near(_health(ship, "rcs"), before - (energy - PlayerShip.DAMAGE_THRESHOLD_J) / PlayerShip.SECTION_DAMAGE_ENERGY_J, 0.0001, "fast incoming contact charges energy once to port RCS section")
 		else:
 			check_near(_health(ship, "rcs"), before, 0.00001, "gentle contact is below damage threshold")
