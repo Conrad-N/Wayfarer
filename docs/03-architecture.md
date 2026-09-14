@@ -91,6 +91,32 @@ resources), economy state (money, debt, contracts, reputation, insurance), and, 
 local scene is active, a snapshot of every rigid body (transform, velocities) and the
 cut state of the reference object. Saving is allowed anywhere except mid-burn.
 
+### First implementation (2026-09-14)
+
+Esc (with no terminal or tablet open) opens `PauseMenu` (`ui/pause_menu.gd`), which
+pauses the tree and offers Resume, Save, Load and Quit. The `Game` autoload
+(`SaveGames`, `scripts/world/save_games.gd`) owns one save slot at
+`user://saves/save.json`, written to a temporary file and renamed into place so a
+crash mid-save leaves the old save intact. The file is full-precision JSON wrapped
+as `{format, version, saved_at, state}`; `SaveCodec` encodes vectors, bases,
+transforms and SimVectors.
+
+`Main.capture_game()` gathers: `OrbitalFlight.capture_save()` (the whole
+`OrbitalSession`: world, every orbital object and every encounter record, plus
+`ShipApi` state and the loaded reference id), `CargoHold.to_save()`, and the pilot's
+pose and velocity relative to the ship, suit stores, suit wheel momentum, seated
+state and selected tool. Near a derelict, the wreck pieces are recorded with the
+same `EncounterStore.capture` used when leaving an encounter; it does not disturb
+the live pieces.
+
+Load stores the state in `Game`, reloads the main scene, and `Main._ready` applies
+it after the normal setup: the session is restored, the saved encounter is
+re-entered the normal way (so pieces return from the encounter record), cargo
+geometry is regrown, then the pilot is placed and, if saved seated, strapped in.
+Not kept: hand grips, boots latches, the grapple, winch cables (all kits return),
+tool heat and in-progress scans, active vent plumes (finished ones are kept), and
+the practice room, which cannot be saved. The economy does not exist yet.
+
 ## Determinism
 
 Same save plus same inputs must give the same result on Linux and Windows. Sim steps

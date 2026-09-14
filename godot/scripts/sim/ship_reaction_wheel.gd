@@ -85,6 +85,26 @@ func integrate_passive(q: Dictionary, omega_body: SimVector, inertia: Dictionary
 	return {"q": orientation, "omega": omega}
 
 
+## Momentum, battery charge and the enabled switch: the only state that changes
+## in play. Ratings (capacity_nms, max_torque_nm, rotor_inertia_kgm2,
+## motor_efficiency, motor_loss_j_per_nms, battery_capacity_j) are fixed hull
+## specs the owner sets once and are not saved.
+func to_save() -> Dictionary:
+	return {
+		"momentum_body": SaveCodec.sim_vector(momentum_body),
+		"battery_energy_j": battery_energy_j,
+		"enabled": enabled,
+	}
+
+
+## Restore saved momentum and charge, clamped back inside this wheel's own limits.
+func apply_save(data: Dictionary) -> void:
+	var loaded: SimVector = SaveCodec.to_sim_vector(data.get("momentum_body"))
+	momentum_body = SimVector.new(clampf(loaded.x, -capacity_nms, capacity_nms), clampf(loaded.y, -capacity_nms, capacity_nms), clampf(loaded.z, -capacity_nms, capacity_nms))
+	battery_energy_j = clampf(float(data.get("battery_energy_j", battery_energy_j)), 0.0, battery_capacity_j)
+	enabled = bool(data.get("enabled", enabled))
+
+
 ## Copied SI telemetry, suitable for publication through the ship API.
 func snapshot() -> Dictionary:
 	return {

@@ -66,6 +66,90 @@ func _init() -> void:
 	recompute_next_soi()
 
 
+## Everything needed to resume this world exactly, except the body hierarchy:
+## OrbitalSession.start_session() always rebuilds `system` deterministically, so
+## apply_save() is only ever called on a world that already has the right one.
+func to_save() -> Dictionary:
+	var saved_nodes: Array = []
+	for node: Dictionary in nodes:
+		saved_nodes.append(SaveCodec.plain(node))
+	var saved_targets: Array = []
+	for target: Dictionary in targets:
+		saved_targets.append(SaveCodec.plain(target))
+	return {
+		"time": time, "rate": rate, "central_body_id": central_body_id,
+		"ship": SaveCodec.plain(ship),
+		"orientation": SaveCodec.plain(orientation),
+		"angular_vel": SaveCodec.sim_vector(angular_vel),
+		"attitude_mode": attitude_mode,
+		"manual_torque": SaveCodec.sim_vector(manual_torque),
+		"reaction_wheel": reaction_wheel.to_save(),
+		"rate_cap": rate_cap, "attitude_lead_seconds": attitude_lead_seconds, "throttle": throttle,
+		"powered_state": SaveCodec.plain(powered_state),
+		"nodes": saved_nodes,
+		"executor_on": executor_on,
+		"burn_target_dir": SaveCodec.sim_vector(burn_target_dir) if burn_target_dir != null else null,
+		"burn_delivered": burn_delivered, "warp_auto_limited": warp_auto_limited,
+		"pending_maneuver": SaveCodec.plain(pending_maneuver),
+		"targets": saved_targets, "selected_target": selected_target,
+		"next_soi": SaveCodec.plain(next_soi),
+		"_phys_accum": _phys_accum, "_in_burn_window": _in_burn_window, "_cargo_mass_override": _cargo_mass_override,
+		"_local_rv": SaveCodec.plain(_local_rv),
+		"_local_control_remaining": _local_control_remaining,
+		"_local_force": SaveCodec.sim_vector(_local_force),
+		"_local_torque": SaveCodec.sim_vector(_local_torque),
+	}
+
+
+## Restore state written by to_save(). Never touches `system`; call this only on a
+## world whose OrbitalSession.start_session() has already run.
+func apply_save(data: Dictionary) -> void:
+	time = float(data.get("time", 0.0))
+	rate = float(data.get("rate", 1.0))
+	central_body_id = str(data.get("central_body_id", central_body_id))
+	ship = SaveCodec.unplain(data.get("ship", {})) as Dictionary
+	orientation = SaveCodec.unplain(data.get("orientation", orientation)) as Dictionary
+	angular_vel = SaveCodec.to_sim_vector(data.get("angular_vel"))
+	attitude_mode = str(data.get("attitude_mode", attitude_mode))
+	manual_torque = SaveCodec.to_sim_vector(data.get("manual_torque"))
+	reaction_wheel.apply_save(data.get("reaction_wheel", {}) as Dictionary)
+	rate_cap = float(data.get("rate_cap", rate_cap))
+	attitude_lead_seconds = float(data.get("attitude_lead_seconds", attitude_lead_seconds))
+	throttle = float(data.get("throttle", 0.0))
+	powered_state = SaveCodec.unplain(data.get("powered_state", {})) as Dictionary
+	var restored_nodes: Array[Dictionary] = []
+	for node: Variant in (data.get("nodes", []) as Array):
+		restored_nodes.append(SaveCodec.unplain(node) as Dictionary)
+	nodes = restored_nodes
+	executor_on = bool(data.get("executor_on", false))
+	var saved_burn_dir: Variant = data.get("burn_target_dir")
+	burn_target_dir = SaveCodec.to_sim_vector(saved_burn_dir) if saved_burn_dir != null else null
+	burn_delivered = float(data.get("burn_delivered", 0.0))
+	warp_auto_limited = bool(data.get("warp_auto_limited", false))
+	pending_maneuver = SaveCodec.unplain(data.get("pending_maneuver", {})) as Dictionary
+	var restored_targets: Array[Dictionary] = []
+	for target: Variant in (data.get("targets", []) as Array):
+		restored_targets.append(SaveCodec.unplain(target) as Dictionary)
+	targets = restored_targets
+	selected_target = int(data.get("selected_target", 0))
+	next_soi = SaveCodec.unplain(data.get("next_soi", {})) as Dictionary
+	_phys_accum = float(data.get("_phys_accum", 0.0))
+	_in_burn_window = bool(data.get("_in_burn_window", false))
+	_cargo_mass_override = float(data.get("_cargo_mass_override", -1.0))
+	_local_rv = SaveCodec.unplain(data.get("_local_rv", {})) as Dictionary
+	_local_control_remaining = float(data.get("_local_control_remaining", 0.0))
+	_local_force = SaveCodec.to_sim_vector(data.get("_local_force"))
+	_local_torque = SaveCodec.to_sim_vector(data.get("_local_torque"))
+
+
+## Whether it is honest to write a save right now. False only while the main
+## engine is actually delivering thrust this instant (throttle open on real
+## propellant); an executor armed and coasting toward an unstarted node, or one
+## waiting in its approach window for alignment before firing, is fine to save.
+func can_save() -> bool:
+	return not (throttle > 0.0 and float(ship["propellant_kg"]) > 0.0)
+
+
 ## Resolve the current central body after any sphere-of-influence handoff.
 func get_body() -> Dictionary:
 	return system.body(central_body_id)

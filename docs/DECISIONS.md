@@ -480,3 +480,13 @@ decide something the docs did not cover.
   spot (or a harness break, which logs its own anomaly; none was logged since the
   step-out change). Unstrapping now tries the exit spot, then spots along the centre
   passage, and logs an anomaly naming the blocking shapes if none is clear.
+- 2026-09-14 — Conrad: Esc should pause with save, load and quit. Added a pause menu
+  and one save slot. Load rebuilds the main scene and applies the saved state after
+  normal setup, re-entering the saved encounter through the existing encounter
+  record path rather than recreating bodies a second way. Transient attachments
+  (grips, boots, grapple, winch cables) are not saved and are let go on load; every
+  winch kit returns. Saving is refused only while the engine is actually thrusting
+  (throttle above zero with propellant). Cargo manifest entries come back through
+  ShipApi's own save; the cargo hold only regrows geometry and the mass frame, so a
+  load with the cargo door shut does not re-run the loading checks. The save is
+  written to a temporary file and renamed so a failed write keeps the old save.

@@ -38,6 +38,25 @@ func start_session() -> void:
 		objects[str(target.id)] = target
 
 
+## JSON-safe session: the world, every persistent orbital object and every
+## encounter record. The planet and moon themselves are rebuilt by start_session.
+func to_save() -> Dictionary:
+	var records: Dictionary = {}
+	for id: String in encounters:
+		records[id] = EncounterStore.record_to_save(encounters[id])
+	return {"world": world.to_save(), "objects": SaveCodec.plain(objects), "encounters": records}
+
+
+## Apply to_save() data to a session that start_session() has just built.
+func apply_save(data: Dictionary) -> void:
+	world.apply_save(data.get("world", {}) as Dictionary)
+	objects = SaveCodec.unplain(data.get("objects", {})) as Dictionary
+	encounters.clear()
+	var records: Dictionary = data.get("encounters", {}) as Dictionary
+	for id: String in records:
+		encounters[id] = EncounterStore.record_from_save(records[id] as Dictionary)
+
+
 ## Resolve a persistent object into the root inertial frame at explicit simulation time.
 func object_state(id: String, at_time: float) -> Dictionary:
 	if world == null or not objects.has(id):

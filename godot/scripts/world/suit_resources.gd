@@ -39,3 +39,14 @@ func charge_energy(requested_j: float) -> float:
 	var accepted: float = minf(requested_j, BATTERY_CAPACITY_J - battery_energy_j)
 	battery_energy_j += accepted
 	return accepted
+
+
+## Propellant and battery charge; there is no suit oxygen store to save yet.
+func to_save() -> Dictionary:
+	return {"propellant_kg": propellant_kg, "battery_energy_j": battery_energy_j}
+
+
+## Restore saved stores. The property setters above clamp to [0, capacity].
+func apply_save(data: Dictionary) -> void:
+	propellant_kg = float(data.get("propellant_kg", propellant_kg))
+	battery_energy_j = float(data.get("battery_energy_j", battery_energy_j))

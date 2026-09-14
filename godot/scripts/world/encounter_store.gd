@@ -43,3 +43,68 @@ static func restore(session: OrbitalSession, id: String, frame: LocalOrbitFrame,
 		wreck.bodies.append(body)
 	hazards.restore_spent_reservoirs(record.spent)
 	wreck.structure_changed.emit()
+
+
+## Convert one session.encounters[id] record to JSON-safe data: the graph, each
+## fragment's identity/orientation/spin/time, spent reservoirs, and cut progress.
+## Fragment positions and velocities are not stored here; they live in
+## session.objects as propagated orbital elements, saved by the orbital layer.
+static func record_to_save(record: Dictionary) -> Dictionary:
+	var fragments: Array = []
+	for fragment: Dictionary in (record.get("fragments", []) as Array):
+		var parts: Array = []
+		for part_id: String in (fragment.get("parts", PackedStringArray()) as PackedStringArray):
+			parts.append(part_id)
+		fragments.append({
+			"id": str(fragment.get("id", "")),
+			"parts": parts,
+			"basis": SaveCodec.basis(fragment.get("basis", Basis.IDENTITY)),
+			"spin": SaveCodec.vector3(fragment.get("spin", Vector3.ZERO)),
+			"time": float(fragment.get("time", 0.0)),
+		})
+	var spent: Dictionary = {}
+	for part_id: String in (record.get("spent", {}) as Dictionary).keys():
+		var kinds: Array = []
+		for kind: String in (record.spent[part_id] as Array):
+			kinds.append(kind)
+		spent[part_id] = kinds
+	var cut_progress: Dictionary = {}
+	for edge_id: String in (record.get("cut_progress", {}) as Dictionary).keys():
+		cut_progress[edge_id] = float(record.cut_progress[edge_id])
+	return {
+		"graph": (record.get("graph") as ShipGraph).to_save(),
+		"fragments": fragments,
+		"spent": spent,
+		"cut_progress": cut_progress,
+	}
+
+
+## Rebuild one session.encounters[id] record from record_to_save() data, ready to
+## assign straight into session.encounters and pass to restore().
+static func record_from_save(data: Dictionary) -> Dictionary:
+	var fragments: Array[Dictionary] = []
+	for entry: Variant in (data.get("fragments", []) as Array):
+		if not entry is Dictionary:
+			continue
+		var fragment: Dictionary = entry
+		fragments.append({
+			"id": str(fragment.get("id", "")),
+			"parts": PackedStringArray(fragment.get("parts", []) as Array),
+			"basis": SaveCodec.to_basis(fragment.get("basis")),
+			"spin": SaveCodec.to_vector3(fragment.get("spin")),
+			"time": float(fragment.get("time", 0.0)),
+		})
+	var spent: Dictionary = {}
+	for part_id: String in (data.get("spent", {}) as Dictionary).keys():
+		var kinds: Array[String] = []
+		kinds.assign(data.spent[part_id] as Array)
+		spent[part_id] = kinds
+	var cut_progress: Dictionary = {}
+	for edge_id: String in (data.get("cut_progress", {}) as Dictionary).keys():
+		cut_progress[edge_id] = float(data.cut_progress[edge_id])
+	return {
+		"graph": ShipGraph.from_save(data.get("graph", {}) as Dictionary),
+		"fragments": fragments,
+		"spent": spent,
+		"cut_progress": cut_progress,
+	}

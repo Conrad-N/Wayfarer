@@ -412,7 +412,8 @@ Goal: the whole job, once.
 - [ ] Station docking (approach a docking ring, dock when slow enough).
 - [ ] Market, contract board, spares, propellant, oxygen.
 - [ ] Insurance (hull, rescue, cargo). Rescue call and tug arrival. Debt and interest.
-- [ ] Save and load.
+- [ ] Save and load. First version done 2026-09-14 (Esc menu, one slot; see
+  03-architecture "First implementation"). Economy state joins it when the economy exists.
 - [ ] Failure states: stranded, overdue, dead suit. Uninsured loss.
 
 Done when: a new player can take a contract, do it, and come back richer or poorer.

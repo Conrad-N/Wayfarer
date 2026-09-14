@@ -172,7 +172,9 @@ and up/down to ±85° without using resources. WASD follows the view along the s
 Shift is unnecessary. Releasing boots keeps the view where it points and turns the
 torso to face it with the suit wheels; then normal EVA turns resume.
 Escape and focus loss cancel active motors and tools, retaining passive
-hand/boot/seat attachments. A visual bump indicator gives feedback when the
+hand/boot/seat attachments. Escape with no screen open also pauses the game behind a
+menu with Resume, Save, Load and Quit; Escape again resumes. With a terminal or the
+tablet open, the first Escape only closes the screen. A visual bump indicator gives feedback when the
 suit physically contacts its surroundings.
 
 SHIP shows wheel storage, signed momentum on all three ship axes and capacity,

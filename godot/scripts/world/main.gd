@@ -23,6 +23,9 @@ var _grip: PhysicalGrip
 var _boots: MagneticBoots
 var _flight: OrbitalFlight
 var _dump: DebugDump
+var _pause_menu: PauseMenu
+## Rebuilds the game scene for a load; tests replace it.
+var reload_action: Callable = func() -> void: get_tree().reload_current_scene()
 var _logged_states: Dictionary = {}
 
 var _screenshot_notice_seconds: float = 0.0
@@ -55,6 +58,10 @@ func _ready() -> void:
 		_flight.configure(get_node("/root/Sim") as OrbitalSession, _ship, _player, _wreck, _hazards)
 		print("Wayfarer M4: orbital flight. F terminal / Tab tablet / PLAN transfer.")
 	_install_debug_dump()
+	_build_pause_menu()
+	var pending: Dictionary = _saves().take_pending_load()
+	if not pending.is_empty() and not salvage_practice:
+		_apply_game(pending)
 	if not salvage_practice:
 		return
 	var wall: Color = Color(0.12, 0.16, 0.20)
@@ -148,6 +155,85 @@ func _process(delta: float) -> void:
 
 
 ## F11 (or any logged anomaly) writes the whole play state to user://debug/.
+func _build_pause_menu() -> void:
+	_pause_menu = PauseMenu.new()
+	add_child(_pause_menu)
+	_player.pause_requested.connect(_open_pause_menu)
+	_pause_menu.closed.connect(_player.resume_control)
+	_pause_menu.save_requested.connect(_on_save_requested)
+	_pause_menu.load_requested.connect(_on_load_requested)
+
+
+func _open_pause_menu() -> void:
+	_pause_menu.set_available(not salvage_practice, _saves().has_save())
+	_pause_menu.open()
+
+
+func _saves() -> SaveGames:
+	return get_node("/root/Game") as SaveGames
+
+
+func _on_save_requested() -> void:
+	if salvage_practice:
+		_pause_menu.show_message("The practice room cannot be saved.")
+		return
+	if not _flight.session.world.can_save():
+		_pause_menu.show_message("Cannot save during an engine burn.")
+		return
+	var error: Error = _saves().write(capture_game())
+	_pause_menu.show_message("Game saved." if error == OK else "Save failed: %s." % error_string(error))
+	_pause_menu.set_available(true, _saves().has_save())
+
+
+## Everything needed to rebuild this moment of the orbital game. Hand grips, boots,
+## the grapple and winch cables are not kept: they are let go on load and every
+## winch kit returns to the suit.
+func capture_game() -> Dictionary:
+	var lever: Vector3 = _player.global_position - _ship.to_global(_ship.center_of_mass)
+	var carrier_velocity: Vector3 = _ship.linear_velocity + _ship.angular_velocity.cross(lever)
+	return {
+		"flight": _flight.capture_save(),
+		"cargo": _cargo.to_save(),
+		"player": {
+			"pose": SaveCodec.transform(_ship.global_transform.affine_inverse() * _player.global_transform),
+			"velocity": SaveCodec.vector3(_player.linear_velocity - carrier_velocity),
+			"spin": SaveCodec.vector3(_player.angular_velocity),
+			"suit": _player.suit.to_save(),
+			"attitude": _player.attitude.to_save(),
+			"seated": _interaction.is_seated(),
+			"tool": int(_player.salvage_tools.selected),
+		},
+	}
+
+
+func _apply_game(state: Dictionary) -> void:
+	_flight.apply_save(state.get("flight", {}) as Dictionary)
+	_cargo.apply_save(state.get("cargo", {}) as Dictionary)
+	var player: Dictionary = state.get("player", {}) as Dictionary
+	_player.global_transform = _ship.global_transform * SaveCodec.to_transform(player.get("pose"), _ship.global_transform.affine_inverse() * _player.global_transform)
+	var lever: Vector3 = _player.global_position - _ship.to_global(_ship.center_of_mass)
+	_player.linear_velocity = _ship.linear_velocity + _ship.angular_velocity.cross(lever) + SaveCodec.to_vector3(player.get("velocity"))
+	_player.angular_velocity = SaveCodec.to_vector3(player.get("spin"))
+	_player.suit.apply_save(player.get("suit", {}) as Dictionary)
+	_player.attitude.apply_save(player.get("attitude", {}) as Dictionary)
+	_player.salvage_tools.select_tool(clampi(int(player.get("tool", 0)), 0, SalvageTools.Tool.size() - 1) as SalvageTools.Tool)
+	if bool(player.get("seated", false)):
+		_player.global_transform = _ship.global_transform * Transform3D(Basis(Vector3.UP, PI / 2.0), PlayerShip.SEAT_POSITION)
+		if not _interaction.strap_in():
+			DebugLog.anomaly("save", "loaded a seated pilot but the harness would not fasten")
+
+
+func _on_load_requested() -> void:
+	var state: Dictionary = _saves().read()
+	if state.is_empty():
+		_pause_menu.show_message("No saved game found.")
+		return
+	# The scene is rebuilt from scratch and applies the waiting state once it is set up.
+	_saves().request_load(state)
+	_pause_menu.close()
+	reload_action.call()
+
+
 func _install_debug_dump() -> void:
 	_dump = DebugDump.new()
 	_dump.name = "DebugDump"

@@ -52,6 +52,35 @@ func configure(owner_session: OrbitalSession, owner_ship: PlayerShip, suit: Play
 	_publish()
 
 
+## Record this moment of flight: the orbital session, the ship's own state and the
+## loaded encounter. Wreck pieces are recorded exactly as leaving the encounter
+## records them; the live pieces stay where they are.
+func capture_save() -> Dictionary:
+	if ship_is_local:
+		_refresh_local_snapshot()
+	if not reference_id.is_empty() and str(session.objects[reference_id].get("kind", "")) == "derelict":
+		EncounterStore.capture(session, reference_id, frame, wreck, hazards)
+	return {"session": session.to_save(), "ship_api": ship.api.to_save(), "reference_id": reference_id}
+
+
+## Rebuild a captured moment on a freshly configured flight, re-entering the saved
+## encounter the normal way so its wreck pieces return from the session record.
+func apply_save(data: Dictionary) -> void:
+	session.apply_save(data.get("session", {}) as Dictionary)
+	ship.api.apply_save(data.get("ship_api", {}) as Dictionary)
+	ship.global_basis = LocalOrbitFrame.ship_basis(session.world.orientation)
+	ship.global_position = -(ship.global_basis * ship.center_of_mass)
+	var state: Dictionary = session.world.ship_root_state()
+	frame.set_reference(state.position, state.velocity)
+	frame.shift = SimVector.new()
+	ship.api.publish_flight({"available": true}, float(session.world.ship.propellant_kg))
+	_sync_mass()
+	var id: String = str(data.get("reference_id", ""))
+	if not id.is_empty() and session.objects.has(id):
+		_enter_encounter(id)
+	_publish()
+
+
 ## Whether the suit is physically inside the ship's enclosed interior envelope.
 func is_aboard() -> bool:
 	return AABB(Vector3(-1.9, -1.4, -7.0), Vector3(3.8, 2.8, 12.8)).has_point(ship.to_local(player.global_position))

@@ -7,12 +7,17 @@ var wreck: SalvageWreck
 var hazards: SalvageHazards
 var _passages: Dictionary = {}
 var _mesh_vertices: Dictionary = {}
+## One entry per secured cargo item, keyed by its manifest id, kept only so
+## to_save() can serialize freight that is no longer represented by any live
+## WreckBody. See to_save() for the shape.
+var _cargo: Dictionary = {}
 
 
 ## Bind the ship and salvage scene; acquisition runs before new tool forces.
 func configure(owner_ship: PlayerShip, source: SalvageWreck, vents: SalvageHazards) -> void:
 	_passages.clear()
 	_mesh_vertices.clear()
+	_cargo.clear()
 	ship = owner_ship
 	wreck = source
 	hazards = vents
@@ -118,6 +123,20 @@ func _secure(body: WreckBody, bounds: AABB) -> void:
 	angular_momentum += (body.global_position - new_center).cross(body.linear_velocity * body.mass)
 	if not ship.api.register_cargo(cargo_id, bounds.size, body.mass, volume, {"value_cr": value, "parts": ids}):
 		return
+	# Record what to_save() needs while the part data and body pose are still
+	# live: each part's own save (definition asset, condition, scan state — the
+	# wreck graph entry becomes orphaned the moment the body is freed below) and
+	# the ship-local frame its geometry sits in, so apply_save() can regenerate
+	# the same shapes without keeping the original nodes around.
+	var part_saves: Dictionary = {}
+	var part_transforms: Dictionary = {}
+	for id: String in ids:
+		var part: ShipPart = wreck.graph.get_part(id)
+		var body_from_part: Transform3D = body.assembly_from_body.affine_inverse() * part.transform
+		part_saves[id] = part.to_save()
+		part_transforms[id] = ship.global_transform.affine_inverse() * body.global_transform * body_from_part
+	_cargo[cargo_id] = {"parts": ids.duplicate(), "size_m": bounds.size, "mass_kg": body.mass,
+		"volume_m3": volume, "value_cr": value, "part_saves": part_saves, "part_transforms": part_transforms}
 	# Represent secured freight once: move its geometry into the ship's compound body.
 	for child: Node in body.get_children():
 		if child is MeshInstance3D or child is CollisionShape3D:
@@ -150,3 +169,92 @@ func _secure(body: WreckBody, bounds: AABB) -> void:
 
 func _parallel_diagonal(offset: Vector3, weight: float) -> Vector3:
 	return weight * Vector3(offset.y * offset.y + offset.z * offset.z, offset.x * offset.x + offset.z * offset.z, offset.x * offset.x + offset.y * offset.y)
+
+
+## JSON-safe snapshot of every secured cargo item plus the ship-frame mass state
+## clamping produced (centre of mass and inertia). Ship mass itself needs no
+## separate storage: PlayerShip recomputes it from ShipApi's telemetry every
+## physics tick, so it self-heals once the manifest is restored. Each item
+## carries its own parts' full ShipPart save, because the wreck graph's entry
+## for a secured part is orphaned — no WreckBody claims it — the moment it is
+## aboard, so nothing else keeps that state once the source wreck is gone.
+func to_save() -> Dictionary:
+	var items: Array = []
+	for cargo_id: String in _cargo:
+		var entry: Dictionary = _cargo[cargo_id]
+		var parts: Array = []
+		for id: String in (entry.parts as PackedStringArray):
+			parts.append(id)
+		var part_transforms: Dictionary = {}
+		for id: String in (entry.part_transforms as Dictionary).keys():
+			part_transforms[id] = SaveCodec.transform(entry.part_transforms[id])
+		items.append({
+			"cargo_id": cargo_id, "parts": parts, "size_m": SaveCodec.vector3(entry.size_m),
+			"mass_kg": entry.mass_kg, "volume_m3": entry.volume_m3, "value_cr": entry.value_cr,
+			"part_transforms": part_transforms, "part_saves": (entry.part_saves as Dictionary).duplicate(true),
+		})
+	var center: Vector3 = ship.center_of_mass if is_instance_valid(ship) else Vector3.ZERO
+	var inertia_diagonal: Vector3 = ship.inertia if is_instance_valid(ship) else Vector3.ZERO
+	return {"items": items, "center_of_mass": SaveCodec.vector3(center), "inertia": SaveCodec.vector3(inertia_diagonal)}
+
+
+## Rebuild every secured cargo item from to_save() data: regrow the ship's compound
+## visual/collision geometry at its saved ship-local placement, then restore the
+## resulting mass frame. The manifest itself comes back through ShipApi.apply_save,
+## which must run first; re-registering here would re-run the loading checks (door
+## open, power on) that a ship loaded with its door shut would fail.
+func apply_save(data: Dictionary) -> void:
+	if not is_instance_valid(ship):
+		return
+	_cargo.clear()
+	for entry: Variant in (data.get("items", []) as Array):
+		if not entry is Dictionary:
+			continue
+		var item: Dictionary = entry
+		var cargo_id: String = str(item.get("cargo_id", ""))
+		var ids: PackedStringArray = PackedStringArray(item.get("parts", []) as Array)
+		var size_m: Vector3 = SaveCodec.to_vector3(item.get("size_m"))
+		var mass_kg: float = float(item.get("mass_kg", 0.0))
+		var volume_m3: float = float(item.get("volume_m3", 0.0))
+		var value_cr: float = float(item.get("value_cr", 0.0))
+		var part_saves: Dictionary = item.get("part_saves", {}) as Dictionary
+		var part_transforms: Dictionary = item.get("part_transforms", {}) as Dictionary
+		var stored_transforms: Dictionary = {}
+		for id: String in ids:
+			var part: ShipPart = ShipPart.from_save(part_saves.get(id, {}) as Dictionary)
+			var ship_local: Transform3D = SaveCodec.to_transform(part_transforms.get(id))
+			stored_transforms[id] = ship_local
+			_add_cargo_geometry(part, ship_local)
+		_cargo[cargo_id] = {"parts": ids, "size_m": size_m, "mass_kg": mass_kg, "volume_m3": volume_m3,
+			"value_cr": value_cr, "part_saves": part_saves.duplicate(true), "part_transforms": stored_transforms}
+	ship.center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
+	ship.center_of_mass = SaveCodec.to_vector3(data.get("center_of_mass"))
+	ship.inertia = SaveCodec.to_vector3(data.get("inertia"))
+
+
+## Regrow one secured part's visual and collision geometry directly under the
+## ship at its saved ship-local placement, mirroring how WreckBody lays out
+## the same part's meshes/shapes relative to its own body in _add_part().
+func _add_cargo_geometry(part: ShipPart, ship_local: Transform3D) -> void:
+	if part.definition == null:
+		return
+	var geometry: Dictionary = PartCatalog.geometry(part.definition) if part.definition.model_path != "" else {}
+	if geometry.is_empty():
+		var mesh: BoxMesh = BoxMesh.new()
+		mesh.size = part.definition.size_m
+		var shape: BoxShape3D = BoxShape3D.new()
+		shape.size = part.definition.size_m
+		geometry = {"meshes": [{"mesh": mesh, "transform": Transform3D.IDENTITY}], "shapes": [{"shape": shape, "transform": Transform3D.IDENTITY}]}
+	for entry: Dictionary in geometry.meshes:
+		var visual: MeshInstance3D = MeshInstance3D.new()
+		visual.mesh = entry.mesh
+		visual.transform = ship_local * (entry.transform as Transform3D)
+		visual.set_meta("system_id", "cargo")
+		ship.add_child(visual)
+	for entry: Dictionary in geometry.shapes:
+		var collision: CollisionShape3D = CollisionShape3D.new()
+		collision.shape = entry.shape
+		collision.transform = ship_local * (entry.transform as Transform3D)
+		collision.set_meta("system_id", "cargo")
+		collision.set_meta("part_id", part.id)
+		ship.add_child(collision)

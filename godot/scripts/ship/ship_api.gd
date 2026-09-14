@@ -426,3 +426,54 @@ func set_rcs_translation(direction: Vector3) -> bool:
 	if not direction.is_finite():
 		return _reject("INVALID RCS DIRECTION")
 	return flight_command("rcs_translate", {"direction": direction.limit_length(1.0)})
+
+
+## Everything this class owns that must survive a save: RCS propellant, battery,
+## door and airlock positions, every system's health/enabled flag, the cargo
+## manifest, and the main-drive propellant mirrored in from the flight session.
+## Skips Callables (_door_validator, _flight_handler — rebuilt by the owning
+## scene) and the per-frame published snapshots (_motion, _flight, solar
+## readings), which the next physics tick republishes anyway. Also skips
+## _main_capacity_kg (an owner-set rating from bind_flight(), not this class's
+## own state) and _last_message (status text, not ship state).
+func to_save() -> Dictionary:
+	return {
+		"propellant_kg": _propellant_kg,
+		"battery_energy_j": _battery_energy_j,
+		"cargo_door_open": _cargo_door_open,
+		"airlock_inner_open": _airlock_inner_open,
+		"airlock_outer_open": _airlock_outer_open,
+		"braking": _braking,
+		"systems": _systems.duplicate(true),
+		"cargo_manifest": SaveCodec.plain(_manifest),
+		"main_propellant_kg": _main_propellant_kg,
+	}
+
+
+## Restore saved ship state. Health clamps to [0,1], propellant and battery clamp
+## to their tank capacities, the airlock interlock is re-enforced rather than
+## trusted, and the brake is rechecked against the restored power/RCS/propellant
+## state instead of taken on faith.
+func apply_save(data: Dictionary) -> void:
+	_propellant_kg = clampf(float(data.get("propellant_kg", _propellant_kg)), 0.0, PROPELLANT_CAPACITY_KG)
+	_battery_energy_j = clampf(float(data.get("battery_energy_j", _battery_energy_j)), 0.0, BATTERY_CAPACITY_J)
+	_cargo_door_open = bool(data.get("cargo_door_open", _cargo_door_open))
+	_airlock_inner_open = bool(data.get("airlock_inner_open", _airlock_inner_open))
+	_airlock_outer_open = bool(data.get("airlock_outer_open", _airlock_outer_open)) and not _airlock_inner_open
+	var loaded_systems: Variant = data.get("systems", {})
+	if loaded_systems is Dictionary:
+		for id: String in (loaded_systems as Dictionary).keys():
+			if not _systems.has(id):
+				continue
+			var entry: Dictionary = (loaded_systems as Dictionary)[id]
+			_systems[id] = {
+				"health": clampf(float(entry.get("health", 1.0)), 0.0, 1.0),
+				"enabled": bool(entry.get("enabled", true)),
+			}
+	_manifest.clear()
+	for item: Variant in (data.get("cargo_manifest", []) as Array):
+		_manifest.append(SaveCodec.unplain(item) as Dictionary)
+	_main_propellant_kg = maxf(0.0, float(data.get("main_propellant_kg", _main_propellant_kg)))
+	_braking = bool(data.get("braking", _braking))
+	_refresh_brake()
+	changed.emit()

@@ -77,3 +77,14 @@ func gyroscopic_torque(omega_body: Vector3) -> Vector3:
 ## Highest axis utilization, from empty (zero) to saturated (one).
 func utilization() -> float:
 	return maxf(absf(momentum_body.x), maxf(absf(momentum_body.y), absf(momentum_body.z))) / MOMENTUM_LIMIT_NMS
+
+
+## Rotor momentum is the only mutable state; the constants above are fixed ratings.
+func to_save() -> Dictionary:
+	return {"momentum_body": SaveCodec.vector3(momentum_body)}
+
+
+## Restore saved rotor momentum, clamped back inside the wheel's own limit.
+func apply_save(data: Dictionary) -> void:
+	var loaded: Vector3 = SaveCodec.to_vector3(data.get("momentum_body"), Vector3.ZERO)
+	momentum_body = loaded.clamp(Vector3.ONE * -MOMENTUM_LIMIT_NMS, Vector3.ONE * MOMENTUM_LIMIT_NMS)

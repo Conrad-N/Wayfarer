@@ -24,3 +24,33 @@ func salvage_value() -> float:
 ## Only identified parts with valid physical definitions can enter an assembly.
 func is_valid() -> bool:
 	return not id.strip_edges().is_empty() and definition != null and definition.is_valid() and PartDefinition.is_rigid_transform(transform)
+
+
+## JSON-safe snapshot: identity, the catalog asset name to re-resolve the shared
+## definition on load, the assembly-local transform, and all mutable state.
+func to_save() -> Dictionary:
+	return {
+		"id": id,
+		"asset": definition.model_path.get_file().get_basename() if definition != null else "",
+		"transform": SaveCodec.transform(transform),
+		"condition": condition,
+		"intact_factor": intact_factor,
+		"scanned": scanned,
+	}
+
+
+## Rebuild a part from to_save() data. The definition comes from PartCatalog's
+## cache, so every part built from the same asset shares one PartDefinition
+## instance again, exactly as PracticeWreck and the salvage cutters expect.
+static func from_save(data: Dictionary) -> ShipPart:
+	var part: ShipPart = ShipPart.new()
+	part.id = str(data.get("id", ""))
+	var asset: String = str(data.get("asset", ""))
+	part.definition = PartCatalog.definition(asset)
+	if part.definition == null:
+		push_error("Save data references an unknown part asset: %s" % asset)
+	part.transform = SaveCodec.to_transform(data.get("transform"))
+	part.condition = float(data.get("condition", 1.0))
+	part.intact_factor = float(data.get("intact_factor", 1.0))
+	part.scanned = bool(data.get("scanned", false))
+	return part

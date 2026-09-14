@@ -94,6 +94,41 @@ func get_edge(id: String) -> Dictionary:
 	return edge.duplicate()
 
 
+## JSON-safe snapshot of every part and every surviving connection, with enough
+## detail for from_save() to rebuild an identical graph: same components, same
+## severed edges, same mass (parts share catalog definitions, not copies).
+func to_save() -> Dictionary:
+	var parts: Array = []
+	for id: String in part_ids():
+		parts.append(_parts[id].to_save())
+	var edges: Array = []
+	for id: String in edge_ids():
+		var edge: Dictionary = _edges[id]
+		edges.append({"id": id, "a": edge["a"], "b": edge["b"], "socket_a": edge["socket_a"], "socket_b": edge["socket_b"]})
+	return {"parts": parts, "edges": edges}
+
+
+## Rebuild a graph from to_save() data. A part whose asset no longer resolves,
+## or an edge that fails validation, is skipped and logged rather than aborting
+## the whole load; the rest of the wreck still comes back.
+static func from_save(data: Dictionary) -> ShipGraph:
+	var graph: ShipGraph = ShipGraph.new()
+	for entry: Variant in (data.get("parts", []) as Array):
+		if not entry is Dictionary:
+			continue
+		var part: ShipPart = ShipPart.from_save(entry)
+		if not graph.add_part(part):
+			push_error("Save data could not restore part: %s" % str((entry as Dictionary).get("id", "")))
+	for entry: Variant in (data.get("edges", []) as Array):
+		if not entry is Dictionary:
+			continue
+		var edge: Dictionary = entry
+		var edge_id: String = str(edge.get("id", ""))
+		if not graph.connect_parts(edge_id, str(edge.get("a", "")), str(edge.get("socket_a", "")), str(edge.get("b", "")), str(edge.get("socket_b", ""))):
+			push_error("Save data could not restore edge: %s" % edge_id)
+	return graph
+
+
 func _socket_size(socket: String) -> String:
 	var suffix: String = socket.get_slice("_", socket.get_slice_count("_") - 1)
 	return suffix if suffix in ["S", "M", "L"] else "M"

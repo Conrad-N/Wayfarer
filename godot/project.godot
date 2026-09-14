@@ -23,6 +23,7 @@ gdscript/warnings/unsafe_property_access=1
 [autoload]
 
 Sim="*res://scripts/world/orbital_session.gd"
+Game="*res://scripts/world/save_games.gd"
 
 [display]
 

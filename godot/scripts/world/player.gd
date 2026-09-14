@@ -13,6 +13,9 @@ extends RigidBody3D
 @export_range(1.0, 10000.0, 1.0) var exhaust_velocity_mps: float = 2000.0
 @export_range(0.01, 2.0, 0.01) var thruster_lever_arm_m: float = 0.5
 
+## Esc was pressed with no screen open.
+signal pause_requested
+
 const HEAD_YAW_LIMIT_RAD: float = PI / 3.0
 const HEAD_PITCH_LIMIT_RAD: float = PI * 5.0 / 18.0
 const SURFACE_PITCH_LIMIT_RAD: float = PI * 17.0 / 36.0
@@ -116,6 +119,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("ui_cancel"):
 		_release_mouse()
+		pause_requested.emit()
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton:
 		var button: InputEventMouseButton = event as InputEventMouseButton
@@ -529,6 +533,14 @@ func _apply_suit_forces(force: Vector3, torque: Vector3, delta: float) -> void:
 	mass = maxf(mass - spent, 0.001)
 	apply_central_force(force * fraction)
 	apply_torque(torque * fraction)
+
+
+## Take the mouse back after a menu, without the click or key that closed it firing a tool.
+func resume_control() -> void:
+	_capture_click_held = true
+	_secondary_blocked = true
+	if input_enabled and DisplayServer.get_name() != "headless":
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
 func _release_mouse() -> void:
