@@ -460,3 +460,11 @@ decide something the docs did not cover.
   when that moment would exceed the jets' 60 N·m rating the push is scaled down
   rather than spinning the pair. Mouse steering also planned its stop with the
   suit's inertia alone and overshot heavy loads; it now uses the combined inertia.
+- 2026-09-14 — Conrad: the ship and suit must be able to slow spin, recharging, even
+  at 0 battery. Both wheel drives now accept a command on a flat battery, restricted
+  to its spin-opposing part and to the fraction whose electrical work is not positive
+  (the existing bisection). Charge banked early in a stop pays for the low-rotor-speed
+  end, where losses exceed regeneration. ShipApi keeps STOP ROTATION ("kill") available
+  without charge while the power system is on and healthy; pointing modes still need
+  charge. Physics limit kept: stopping an outside spin with the rotors near rest needs
+  rotor spin-up energy, so a flat battery cannot do it.

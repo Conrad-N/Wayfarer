@@ -17,9 +17,14 @@ var momentum_body: SimVector = SimVector.new()
 ## Apply a motor command, returning equal-and-opposite carrier torque in N m.
 ## Positive electrical work drains the supplied battery; deceleration regenerates.
 func drive(requested_torque: SimVector, omega_body: SimVector, inertia: Dictionary, delta: float) -> SimVector:
-	if not enabled or not _valid(delta, requested_torque, omega_body, inertia) or battery_energy_j <= 0.0:
+	if not enabled or not _valid(delta, requested_torque, omega_body, inertia):
 		return SimVector.new()
 	var requested_impulse: SimVector = SimVector.scale(SimVector.clamp_magnitude(requested_torque, max_torque_nm), delta)
+	if battery_energy_j <= 0.0:
+		# A flat battery can still brake: slowing a rotor that holds the opposite
+		# momentum generates. Keep only the spin-opposing part of the command; the
+		# energy check below allows no more than the rotor returns.
+		requested_impulse = spin_opposing(requested_impulse, omega_body)
 	var next: SimVector = SimVector.sub(momentum_body, requested_impulse)
 	next = SimVector.new(clampf(next.x, -capacity_nms, capacity_nms), clampf(next.y, -capacity_nms, capacity_nms), clampf(next.z, -capacity_nms, capacity_nms))
 	var impulse: SimVector = SimVector.sub(momentum_body, next)
@@ -89,6 +94,15 @@ func snapshot() -> Dictionary:
 		"stored_energy_j": SimVector.dot(momentum_body, momentum_body) / (2.0 * rotor_inertia_kgm2),
 		"enabled": enabled,
 	}
+
+
+## The part of a carrier impulse that directly opposes the carrier's current spin.
+static func spin_opposing(impulse: SimVector, omega_body: SimVector) -> SimVector:
+	var speed: float = SimVector.length(omega_body)
+	if not is_finite(speed) or speed <= 0.0:
+		return SimVector.new()
+	var along: float = SimVector.dot(impulse, omega_body) / speed
+	return SimVector.scale(omega_body, along / speed) if along < 0.0 else SimVector.new()
 
 
 func _electrical_work(impulse: SimVector, omega_body: SimVector, inertia: Dictionary) -> float:

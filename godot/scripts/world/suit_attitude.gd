@@ -18,12 +18,15 @@ func drive(requested_torque: Vector3, omega_body: Vector3, max_torque_nm: float,
 	if delta <= 0.0 or not is_finite(delta) or not requested_torque.is_finite() or not omega_body.is_finite():
 		return Vector3.ZERO
 	var impulse: Vector3 = requested_torque.limit_length(maxf(max_torque_nm, 0.0)) * delta
+	if suit.battery_energy_j <= 0.0:
+		# A flat battery can still brake: slowing a rotor that holds the opposite
+		# momentum generates. Keep only the spin-opposing part of the command; the
+		# energy check below allows no more than the rotor returns.
+		impulse = spin_opposing(impulse, omega_body)
 	var next_momentum: Vector3 = (momentum_body - impulse).clamp(
 		Vector3.ONE * -MOMENTUM_LIMIT_NMS, Vector3.ONE * MOMENTUM_LIMIT_NMS)
 	impulse = momentum_body - next_momentum
 	if impulse.length_squared() < 1e-20:
-		return Vector3.ZERO
-	if suit.battery_energy_j <= 0.0:
 		return Vector3.ZERO
 	var cost: float = _energy_cost(impulse, omega_body, inverse_inertia_body)
 	if cost > suit.battery_energy_j:
@@ -45,6 +48,15 @@ func drive(requested_torque: Vector3, omega_body: Vector3, max_torque_nm: float,
 		suit.charge_energy(-cost)
 	momentum_body -= impulse
 	return impulse / delta
+
+
+## The part of a body impulse that directly opposes the body's current spin.
+static func spin_opposing(impulse: Vector3, omega_body: Vector3) -> Vector3:
+	var speed: float = omega_body.length()
+	if speed <= 0.0:
+		return Vector3.ZERO
+	var along: float = impulse.dot(omega_body) / speed
+	return omega_body * (along / speed) if along < 0.0 else Vector3.ZERO
 
 
 func _energy_cost(impulse: Vector3, omega_body: Vector3, inverse_inertia_body: Basis) -> float:

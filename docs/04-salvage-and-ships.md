@@ -179,7 +179,10 @@ existing fully supplied 100 kg suit. Each full wheel stores about 209 kJ.
 Motors pay electrical/mechanical losses; saturation prevents further momentum
 storage. Slowing rotors recovers electrical energy with losses, without deleting
 angular momentum. X brakes rotation with wheels only, leaving drift and fuel
-alone. Alt unloads stored wheel momentum with opposing propellant jets while
+alone. X still works on a flat battery (2026-09-14) when the rotors hold the
+opposite momentum, as they do after a wheel-driven turn: slowing them stops the
+spin and recharges the battery. A spin from outside, with the rotors near rest,
+needs charge to stop. Alt unloads stored wheel momentum with opposing propellant jets while
 braking drift and spin.
 
 Hold C to run the wheels toward zero momentum. The equal and opposite torque

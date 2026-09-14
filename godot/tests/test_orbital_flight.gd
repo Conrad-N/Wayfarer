@@ -386,6 +386,29 @@ func test_flat_battery_recovers_and_restores_power() -> void:
 	fixture.root.free()
 
 
+## STOP ROTATION works on a flat battery: slowing the loaded wheels stops the ship and recharges it.
+func test_flat_battery_stop_rotation_recharges() -> void:
+	var fixture: Dictionary = _fixture()
+	var flight: OrbitalFlight = fixture.flight
+	var world: OrbitalWorld = fixture.session.world
+	var api: ShipApi = fixture.ship.api
+	api.set_system_enabled("solar", false)
+	var iy: float = float(world.ship.inertia.iy)
+	world.angular_vel = SimVector.new(0.0, 0.1, 0.0)
+	world.reaction_wheel.momentum_body = SimVector.new(0.0, -iy * 0.1, 0.0)
+	api.consume_energy(ShipApi.BATTERY_CAPACITY_J)
+	check(not api.set_attitude_mode("prograde"), "pointing modes still need charge")
+	check(api.set_attitude_mode("kill"), "STOP ROTATION is accepted on a flat battery")
+	for second: int in range(30):
+		flight._advance_orbit(1.0)
+	check(absf(world.angular_vel.y) < 0.002, "ship stops rotating, got %.4f rad/s" % world.angular_vel.y)
+	check(float(api.get_telemetry().battery_energy_j) > 0.0, "slowing the wheels recharged the flat battery")
+	check_near(iy * world.angular_vel.y + world.reaction_wheel.momentum_body.y, 0.0, iy * 0.002, "braking only moves momentum between hull and wheels")
+	api.set_system_enabled("power", false)
+	check(not api.set_attitude_mode("kill"), "a switched-off power system cannot run STOP ROTATION")
+	fixture.root.free()
+
+
 func _fixture() -> Dictionary:
 	var tree: SceneTree = Engine.get_main_loop() as SceneTree
 	var holder: Node3D = Node3D.new()

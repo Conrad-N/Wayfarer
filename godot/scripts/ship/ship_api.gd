@@ -365,7 +365,9 @@ func flight_command(command: String, arguments: Dictionary = {}) -> bool:
 	if not _flight_handler.is_valid():
 		return _reject("FLIGHT COMPUTER UNAVAILABLE")
 	var releasing_rcs: bool = command == "rcs_translate" and arguments.get("direction") is Vector3 and arguments["direction"] == Vector3.ZERO
-	if not _has_power() and not releasing_rcs and command not in ["cutoff", "cancel_plan", "set_warp"]:
+	# STOP ROTATION stays available on a flat battery: wheel braking can pay for itself.
+	var stopping_rotation: bool = command == "set_attitude_mode" and str(arguments.get("mode", "")) == "kill" and _system_working("power")
+	if not _has_power() and not releasing_rcs and not stopping_rotation and command not in ["cutoff", "cancel_plan", "set_warp"]:
 		return _reject("FLIGHT CONTROLS NEED SHIP POWER")
 	var result: Dictionary = _flight_handler.call(command, arguments.duplicate(true))
 	if not bool(result.get("ok", false)):

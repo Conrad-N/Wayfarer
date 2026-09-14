@@ -32,6 +32,49 @@ func test_partial_battery_pays_for_body_and_rotor_energy() -> void:
 	check_near((wheel.momentum_body + impulse).length(), 0.0, 1e-6, "partial supply preserves opposite momentum")
 
 
+## A flat battery can still brake spin when the slowing rotor pays for it, but never speeds spin up.
+func test_flat_battery_brakes_spin_by_slowing_rotor() -> void:
+	var inverse: Basis = Basis.from_scale(Vector3.ONE / 20.0)
+	var omega: Vector3 = Vector3(0.0, 1.0, 0.0)
+	var wheel: SuitAttitude = SuitAttitude.new()
+	var suit: SuitResources = SuitResources.new()
+	suit.battery_energy_j = 0.0
+	wheel.momentum_body = Vector3(0.0, -20.0, 0.0)
+	var released_before: float = 400.0 / (2.0 * SuitAttitude.ROTOR_INERTIA_KGM2) + 0.5 * 20.0
+	var torque: Vector3 = wheel.drive(Vector3(0.0, -8.0, 0.0), omega, 8.0, 0.1, suit, inverse)
+	check(torque.y < 0.0, "flat battery still delivers spin-opposing torque")
+	check(suit.battery_energy_j > 0.0, "braking a loaded rotor recharges a flat suit battery")
+	var omega_after: float = 1.0 + torque.y * 0.1 / 20.0
+	var released_after: float = wheel.momentum_body.length_squared() / (2.0 * SuitAttitude.ROTOR_INERTIA_KGM2) + 0.5 * 20.0 * omega_after * omega_after
+	check(suit.battery_energy_j <= released_before - released_after, "recovered charge never exceeds the mechanical energy released")
+	var speeding: SuitAttitude = SuitAttitude.new()
+	var flat: SuitResources = SuitResources.new()
+	flat.battery_energy_j = 0.0
+	speeding.momentum_body = Vector3(0.0, -20.0, 0.0)
+	check_near(speeding.drive(Vector3(0.0, 8.0, 0.0), omega, 8.0, 0.1, flat, inverse).length(), 0.0, 1e-9, "flat battery cannot speed spin up")
+	var still_rotor: SuitAttitude = SuitAttitude.new()
+	check_near(still_rotor.drive(Vector3(0.0, -8.0, 0.0), omega, 8.0, 0.1, flat, inverse).length(), 0.0, 1e-9, "stopping outside spin needs rotor spin-up energy a flat battery lacks")
+	check_eq(flat.battery_energy_j, 0.0, "refused braking neither charges nor drains")
+
+
+## X stops a spin the wheels started even with a flat battery, recharging as it goes.
+func test_wheel_brake_on_flat_battery_stops_spin_and_recharges() -> void:
+	var player: Player = _spawn_player()
+	await _steps(3)
+	var inertia: Basis = player.get_inverse_inertia_tensor().inverse()
+	player.angular_velocity = Vector3.UP
+	player.attitude.momentum_body = player.global_basis.transposed() * -(inertia * Vector3.UP)
+	player.suit.battery_energy_j = 0.0
+	player.set_wheel_braking(true)
+	await _steps(120)
+	player.set_wheel_braking(false)
+	var world_momentum: Vector3 = player.get_inverse_inertia_tensor().inverse() * player.angular_velocity + player.global_basis * player.attitude.momentum_body
+	check(player.angular_velocity.length() < 0.05, "flat-battery wheel brake stops the spin, got %.3f rad/s" % player.angular_velocity.length())
+	check(player.suit.battery_energy_j > 0.0, "braking recharged the suit battery")
+	check_near(world_momentum.length(), 0.0, 0.3, "braking only moves momentum between suit and rotors")
+	player.free()
+
+
 ## Physical spin and rotor momentum cancel after a powered free-space roll.
 func test_jolt_body_plus_wheels_conserve_angular_momentum() -> void:
 	var player: Player = _spawn_player()

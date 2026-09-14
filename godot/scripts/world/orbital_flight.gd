@@ -151,7 +151,9 @@ func _advance_local(delta: float) -> void:
 
 func _attitude_available() -> bool:
 	var data: Dictionary = ship.api.get_telemetry()
-	return bool(data.power_available) and bool(data.systems.reaction_wheel.enabled) and float(data.systems.reaction_wheel.health) > 0.0
+	# A flat battery still counts: the wheel itself limits a flat battery to braking that pays for itself.
+	return bool(data.systems.power.enabled) and float(data.systems.power.health) > 0.0 \
+		and bool(data.systems.reaction_wheel.enabled) and float(data.systems.reaction_wheel.health) > 0.0
 
 
 func _sync_attitude_authority() -> void:

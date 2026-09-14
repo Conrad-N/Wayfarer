@@ -37,6 +37,31 @@ func test_partial_battery_and_invalid_input() -> void:
 	check_eq(wheel.battery_energy_j, 100.0, "invalid commands do not charge or consume energy")
 
 
+## A flat battery can still brake spin when the slowing rotor pays for it, but never speeds spin up.
+func test_flat_battery_brakes_spin_by_slowing_rotor() -> void:
+	var wheel: ShipReactionWheel = ShipReactionWheel.new()
+	wheel.battery_energy_j = 0.0
+	var omega: SimVector = SimVector.new(0.0, 0.1, 0.0)
+	wheel.momentum_body = SimVector.new(0.0, -float(INERTIA.iy) * 0.1, 0.0)
+	var rotor_before: float = SimVector.dot(wheel.momentum_body, wheel.momentum_body) / (2.0 * wheel.rotor_inertia_kgm2)
+	var body_before: float = 0.5 * float(INERTIA.iy) * 0.01
+	var torque: SimVector = wheel.drive(SimVector.new(0.0, -5500.0, 0.0), omega, INERTIA, 0.5)
+	check(torque.y < 0.0, "flat battery still delivers spin-opposing torque")
+	check(wheel.battery_energy_j > 0.0, "braking a loaded rotor recharges a flat battery")
+	var rotor_after: float = SimVector.dot(wheel.momentum_body, wheel.momentum_body) / (2.0 * wheel.rotor_inertia_kgm2)
+	var omega_after: float = 0.1 + torque.y * 0.5 / float(INERTIA.iy)
+	var body_after: float = 0.5 * float(INERTIA.iy) * omega_after * omega_after
+	check(wheel.battery_energy_j <= (rotor_before + body_before) - (rotor_after + body_after), "recovered charge never exceeds the mechanical energy released")
+	var speeding: ShipReactionWheel = ShipReactionWheel.new()
+	speeding.battery_energy_j = 0.0
+	speeding.momentum_body = SimVector.new(0.0, -10700.0, 0.0)
+	check_near(SimVector.length(speeding.drive(SimVector.new(0.0, 5500.0, 0.0), omega, INERTIA, 0.5)), 0.0, 1e-12, "flat battery cannot speed spin up")
+	var still_rotor: ShipReactionWheel = ShipReactionWheel.new()
+	still_rotor.battery_energy_j = 0.0
+	check_near(SimVector.length(still_rotor.drive(SimVector.new(0.0, -5500.0, 0.0), omega, INERTIA, 0.5)), 0.0, 1e-12, "stopping outside spin needs rotor spin-up energy a flat battery lacks")
+	check_eq(still_rotor.battery_energy_j, 0.0, "refused braking neither charges nor drains")
+
+
 ## Unloading returns energy with losses while delivering the rotor's momentum.
 func test_regeneration_preserves_momentum_and_energy() -> void:
 	var wheel: ShipReactionWheel = ShipReactionWheel.new()

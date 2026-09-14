@@ -131,6 +131,13 @@ A full single-axis wheel stores 5 MJ. Motors use the ship battery for positive
 work and losses of 2 J per N·m·s transferred; generating returns 90% of available
 energy up to battery capacity. Excess energy is dissipated, never extra charge.
 Momentum storage and battery charge are distinct limits.
+A flat battery does not lock the wheels (2026-09-14). STOP ROTATION is still accepted
+while the power system is switched on and undamaged. With no charge the wheels
+deliver only torque that opposes the current spin, and only as much as the slowing
+rotors pay for after losses. A spin the wheels started (a slew cut short by an empty
+battery) can therefore be stopped, and it recharges the battery. A spin from outside,
+such as a collision, with the rotors near rest would need energy to spin them up, so
+a flat battery cannot stop it. The suit's X wheel brake follows the same rule.
 Automatic pointing (direction holds, STOP ROTATION and burn alignment) turns no
 faster than a quarter of wheel capacity allows for the current hull inertia:
 about 2°/s for the loaded starter ship. A half-turn then loses roughly 0.2 MJ
