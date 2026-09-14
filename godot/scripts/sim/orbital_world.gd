@@ -10,6 +10,10 @@ const SOI_LEAD: float = 120.0
 const CAPTURE_SAMPLES: int = 2000
 const MAX_RATE: float = 1000000.0
 const ATTITUDE_MODES: PackedStringArray = ["manual", "kill", "prograde", "retrograde", "normal", "antinormal", "radial_in", "radial_out", "target", "anti_target", "node"]
+## Automatic slews cruise with at most this share of wheel capacity in the hull.
+## Rotor energy grows with momentum squared, so a slew that fills a wheel ties up
+## 5 MJ and loses over 1 MJ to motor inefficiency; a quarter-capacity slew loses ~0.2 MJ.
+const SLEW_WHEEL_FRACTION: float = 0.25
 
 var system: OrbitalSystem
 var central_body_id: String = "cradle"
@@ -185,7 +189,7 @@ func advance_local(delta: float, r: SimVector, v: SimVector, q: Dictionary, omeg
 			if executor_on:
 				_drive_executor()
 			_local_force = SimVector.scale(FlightMath.thrust_axis_world(orientation), float(ship["thrust_n"]) * throttle)
-			_local_torque = FlightMath.clamp_magnitude(manual_torque, ship["max_torque_nm"]) if attitude_mode == "manual" else FlightMath.control_torque_body(orientation, angular_vel, attitude_target_dir(), ship["inertia"], ship["max_torque_nm"], rate_cap)
+			_local_torque = FlightMath.clamp_magnitude(manual_torque, ship["max_torque_nm"]) if attitude_mode == "manual" else FlightMath.control_torque_body(orientation, angular_vel, attitude_target_dir(), ship["inertia"], ship["max_torque_nm"], _slew_rate_cap())
 			_local_control_remaining = DT_PHYS
 		var step: float = minf(remaining, _local_control_remaining)
 		var thrust: float = SimVector.length(_local_force)
@@ -659,6 +663,12 @@ func _check_powered_soi() -> void:
 			return
 
 
+## Slew rate [rad/s] whose momentum in the heaviest transverse axis stays within the wheel share.
+func _slew_rate_cap() -> float:
+	var inertia: float = maxf(float(ship.inertia.iy), float(ship.inertia.iz))
+	return minf(rate_cap, SLEW_WHEEL_FRACTION * reaction_wheel.capacity_nms / maxf(1.0, inertia))
+
+
 func _attitude_active() -> bool:
 	if attitude_mode == "manual":
 		return SimVector.length(angular_vel) > 1e-12 or SimVector.length(manual_torque) > 0.0
@@ -671,7 +681,7 @@ func _attitude_active() -> bool:
 
 
 func _step_attitude(dt: float) -> void:
-	var torque: SimVector = FlightMath.clamp_magnitude(manual_torque, ship["max_torque_nm"]) if attitude_mode == "manual" else FlightMath.control_torque_body(orientation, angular_vel, attitude_target_dir(), ship["inertia"], ship["max_torque_nm"], rate_cap)
+	var torque: SimVector = FlightMath.clamp_magnitude(manual_torque, ship["max_torque_nm"]) if attitude_mode == "manual" else FlightMath.control_torque_body(orientation, angular_vel, attitude_target_dir(), ship["inertia"], ship["max_torque_nm"], _slew_rate_cap())
 	var motor_torque: SimVector = reaction_wheel.drive(torque, angular_vel, ship["inertia"], dt)
 	var after_motor: SimVector = SimVector.add(angular_vel, SimVector.new(motor_torque.x * dt / float(ship.inertia.ix), motor_torque.y * dt / float(ship.inertia.iy), motor_torque.z * dt / float(ship.inertia.iz)))
 	var next: Dictionary = reaction_wheel.integrate_passive(orientation, after_motor, ship["inertia"], dt)

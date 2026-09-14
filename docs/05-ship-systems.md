@@ -131,6 +131,11 @@ A full single-axis wheel stores 5 MJ. Motors use the ship battery for positive
 work and losses of 2 J per N·m·s transferred; generating returns 90% of available
 energy up to battery capacity. Excess energy is dissipated, never extra charge.
 Momentum storage and battery charge are distinct limits.
+Automatic pointing (direction holds, STOP ROTATION and burn alignment) turns no
+faster than a quarter of wheel capacity allows for the current hull inertia:
+about 2°/s for the loaded starter ship. A half-turn then loses roughly 0.2 MJ
+instead of filling a wheel and losing over 1 MJ. The maneuver executor starts
+lining up 120 s before each burn.
 
 The `reaction_wheel` system has independent health and on/off state. NAV attitude
 AUTO OFF leaves automatic compensation disabled; STOP ROTATION or a direction

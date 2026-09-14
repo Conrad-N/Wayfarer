@@ -43,7 +43,8 @@ func configure(owner_session: OrbitalSession, owner_ship: PlayerShip, suit: Play
 	ship.api.publish_flight({"available": true}, float(session.world.ship.propellant_kg))
 	ship.mass = float(ship.api.get_telemetry().mass_kg)
 	_sync_mass()
-	session.world.attitude_lead_seconds = 60.0
+	# A loaded hull slews about 2°/s, so a half-turn needs roughly 90 s before a burn.
+	session.world.attitude_lead_seconds = 120.0
 	_make_sky()
 	_publish()
 

@@ -382,6 +382,30 @@ func test_powered_mass_sync_and_starvation_disengage() -> void:
 	check(world.powered_state.is_empty(), "starvation folds back to coast")
 
 
+## A loaded hull (measured 34 t starter ship inertia) half-turns without filling
+## a wheel. Full-rate slews drained the whole battery over a five-burn intercept.
+func test_loaded_hull_half_turn_is_affordable() -> void:
+	var world: OrbitalWorld = OrbitalWorld.new()
+	world.ship.inertia = {"ix": 140164.0, "iy": 636479.0, "iz": 606638.0}
+	world.set_attitude_mode("prograde")
+	for step: int in range(800):
+		world.advance(0.25)
+	check(world.pointing_error(world.attitude_target_dir()) < deg_to_rad(0.5), "heavy hull settles on prograde")
+	var before: float = world.reaction_wheel.battery_energy_j
+	world.set_attitude_mode("retrograde")
+	var peak_momentum: float = 0.0
+	var aligned_at: float = INF
+	var start: float = world.time
+	for step: int in range(800):
+		world.advance(0.25)
+		peak_momentum = maxf(peak_momentum, SimVector.length(world.reaction_wheel.momentum_body))
+		if aligned_at == INF and world.pointing_error(world.attitude_target_dir()) < deg_to_rad(2.0):
+			aligned_at = world.time - start
+	check(aligned_at <= 120.0, "half-turn aligns within the executor lead (%.1f s)" % aligned_at)
+	check(peak_momentum <= OrbitalWorld.SLEW_WHEEL_FRACTION * world.reaction_wheel.capacity_nms * 1.25, "slew keeps wheel momentum near its share (%.0f N*m*s)" % peak_momentum)
+	check(before - world.reaction_wheel.battery_energy_j < 400000.0, "half-turn costs under 0.4 MJ (%.0f J)" % (before - world.reaction_wheel.battery_energy_j))
+
+
 func _aligned_world() -> OrbitalWorld:
 	var world: OrbitalWorld = OrbitalWorld.new()
 	world.set_attitude_mode("prograde")

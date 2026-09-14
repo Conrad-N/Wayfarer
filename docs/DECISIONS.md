@@ -413,3 +413,12 @@ decide something the docs did not cover.
   (2026-09-13); Z is free for future use. The stale "Shift + mouse steer held
   load" HUD line from before that change is corrected to plain mouse steering.
 
+- 2026-09-14 — Automatic ship slews are rate-limited so cruise momentum stays
+  within a quarter of wheel capacity for the current hull inertia (about 2°/s
+  for the 34 t starter ship), and the executor lines up 120 s before a burn
+  instead of 60 s. Conrad's ship battery died warping to Kestrel: at the old
+  20°/s cap a loaded hull (yaw inertia ~636,000 kg·m²) filled a wheel on every
+  half-turn, briefly holding 5 MJ of the 7.2 MJ battery and losing over 1 MJ per
+  slew to motor losses, so the fifth node of a guided intercept emptied it.
+  A quarter-capacity half-turn loses about 0.2 MJ. The flat-battery trap (an
+  empty battery also blocks regenerative wheel braking) is left as is for now.
