@@ -229,7 +229,8 @@ func _refresh_plan(data: Dictionary) -> void:
 func _refresh_ship(data: Dictionary) -> void:
 	var manifest: Array = data.get("cargo_manifest", [])
 	var door: Vector2 = data.get("door_size_m", Vector2.ZERO)
-	_readout.text = "SHIP %3.0f%%   BATTERY %.1f kWh\nCARGO %d LOADS / %.1f kg\nVOLUME %.1f / %.1f m³\nDOOR CLEARANCE %.1f × %.1f m" % [float(data.get("ship_health", 0.0)) * 100.0, float(data.get("battery_energy_j", 0.0)) / 3600000.0, manifest.size(), float(data.get("cargo_mass_kg", 0.0)), float(data.get("cargo_volume_m3", 0.0)), float(data.get("cargo_capacity_m3", 0.0)), door.x, door.y]
+	var solar_line: String = "SOLAR %.1f kW%s" % [float(data.get("solar_power_w", 0.0)) / 1000.0, "" if bool(data.get("solar_sunlit", true)) else " (SHADOW)"]
+	_readout.text = "SHIP %3.0f%%   BATTERY %.1f kWh\nCARGO %d LOADS / %.1f kg / %.1f of %.1f m³\n%s\nDOOR CLEARANCE %.1f × %.1f m" % [float(data.get("ship_health", 0.0)) * 100.0, float(data.get("battery_energy_j", 0.0)) / 3600000.0, manifest.size(), float(data.get("cargo_mass_kg", 0.0)), float(data.get("cargo_volume_m3", 0.0)), float(data.get("cargo_capacity_m3", 0.0)), solar_line, door.x, door.y]
 	var systems: Dictionary = data.get("systems", {})
 	var lines: PackedStringArray = []
 	var row: PackedStringArray = []

@@ -62,8 +62,8 @@ capped at 1x in the local scene while anything is loose.
 
 ## M3 implementation (2026-09-10)
 
-The starter ship has an 8,000 kg dry hull, 2,000 kg RCS propellant and a 2 kWh
-battery. Its kit-panel shell encloses a hab, an interlocked airlock and a cargo
+The starter ship has an 8,000 kg dry hull, 2,000 kg RCS propellant and a 20 MJ
+(≈5.6 kWh) battery. Its kit-panel shell encloses a hab, an interlocked airlock and a cargo
 bay. The bay is 3.6 × 2.8 × 5 m (50.4 m³); its external opening is fixed at
 2.2 × 2.2 m. Doors refuse to close across a body. Each actual door movement
 costs 1,000 J; repeated requests for the current position cost nothing.
@@ -100,7 +100,7 @@ cancels burns and local approach. Engine wear and thermal limits remain later wo
 
 Orbital attitude control and maneuver execution use the ported bounded torque
 controller. During physical encounters its braking calculation uses the actual
-hull inertia, with a 60-second pointing lead before maneuver nodes. The reaction-wheel actuator now has finite momentum and electrical budgets,
+hull inertia, with a 120-second pointing lead before maneuver nodes. The reaction-wheel actuator now has finite momentum and electrical budgets,
 separate from the RCS section (see below). Local translation and station holding
 use the finite RCS tank.
 
@@ -152,3 +152,39 @@ against a docking constraint or opposing jets. Station unloading, a ship dump
 control, environmental magnetic torques and a removable wheel part remain future
 work; the module's own state and ratings keep that later part separate from the
 attitude controller.
+
+## Solar panels (2026-09-14)
+
+Two wings, one on each side, replace a reactor for now. Each is 2 m along the hull
+by 4 m outward (8 m², comparable to one pair of Orion's four wings) with 30%-efficient
+cells. Sunlight at 1 AU is 1,361 W/m², so face-on the pair delivers about 6.53 kW; a
+solar-array script (`scripts/sim/solar_array.gd`, pure sim math, no nodes) is the
+source of truth.
+
+Each wing tracks the Sun on a single hinge along the ship's own left-right (span)
+axis, so only the Sun's angle to that axis matters: sun off either side gives zero,
+and the sun anywhere in the nose/belly/tail/top plane gives full output, following
+`sqrt(1 − (sun · span)²)`. There is no eclipse model for the star itself; a planet or
+moon between the ship and the Sun casts a plain cylindrical shadow (its own radius,
+extending straight back) and the wings deliver nothing inside it. Output also scales
+with the new `solar` system's health and stops entirely if it is disabled or destroyed,
+same as every other system.
+
+The game's live session has no Sun body yet (only Cradle and Lune exist), so the
+array uses a fixed placeholder Sun 1 AU away along the world's +X axis until a real
+Sol is added to the session. The scene's `DirectionalLight3D` is aimed the same way,
+so the lit side of the hull always matches which way the panels are tracking. The
+`salvage_practice` scene has no orbital session at all, so its ship has no Sun to
+track and never charges from sunlight there.
+
+`ShipApi` reports `solar_power_w` and `solar_sunlit`; the ship panel shows a
+"SOLAR 6.5 kW" (or "... (SHADOW)") line. Charging runs once per physics frame in
+`orbital_flight.gd`, after the reaction wheel settles its own energy, and does not
+require ship power to already be on — a battery that runs all the way to 0 J still
+recovers in sunlight, and everything electrical comes back once it holds any charge.
+Warp can skip a whole orbit in one frame, so charging is integrated in sub-steps of
+at most 30 sim-seconds (capped at 512 samples per frame, averaged evenly if that cap
+is hit) rather than read once at the end of the jump, so a fast warp does not miss an
+eclipse. With the fixed Sun in the default 400 km orbit's plane, about 61% of each
+orbit is lit (the planet's shadow covers roughly 140° of arc); a full orbit from empty
+gains more than the 20 MJ battery holds.

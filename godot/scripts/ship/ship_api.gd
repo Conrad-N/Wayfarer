@@ -7,7 +7,7 @@ signal command_requested(command: String, args: Dictionary)
 
 const DRY_MASS_KG: float = 8000.0
 const PROPELLANT_CAPACITY_KG: float = 2000.0
-const BATTERY_CAPACITY_J: float = 7200000.0
+const BATTERY_CAPACITY_J: float = 20000000.0
 const CARGO_CAPACITY_M3: float = 50.4
 const DOOR_SIZE_M: Vector2 = Vector2(2.2, 2.2)
 const BAY_SIZE_M: Vector3 = Vector3(3.6, 2.8, 5.0)
@@ -32,6 +32,7 @@ var _systems: Dictionary = {
 	"cargo": {"health": 1.0, "enabled": true},
 	"airlock": {"health": 1.0, "enabled": true},
 	"sensors": {"health": 1.0, "enabled": true},
+	"solar": {"health": 1.0, "enabled": true},
 }
 var _manifest: Array[Dictionary] = []
 var _motion: Dictionary = {
@@ -48,6 +49,8 @@ var _flight_handler: Callable = Callable()
 var _flight: Dictionary = {"available": false}
 var _main_propellant_kg: float = 0.0
 var _main_capacity_kg: float = 0.0
+var _solar_power_w: float = 0.0
+var _solar_sunlit: bool = false
 
 
 ## Return an independent snapshot; clients cannot change the ship through dictionaries.
@@ -83,6 +86,8 @@ func get_telemetry() -> Dictionary:
 		"cargo_manifest": _manifest.duplicate(true),
 		"motion": _motion.duplicate(true),
 		"power_available": _has_power(),
+		"solar_power_w": _solar_power_w,
+		"solar_sunlit": _solar_sunlit,
 		"last_message": _last_message,
 	}
 
@@ -278,6 +283,17 @@ func set_cargo_message(message: String) -> void:
 	if message == _last_message:
 		return
 	_last_message = message
+	changed.emit()
+
+
+## Publish instantaneous solar-array output [W] and whether the Sun is unshadowed.
+func publish_solar(power_w: float, sunlit: bool) -> void:
+	if not is_finite(power_w) or power_w < 0.0:
+		return
+	if absf(power_w - _solar_power_w) < 0.05 and sunlit == _solar_sunlit:
+		return
+	_solar_power_w = power_w
+	_solar_sunlit = sunlit
 	changed.emit()
 
 

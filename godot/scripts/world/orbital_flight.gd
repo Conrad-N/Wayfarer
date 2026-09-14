@@ -24,6 +24,9 @@ const EVA_REFERENCE_ID: String = "__eva_coast_reference"
 const ATTITUDE_TORQUE_NM: float = 5500.0
 ## Fastest closing speed the local approach will command, whatever the range.
 const APPROACH_SPEED_LIMIT_MPS: float = 20.0
+## Solar integration granularity: warp must not skip eclipse passages.
+const SOLAR_SAMPLE_S: float = 30.0
+const SOLAR_MAX_SAMPLES: int = 512
 
 
 ## Start a session with the existing physical ship and tool scene as its local actors.
@@ -130,8 +133,10 @@ func _advance_local(delta: float) -> void:
 	var parent: Dictionary = session.world.system.body_state_in_root(session.world.central_body_id, session.world.time)
 	var omega: Vector3 = LocalOrbitFrame.GODOT_TO_SIM_BODY * (ship.global_basis.transposed() * ship.angular_velocity)
 	_sync_physical_inertia()
+	var time_before: float = session.world.time
 	var controls: Dictionary = session.world.advance_local(delta, SimVector.sub(root_position, parent.position), SimVector.sub(root_velocity, parent.velocity), LocalOrbitFrame.orbital_orientation(ship.global_basis), LocalOrbitFrame.scalar(omega))
 	_settle_wheel_energy()
+	_advance_solar(time_before)
 	ship.api.publish_flight(ship.api.get_telemetry().flight, float(controls.propellant_kg))
 	ship.mass = float(ship.api.get_telemetry().mass_kg)
 	ship.apply_central_force(LocalOrbitFrame.native(controls.force_world))
@@ -163,6 +168,53 @@ func _settle_wheel_energy() -> void:
 		ship.api.consume_energy(spent)
 	elif spent < 0.0:
 		ship.api.store_energy(-spent)
+
+
+## Charge the battery from the solar wings for the sim time that just passed,
+## regardless of ship power (a flat battery must be able to recover). Warp can
+## cover a whole orbit in one frame, so the interval is swept in sub-steps of
+## at most SOLAR_SAMPLE_S (capped at SOLAR_MAX_SAMPLES, averaged evenly if
+## capped) so eclipse passages are not skipped. Orientation is held at its
+## current value for the whole interval; only the ship's orbital position
+## (and so eclipse state) is resampled per sub-step.
+func _advance_solar(time_before: float) -> void:
+	var world: OrbitalWorld = session.world
+	var elapsed: float = world.time - time_before
+	if not is_finite(elapsed) or elapsed <= 0.0:
+		return
+	var span: SimVector = SolarArray.span_axis(world.orientation)
+	var body: Dictionary = world.get_body()
+	var solar: Dictionary = ship.api.get_telemetry().systems.get("solar", {})
+	var health: float = float(solar.get("health", 1.0))
+	var enabled: bool = bool(solar.get("enabled", true))
+	var samples: int = clampi(ceili(elapsed / SOLAR_SAMPLE_S), 1, SOLAR_MAX_SAMPLES)
+	var step: float = elapsed / float(samples)
+	var energy_j: float = 0.0
+	for index: int in samples:
+		var at_time: float = time_before + step * (float(index) + 0.5)
+		var reading: Dictionary = _solar_reading_at(world, at_time, span, body, health, enabled)
+		energy_j += float(reading.power_w) * step
+	if energy_j > 0.0:
+		ship.api.store_energy(energy_j)
+	var now: Dictionary = _solar_reading_at(world, world.time, span, body, health, enabled)
+	ship.api.publish_solar(float(now.power_w), bool(now.sunlit))
+	ship.set_solar_tracking(_local_sun_direction(now.sun_dir, world.orientation))
+
+
+## Output, eclipse state and Sun bearing at one instant, in the hierarchy's root frame.
+func _solar_reading_at(world: OrbitalWorld, at_time: float, span: SimVector, body: Dictionary, health: float, enabled: bool) -> Dictionary:
+	var local_r: SimVector = world.orbit_at(at_time).get("position", SimVector.new()) as SimVector
+	var base: SimVector = world.system.body_state_in_root(world.central_body_id, at_time).get("position", SimVector.new()) as SimVector
+	var bearing: Dictionary = SolarArray.sun_bearing(world.system, SimVector.add(base, local_r), at_time)
+	var power_w: float = SolarArray.output_w(bearing.direction, bearing.distance_m, span, local_r, body, health, enabled)
+	return {"power_w": power_w, "sunlit": not SolarArray.shadowed(local_r, bearing.direction, body), "sun_dir": bearing.direction}
+
+
+## Convert a root-frame Sun bearing into the ship's own local (hull) axes, the
+## same rotation the navball uses to place orbital directions on the dial.
+func _local_sun_direction(sun_dir_root: SimVector, orientation: Dictionary) -> Vector3:
+	var body_dir: SimVector = FlightMath.rotate(FlightMath.q_conj(orientation), sun_dir_root)
+	return LocalOrbitFrame.GODOT_TO_SIM_BODY.transposed() * LocalOrbitFrame.native(body_dir)
 
 
 func _sync_physical_inertia() -> void:
@@ -218,8 +270,10 @@ func _advance_orbit(delta: float) -> void:
 		var safe_time: float = maxf(delta, (range_m - LocalOrbitFrame.LOCAL_RADIUS_M) * 0.8 / (speed + 500.0))
 		sim_delta = minf(sim_delta, safe_time)
 	session.world.set_rate(sim_delta / delta)
+	var time_before: float = session.world.time
 	session.world.advance(delta)
 	_settle_wheel_energy()
+	_advance_solar(time_before)
 	root_state = session.world.ship_root_state()
 	if reference_id.is_empty():
 		frame.set_reference(root_state.position, root_state.velocity)

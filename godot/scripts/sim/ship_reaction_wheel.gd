@@ -8,8 +8,8 @@ var max_torque_nm: float = 5500.0
 var rotor_inertia_kgm2: float = 1000.0
 var motor_efficiency: float = 0.9
 var motor_loss_j_per_nms: float = 2.0
-var battery_capacity_j: float = 7200000.0
-var battery_energy_j: float = 7200000.0
+var battery_capacity_j: float = 20000000.0
+var battery_energy_j: float = 20000000.0
 var enabled: bool = true
 var momentum_body: SimVector = SimVector.new()
 

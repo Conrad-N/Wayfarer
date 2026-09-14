@@ -305,6 +305,87 @@ func test_attitude_requires_working_power_and_reaction_wheel() -> void:
 	fixture.root.free()
 
 
+## Warp only changes how many frames a sim-time interval is split into before
+## each one calls _advance_solar; the energy collected over the same interval
+## (~half the default 400 km orbit, well under the empty battery's 20 MJ cap)
+## must not depend on that chunking, whether warp is 10 or 1000.
+func test_solar_charging_matches_across_warp_rates() -> void:
+	var gained: Dictionary = {}
+	for rate: float in [10.0, 1000.0]:
+		var fixture: Dictionary = _fixture()
+		var flight: OrbitalFlight = fixture.flight
+		var world: OrbitalWorld = fixture.session.world
+		var api: ShipApi = fixture.ship.api
+		api.consume_energy(ShipApi.BATTERY_CAPACITY_J)
+		var half: float = float(world.orbit().period) * 0.5
+		world.set_rate(rate)
+		var remaining: float = half
+		while remaining > 1e-6:
+			var real_dt: float = minf(1.0, remaining / rate)
+			var before: float = world.time
+			world.advance(real_dt)
+			flight._advance_solar(before)
+			remaining -= (world.time - before)
+		gained[rate] = float(api.get_telemetry().battery_energy_j)
+		fixture.root.free()
+	print("solar warp independence: warp10=%.1f J warp1000=%.1f J diff=%.3f%%" % [gained[10.0], gained[1000.0], 100.0 * absf(gained[1000.0] - gained[10.0]) / gained[10.0]])
+	check(gained[10.0] > 0.0 and gained[10.0] < ShipApi.BATTERY_CAPACITY_J, "half orbit charges without hitting the 20 MJ cap")
+	check_close(gained[1000.0], gained[10.0], 0.02, "warp 10 and warp 1000 collect the same energy within 2%")
+
+
+## The energy collected over an interval should equal the wings' unshadowed
+## face-on output times the time actually spent unshadowed, checked on the
+## same sub-step grid _advance_solar uses internally.
+func test_solar_charging_matches_power_times_sunlit_time() -> void:
+	var fixture: Dictionary = _fixture()
+	var flight: OrbitalFlight = fixture.flight
+	var world: OrbitalWorld = fixture.session.world
+	var api: ShipApi = fixture.ship.api
+	api.consume_energy(ShipApi.BATTERY_CAPACITY_J)
+	var half: float = float(world.orbit().period) * 0.5
+	var body: Dictionary = world.get_body()
+	var span: SimVector = SolarArray.span_axis(world.orientation)
+	var sun_dir: SimVector = SolarArray.sun_bearing(world.system, world.ship_root_state().position, world.time).direction
+	var unshadowed_power_w: float = float(SolarArray.PANEL_COUNT) * SolarArray.PANEL_AREA_M2 * SolarArray.CELL_EFFICIENCY * SolarArray.IRRADIANCE_AT_AU_WM2 * SolarArray.tracking_factor(sun_dir, span)
+	var before: float = world.time
+	var samples: int = clampi(ceili(half / OrbitalFlight.SOLAR_SAMPLE_S), 1, OrbitalFlight.SOLAR_MAX_SAMPLES)
+	var step: float = half / float(samples)
+	var sunlit_seconds: float = 0.0
+	for index: int in samples:
+		var at_time: float = before + step * (float(index) + 0.5)
+		if not SolarArray.shadowed(world.orbit_at(at_time).position, sun_dir, body):
+			sunlit_seconds += step
+	world.set_rate(1000.0)
+	world.advance(half / 1000.0)
+	flight._advance_solar(before)
+	check_close(float(api.get_telemetry().battery_energy_j), unshadowed_power_w * sunlit_seconds, 0.001, "gain matches face-on output times sunlit seconds")
+	check(sunlit_seconds > half * 0.5 and sunlit_seconds < half * 0.75, "roughly 61% of the default orbit is sunlit")
+	fixture.root.free()
+
+
+## Charging must work with the battery flat and ship power off, and power must
+## return once the battery holds any charge; a full sunlit orbit (~61% of the
+## ~92-minute default orbit) exceeds the 20 MJ cap.
+func test_flat_battery_recovers_and_restores_power() -> void:
+	var fixture: Dictionary = _fixture()
+	var flight: OrbitalFlight = fixture.flight
+	var world: OrbitalWorld = fixture.session.world
+	var api: ShipApi = fixture.ship.api
+	api.consume_energy(ShipApi.BATTERY_CAPACITY_J)
+	check_eq(api.get_telemetry().battery_energy_j, 0.0, "battery drained for the test")
+	check(not bool(api.get_telemetry().power_available), "a flat battery cuts power even with every switch on")
+	var period: float = float(world.orbit().period)
+	world.set_rate(1000.0)
+	var before: float = world.time
+	world.advance(period / 1000.0)
+	flight._advance_solar(before)
+	var telemetry: Dictionary = api.get_telemetry()
+	check(float(telemetry.battery_energy_j) > 0.0, "sunlight recharges a flat, unpowered battery")
+	check(bool(telemetry.power_available), "ship power returns once the battery holds charge")
+	check_near(float(telemetry.battery_energy_j), ShipApi.BATTERY_CAPACITY_J, 1.0, "a full sunlit orbit gains more than the 20 MJ cap")
+	fixture.root.free()
+
+
 func _fixture() -> Dictionary:
 	var tree: SceneTree = Engine.get_main_loop() as SceneTree
 	var holder: Node3D = Node3D.new()

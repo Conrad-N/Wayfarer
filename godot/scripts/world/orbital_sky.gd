@@ -6,6 +6,7 @@ const SKY_SHADER: Shader = preload("res://scripts/world/orbital_sky.gdshader")
 
 var _session: OrbitalSession
 var _material: ShaderMaterial
+var _sun_light: DirectionalLight3D
 
 
 ## Install the celestial background while preserving the scene's authored ambient lighting.
@@ -23,6 +24,8 @@ func configure(session: OrbitalSession, world_environment: WorldEnvironment) -> 
 		world_environment.environment = Environment.new()
 	world_environment.environment.sky = sky
 	world_environment.environment.background_mode = Environment.BG_SKY
+	var lights: Array[Node] = get_tree().root.find_children("DirectionalLight3D", "DirectionalLight3D", true, false)
+	_sun_light = lights[0] as DirectionalLight3D if not lights.is_empty() else null
 	_update_bodies()
 
 
@@ -38,6 +41,21 @@ func _update_bodies() -> void:
 		return
 	_update_body("cradle", "planet", ship.position)
 	_update_body("lune", "moon", ship.position)
+	_update_sun(ship.position)
+
+
+## Aim the scene light along the sim Sun bearing, so the lit hull side matches
+## the solar panels. The bearing is a unit vector already normalized in scalar
+## doubles (same root frame `_update_body` uses above), so converting it to a
+## native Vector3 loses no precision even though `ship_position` can be huge.
+func _update_sun(ship_position: SimVector) -> void:
+	if not is_instance_valid(_sun_light):
+		return
+	var bearing: Dictionary = SolarArray.sun_bearing(_session.world.system, ship_position, _session.world.time)
+	var direction: Vector3 = LocalOrbitFrame.native(bearing.direction)
+	if direction.length() < 0.001:
+		return
+	_sun_light.global_basis = Basis.looking_at(-direction, Vector3.UP if absf(direction.y) < 0.999 else Vector3.FORWARD)
 
 
 func _update_body(body_id: String, prefix: String, ship_position: SimVector) -> void:

@@ -19,6 +19,8 @@ var navigation_target: RigidBody3D
 var rotor_momentum_body: Vector3 = Vector3.ZERO
 var _doors: Dictionary = {}
 var _lights: Array[OmniLight3D] = []
+## Both wing visuals, so OrbitalFlight can turn them to face the sim Sun each frame.
+var _solar_visuals: Array[Node3D] = []
 
 
 func _ready() -> void:
@@ -138,6 +140,33 @@ func _build_interior() -> void:
 		light.light_color = Color(0.65, 0.85, 1.0)
 		add_child(light)
 		_lights.append(light)
+	_build_solar_panels()
+
+
+## Two side wings on short booms, clear of both hull doors (airlock z 3.5-5.9,
+## cargo z -7.1) and every ±X path: booms bridge the hull wall (x = ±2.2) to
+## each wing's inner edge (x = ±2.7); wings run x 2.7-6.7 (4 m outward) by
+## z -1.6..0.4 (2 m along the hull), amidships and clear of both doors.
+func _build_solar_panels() -> void:
+	var boom_color: Color = Color(0.42, 0.46, 0.49)
+	var panel_color: Color = Color(0.07, 0.11, 0.26)
+	for side: float in [-1.0, 1.0]:
+		_add_box("SolarBoom" + str(side), Vector3(0.5, 0.12, 0.12), Vector3(side * 2.45, 0, -0.6), "solar", boom_color)
+		var wing: CollisionShape3D = _add_box("SolarWing" + str(side), Vector3(4.0, 0.05, 2.0), Vector3(side * 4.7, 0, -0.6), "solar", panel_color)
+		_solar_visuals.append(wing.get_meta("visual") as Node3D)
+
+
+## Tilt both wing visuals about the ship's local X (span) axis to face `local_sun_dir`
+## (a Sun bearing already expressed in the ship's own local axes). The collision boxes
+## stay fixed; only the thin visual mesh rotates, so a single hinge angle serves both
+## sides since they share the same span axis.
+func set_solar_tracking(local_sun_dir: Vector3) -> void:
+	if not local_sun_dir.is_finite() or local_sun_dir.length() < 0.001:
+		return
+	var tilt: Basis = Basis(Vector3.RIGHT, atan2(local_sun_dir.z, local_sun_dir.y))
+	for visual: Node3D in _solar_visuals:
+		if is_instance_valid(visual):
+			visual.basis = tilt
 
 
 func _build_pilot_seat() -> void:

@@ -422,3 +422,15 @@ decide something the docs did not cover.
   slew to motor losses, so the fifth node of a guided intercept emptied it.
   A quarter-capacity half-turn loses about 0.2 MJ. The flat-battery trap (an
   empty battery also blocks regenerative wheel braking) is left as is for now.
+- 2026-09-14 — Conrad asks for a 20 MJ ship battery and a pair of side solar panels.
+  Sized each wing at 2 m x 4 m (8 m², about one pair of Orion's four wings) with
+  30%-efficient cells: face-on at 1 AU (1,361 W/m²) that is ~3.27 kW per wing, ~6.53 kW
+  for the pair, enough to refill the new battery well within an orbit. Each wing
+  tracks the Sun on a single hinge along the ship's own left-right axis
+  (`sqrt(1 − (sun · span)²)`); the request's own prose ("nose along the Sun gives
+  zero, broadside is full") had the geometry backwards for that formula, so the
+  formula stands and the docs/tests describe it correctly: sun off either side is
+  zero, sun in the nose/belly/tail/top plane is full. The live session has no Sun
+  body yet, so the array (and the scene light) use a fixed placeholder Sun at 1 AU
+  along +X until a real Sol is added; `salvage_practice` has no orbital session and
+  so never charges.

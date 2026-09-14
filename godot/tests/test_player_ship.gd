@@ -163,7 +163,9 @@ func test_incoming_collision_damages_contacted_system() -> void:
 	for speed: float in [2.0, 15.0]:
 		var ship: PlayerShip = _ship()
 		var before: float = _health(ship, "rcs")
-		var projectile: RigidBody3D = _box(Vector3(-5.0, 0, 0), Vector3.ONE, 100.0)
+		# z = -4 stays clear of the solar wing amidships (z -1.6..0.4) so the shot
+		# still reaches the port RCS-tagged hull wall, not the panel shielding it.
+		var projectile: RigidBody3D = _box(Vector3(-5.0, 0, -4.0), Vector3.ONE, 100.0)
 		projectile.linear_velocity = Vector3.RIGHT * speed
 		await _frames(100)
 		check(ship.linear_velocity.x > 0.0, "collision transfers real momentum")
@@ -175,6 +177,21 @@ func test_incoming_collision_damages_contacted_system() -> void:
 		check_near(_health(ship, "cargo"), 1.0, 0.00001, "uncontacted cargo system is unchanged")
 		projectile.free()
 		ship.free()
+
+
+## The solar wings sit outboard of the hull wall, so a broadside hit amidships
+## (their z -1.6..0.4 span) reaches the panel, and its "solar" system, first.
+func test_solar_panel_shields_hull_from_a_broadside_hit() -> void:
+	var ship: PlayerShip = _ship()
+	var rcs_before: float = _health(ship, "rcs")
+	var solar_before: float = _health(ship, "solar")
+	var projectile: RigidBody3D = _box(Vector3(-8.0, 0, -0.6), Vector3.ONE, 100.0)
+	projectile.linear_velocity = Vector3.RIGHT * 15.0
+	await _frames(100)
+	check(_health(ship, "solar") < solar_before, "a broadside hit amidships damages the solar wing")
+	check_near(_health(ship, "rcs"), rcs_before, 0.00001, "the panel shields the hull wall behind it")
+	projectile.free()
+	ship.free()
 
 
 ## Runtime hazard interception applies damage through the same public API.
