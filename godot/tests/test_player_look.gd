@@ -110,24 +110,34 @@ func test_surface_mouse_aim_is_free_unrestricted_and_persistent() -> void:
 
 
 ## Leaving a surface centres the view immediately and restores powered EVA mouse turns.
-func test_surface_release_centres_view_and_discards_stale_aim() -> void:
+## Leaving the walking view keeps the view where it points (Conrad, 2026-09-14), drops
+## aim queued in that frame, and turns the torso to the view before normal steering resumes.
+func test_surface_release_keeps_view_and_discards_stale_aim() -> void:
 	var player: Player = _spawn(Vector3.ZERO)
+	var camera: Camera3D = player.get_node("Camera3D") as Camera3D
 	player.surface_motion_active = true
 	player.queue_mouse_look(Vector2(-800.0, -200.0))
 	await _steps(3)
 	check(player.head_angles_rad.length() > 1.0, "walking camera begins aimed away from torso")
+	var view: Basis = camera.global_basis
 	player.queue_mouse_look(Vector2(-400, 100))
 	player.surface_motion_active = false
-	check_eq(player.head_angles_rad, Vector2.ZERO, "surface release immediately centres the view")
-	check((player.get_node("Camera3D") as Camera3D).basis.is_equal_approx(Basis.IDENTITY), "released camera faces the physical torso")
-	await _steps(15)
-	check_near(player.angular_velocity.length(), 0.0, 1e-6, "queued walking aim cannot become a surprise EVA turn")
-	check_eq(player.suit.battery_energy_j, SuitResources.BATTERY_CAPACITY_J, "release starts no wheel motor")
+	check(camera.global_basis.is_equal_approx(view), "surface release leaves the view where it was aimed")
+	check_eq(player.head_angles_rad, Vector2.ZERO, "head aim hands over to a torso turn")
+	var steps: int = 0
+	while player._view_handoff and steps < 900:
+		await _steps(1)
+		steps += 1
+	check(not player._view_handoff, "the torso finishes turning to the view")
+	check((-player.global_basis.z).angle_to(-view.z) < 0.02, "aim queued at release is dropped: the torso faces the held view")
+	check(camera.basis.is_equal_approx(Basis.IDENTITY), "camera is back on the torso")
+	check(player.suit.battery_energy_j < SuitResources.BATTERY_CAPACITY_J, "the wheels pay for the turn")
+	var charge: float = player.suit.battery_energy_j
 	player.queue_mouse_look(Vector2(-0.5 / player.mouse_sensitivity, 0.0))
 	await _steps(12)
-	check(player.angular_velocity.y > 0.01, "normal mouse resumes physical EVA steering after release")
+	check(player.angular_velocity.y > 0.01, "normal mouse resumes physical EVA steering after the turn")
 	check_eq(player.head_angles_rad, Vector2.ZERO, "EVA camera stays centred during powered steering")
-	check(player.suit.battery_energy_j < SuitResources.BATTERY_CAPACITY_J, "restored EVA steering pays electrical work")
+	check(player.suit.battery_energy_j < charge, "restored EVA steering pays electrical work")
 	player.free()
 
 

@@ -143,7 +143,10 @@ fastened.
 While seated, mouse movement always freely aims the camera (unrestricted yaw,
 ±85° pitch) without holding Shift or spending suit resources. V unstraps regardless
 of aim or an open terminal/tablet, closes screen input, restores standing eye
-height, and centres the view for EVA. Existing momentum is preserved. F retains
+height, and centres the view for EVA. The pilot stands up in the passage behind
+the seat back; if something occupies that spot, the nearest clear spot along the
+passage is used, and if none is clear an anomaly is logged naming what blocked it.
+Existing momentum is preserved. F retains
 its contextual seat/terminal behavior.
 The Tab tablet works in either state. A loose suit is affected by ship maneuvers;
 warp and event warp require the seat and remain unavailable near objects.
@@ -166,7 +169,8 @@ to snap back to centre. The head is limited to ±60° yaw / ±50° pitch; body t
 retain the full mouse request and have no artificial speed cap. The same mouse
 motion steers a hand-held load; free look does not steer it. While boots are latched, normal mouse movement freely looks in any yaw direction
 and up/down to ±85° without using resources. WASD follows the view along the surface;
-Shift is unnecessary. Releasing boots centres the view and restores physical EVA turns.
+Shift is unnecessary. Releasing boots keeps the view where it points and turns the
+torso to face it with the suit wheels; then normal EVA turns resume.
 Escape and focus loss cancel active motors and tools, retaining passive
 hand/boot/seat attachments. A visual bump indicator gives feedback when the
 suit physically contacts its surroundings.

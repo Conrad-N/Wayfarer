@@ -278,6 +278,88 @@ func _watch_deck_contact(player: Player, deck: RigidBody3D) -> Dictionary:
 	return contact
 
 
+## Unlatching keeps the view where the head was aimed; the suit then turns to face it.
+func test_release_keeps_view_and_turns_suit_to_face_it() -> void:
+	var f: Dictionary = _fixture()
+	var player: Player = f.player
+	var boots: MagneticBoots = f.boots
+	var camera: Camera3D = player.get_node("Camera3D") as Camera3D
+	await _frames(3)
+	check(boots.try_latch(), "feet engage")
+	player.queue_mouse_look(Vector2(-1.2, -0.4) / player.mouse_sensitivity)
+	await _frames(3)
+	var view: Vector3 = -camera.global_basis.z
+	check(view.angle_to(-player.global_basis.z) > 1.0, "head is aimed well away from the torso")
+	var fuel: float = player.suit.propellant_kg
+	var charge: float = player.suit.battery_energy_j
+	boots.release()
+	# Float clear of the deck so the turn is not levered against it.
+	(f.deck as RigidBody3D).collision_layer = 0
+	await _frames(1)
+	check(-camera.global_basis.z.angle_to(view) < 0.01, "release does not snap the view back to the torso")
+	var drift: float = 0.0
+	var frames: int = 0
+	while player._view_handoff and frames < 900:
+		await _frames(1)
+		frames += 1
+		drift = maxf(drift, (-camera.global_basis.z).angle_to(view))
+	check(not player._view_handoff, "suit finishes turning toward the view (%d frames)" % frames)
+	check(drift < 0.01, "view stays put while the suit turns under it (drift %.4f rad)" % drift)
+	check((-player.global_basis.z).angle_to(view) < 0.02, "suit ends facing where the view was aimed")
+	check(camera.basis.is_equal_approx(Basis.IDENTITY), "camera is back on the torso")
+	check(player.angular_velocity.length() < 0.01, "the turn stops")
+	check_eq(player.suit.propellant_kg, fuel, "turning uses the wheels, not jet fuel")
+	check(player.suit.battery_energy_j < charge, "turning uses wheel power")
+	f.root.free()
+
+
+## Mouse movement during that turn moves the view at once and retargets the suit.
+func test_mouse_during_release_turn_moves_view_immediately() -> void:
+	var f: Dictionary = _fixture()
+	var player: Player = f.player
+	var boots: MagneticBoots = f.boots
+	var camera: Camera3D = player.get_node("Camera3D") as Camera3D
+	await _frames(3)
+	check(boots.try_latch(), "feet engage")
+	player.queue_mouse_look(Vector2(-1.5, 0.0) / player.mouse_sensitivity)
+	await _frames(3)
+	boots.release()
+	(f.deck as RigidBody3D).collision_layer = 0
+	await _frames(2)
+	var view: Vector3 = -camera.global_basis.z
+	player.queue_mouse_look(Vector2(1.0, 0.0) / player.mouse_sensitivity)
+	await _frames(1)
+	check_near((-camera.global_basis.z).angle_to(view), 1.0, 0.05, "the view turns with the mouse right away")
+	var goal: Vector3 = -camera.global_basis.z
+	var frames: int = 0
+	while player._view_handoff and frames < 900:
+		await _frames(1)
+		frames += 1
+	check((-player.global_basis.z).angle_to(goal) < 0.02, "suit ends facing the new view")
+	f.root.free()
+
+
+## Latching again before the turn finishes keeps the view as free head aim.
+func test_relatching_mid_turn_keeps_view() -> void:
+	var f: Dictionary = _fixture()
+	var player: Player = f.player
+	var boots: MagneticBoots = f.boots
+	var camera: Camera3D = player.get_node("Camera3D") as Camera3D
+	await _frames(3)
+	check(boots.try_latch(), "feet engage")
+	player.queue_mouse_look(Vector2(-1.2, -0.3) / player.mouse_sensitivity)
+	await _frames(3)
+	boots.release()
+	await _frames(1)
+	var view: Vector3 = -camera.global_basis.z
+	player.angular_velocity = Vector3.ZERO
+	check(boots.try_latch(), "feet engage again at once")
+	await _frames(1)
+	check((-camera.global_basis.z).angle_to(view) < 0.02, "the view does not jump when the boots catch again")
+	check(not player._view_handoff, "head aim takes the view back over")
+	f.root.free()
+
+
 func _fixture() -> Dictionary:
 	var holder: Node3D = Node3D.new()
 	(Engine.get_main_loop() as SceneTree).root.add_child(holder)

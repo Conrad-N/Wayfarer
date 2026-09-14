@@ -234,8 +234,12 @@ overloaded latch switches off and requires B to rearm. WASD walks in the camera'
 forward/right directions projected onto the supporting surface. While latched,
 normal mouse movement freely aims the camera through unlimited yaw and ±85° pitch,
 without a modifier or any battery, fuel or wheel momentum cost. Shift does not change
-this walking view. Releasing the boots centres the camera on the torso and restores
-physical EVA turning.
+this walking view. Releasing the boots keeps the view pointing where it was aimed:
+the camera holds still in space while the suit's wheels turn the torso to face it,
+with the same finite torque and braking plan as a mouse turn. Mouse movement during
+that turn moves the view at once and gives the torso a new goal; a held roll key
+rolls the view with the suit. Latching again before the turn ends hands the view
+back to free head aim without a jump.
 
 Holding B for 0.35 s while unlatched enables an automatic suit approach to the
 nearest visible boot-compatible surface within 3 m of the suit centre. It aligns

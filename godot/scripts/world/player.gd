@@ -29,14 +29,19 @@ var surface_motion_active: bool = false:
 		_cancel_body_look()
 		_pending_look = Vector2.ZERO
 		_surface_look = Vector2.ZERO
-		if not active:
-			centre_head()
+		if active:
+			_view_handoff_to_head()
+		else:
+			_begin_view_handoff()
 var body_follow_enabled: bool = true
 var _body_follow: bool = false
 var _look_remaining: Vector2 = Vector2.ZERO
 var _look_previous_basis: Basis = Basis.IDENTITY
 var _surface_look: Vector2 = Vector2.ZERO
 var _freelooking: bool = false
+var _view_handoff: bool = false
+var _view_offset: Basis = Basis.IDENTITY
+var _view_previous_basis: Basis = Basis.IDENTITY
 @onready var grapple: Grapple = $Grapple
 var salvage_tools: SalvageTools
 var _capture_click_held: bool = false
@@ -184,15 +189,26 @@ func _physics_process(delta: float) -> void:
 		motor_torque = _wheel_brake_torque(delta, inverse_inertia)
 	elif _body_follow:
 		motor_torque += _body_look_torque(omega_body, inverse_inertia)
+	elif _view_handoff:
+		motor_torque += _view_handoff_torque(omega_body, inverse_inertia)
 	var delivered: Vector3 = attitude.drive(motor_torque, omega_body, roll_torque_nm, delta, suit, global_basis.transposed() * inverse_inertia * global_basis)
 	apply_torque(global_basis * delivered)
 
 
 func _update_head() -> void:
+	var camera: Camera3D = $Camera3D
 	if has_automatic_freelook():
+		# Strapping in poses the head itself; boots convert the view when they latch.
+		_view_handoff = false
 		head_angles_rad -= _pending_look * mouse_sensitivity
 		head_angles_rad.x = wrapf(head_angles_rad.x, -PI, PI)
 		head_angles_rad.y = clampf(head_angles_rad.y, -SURFACE_PITCH_LIMIT_RAD, SURFACE_PITCH_LIMIT_RAD)
+	elif _view_handoff:
+		_track_view_handoff()
+		head_angles_rad = Vector2.ZERO
+		_pending_look = Vector2.ZERO
+		camera.basis = _view_offset
+		return
 	elif _freelooking:
 		head_angles_rad -= _pending_look * mouse_sensitivity
 		head_angles_rad.x = clampf(head_angles_rad.x, -HEAD_YAW_LIMIT_RAD, HEAD_YAW_LIMIT_RAD)
@@ -200,7 +216,6 @@ func _update_head() -> void:
 	else:
 		head_angles_rad = Vector2.ZERO
 	_pending_look = Vector2.ZERO
-	var camera: Camera3D = $Camera3D
 	camera.basis = Basis(Vector3.UP, head_angles_rad.x) * Basis(Vector3.RIGHT, head_angles_rad.y)
 
 
@@ -223,13 +238,7 @@ func _update_body_look() -> void:
 func _body_look_torque(omega_body: Vector3, inverse_inertia: Basis) -> Vector3:
 	if inverse_inertia.determinant() <= 0.0:
 		return Vector3.ZERO
-	# A held load turns with the suit; plan the stop with the pair's inertia or it overshoots.
-	var world_inverse: Basis = inverse_inertia
-	if brake_reference.is_valid():
-		var reference: Dictionary = brake_reference.call()
-		if reference.has("inertia") and (reference.inertia as Basis).determinant() > 0.0:
-			world_inverse = (reference.inertia as Basis).inverse()
-	var inverse_body: Basis = global_basis.transposed() * world_inverse * global_basis
+	var inverse_body: Basis = _steering_inverse_inertia(inverse_inertia)
 	var error: Vector3 = Vector3(_look_remaining.y, _look_remaining.x, 0.0)
 	var desired_rate: Vector3 = Vector3.ZERO
 	for axis: int in 2:
@@ -244,9 +253,80 @@ func _body_look_torque(omega_body: Vector3, inverse_inertia: Basis) -> Vector3:
 	return inverse_body.inverse() * correction
 
 
+## Body-frame inverse inertia for steering. A held load turns with the suit; plan
+## the stop with the pair's inertia or it overshoots.
+func _steering_inverse_inertia(inverse_inertia: Basis) -> Basis:
+	var world_inverse: Basis = inverse_inertia
+	if brake_reference.is_valid():
+		var reference: Dictionary = brake_reference.call()
+		if reference.has("inertia") and (reference.inertia as Basis).determinant() > 0.0:
+			world_inverse = (reference.inertia as Basis).inverse()
+	return global_basis.transposed() * world_inverse * global_basis
+
+
 func _cancel_body_look() -> void:
 	_body_follow = false
 	_look_remaining = Vector2.ZERO
+
+
+## Leaving free camera aim keeps the view where it points; the suit then turns to face it.
+func _begin_view_handoff() -> void:
+	head_angles_rad = Vector2.ZERO
+	var camera: Camera3D = get_node_or_null("Camera3D") as Camera3D
+	if not is_instance_valid(camera) or camera.basis.is_equal_approx(Basis.IDENTITY):
+		return
+	_view_offset = camera.basis.orthonormalized()
+	_view_previous_basis = global_basis
+	_view_handoff = true
+
+
+## Latching again mid-turn carries the unfinished view over as free head aim.
+func _view_handoff_to_head() -> void:
+	if not _view_handoff:
+		return
+	var forward: Vector3 = -_view_offset.z
+	head_angles_rad = Vector2(atan2(-forward.x, -forward.z), asin(clampf(forward.y, -1.0, 1.0)))
+	_view_handoff = false
+	_view_offset = Basis.IDENTITY
+
+
+## Hold the view still in space while the suit turns underneath it. A held roll
+## key rolls the view with the suit instead.
+func _track_view_handoff() -> void:
+	var step: Quaternion = (_view_previous_basis.transposed() * global_basis).get_rotation_quaternion()
+	_view_previous_basis = global_basis
+	if _roll_input != 0.0:
+		step.z = 0.0
+		step = step.normalized()
+	_view_offset = (Basis(step).transposed() * _view_offset).orthonormalized()
+
+
+## Turn the suit toward the held view with the same finite wheels as mouse steering.
+func _view_handoff_torque(omega_body: Vector3, inverse_inertia: Basis) -> Vector3:
+	if inverse_inertia.determinant() <= 0.0:
+		return Vector3.ZERO
+	var turn: Quaternion = _view_offset.get_rotation_quaternion()
+	if turn.w < 0.0:
+		turn = -turn
+	var imaginary: Vector3 = Vector3(turn.x, turn.y, turn.z)
+	var sine_half: float = imaginary.length()
+	var error: Vector3 = imaginary * (2.0 * atan2(sine_half, turn.w) / sine_half) if sine_half > 1e-10 else imaginary * 2.0
+	if _roll_input != 0.0:
+		error.z = 0.0
+	if error.length() < 0.0005 and omega_body.length() < 0.001:
+		_view_handoff = false
+		_view_offset = Basis.IDENTITY
+		($Camera3D as Camera3D).basis = Basis.IDENTITY
+		return Vector3.ZERO
+	var inverse_body: Basis = _steering_inverse_inertia(inverse_inertia)
+	var desired_rate: Vector3 = Vector3.ZERO
+	for axis: int in 3:
+		var acceleration: float = maxf(inverse_body[axis][axis] * roll_torque_nm, 0.0)
+		desired_rate[axis] = signf(error[axis]) * minf(absf(error[axis]) * 4.0, sqrt(1.6 * acceleration * absf(error[axis])))
+	var correction: Vector3 = (desired_rate - omega_body) * 8.0
+	if _roll_input != 0.0:
+		correction.z = 0.0
+	return inverse_body.inverse() * correction
 
 
 ## Supply boot approach requests through the normal finite suit actuators once per tick.
@@ -266,7 +346,7 @@ func centre_head() -> void:
 	_cancel_body_look()
 	var camera: Camera3D = get_node_or_null("Camera3D") as Camera3D
 	if is_instance_valid(camera):
-		camera.basis = Basis.IDENTITY
+		camera.basis = _view_offset if _view_handoff else Basis.IDENTITY
 
 
 ## Hold EVA head-only aiming; walking and seating already permit free camera aim.
@@ -305,7 +385,12 @@ func set_motion_input(translation: Vector3, roll: float) -> void:
 func queue_mouse_look(relative: Vector2) -> void:
 	if not relative.is_finite():
 		return
-	if has_automatic_freelook() or _freelooking:
+	if has_automatic_freelook():
+		_pending_look += relative
+	elif _view_handoff:
+		# The view keeps leading; the suit's turn simply gets a new goal.
+		_view_offset = _view_offset * Basis(Vector3.UP, -relative.x * mouse_sensitivity) * Basis(Vector3.RIGHT, -relative.y * mouse_sensitivity)
+	elif _freelooking:
 		_pending_look += relative
 	elif not freeze and not bool(get_meta("seated", false)) and body_follow_enabled and not _braking and not _wheel_braking and not _wheel_dumping:
 		if not _body_follow:

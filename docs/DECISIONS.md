@@ -468,3 +468,15 @@ decide something the docs did not cover.
   without charge while the power system is on and healthy; pointing modes still need
   charge. Physics limit kept: stopping an outside spin with the rotors near rest needs
   rotor spin-up energy, so a flat battery cannot do it.
+- 2026-09-14 — Conrad: unlatching boots should not spin the view back to a different
+  direction. The release used to snap the camera to the torso. The view now stays
+  fixed in space and the suit wheels turn the torso to face it (same torque limit and
+  stopping plan as mouse turns, combined inertia when holding a load). Mouse input
+  during the turn rotates the view immediately; roll input rolls the view with the
+  suit; re-latching converts the remaining offset into head angles.
+- 2026-09-14 — Conrad: unstrapping left him inside the seat, nearer the wall. Could
+  not reproduce: a clean strap-in/unstrap in the main scene stands the pilot at the
+  exit spot. The only path that leaves the pilot in the seat pose is a blocked exit
+  spot (or a harness break, which logs its own anomaly; none was logged since the
+  step-out change). Unstrapping now tries the exit spot, then spots along the centre
+  passage, and logs an anomaly naming the blocking shapes if none is clear.

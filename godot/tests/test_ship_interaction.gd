@@ -320,6 +320,30 @@ func test_unstrap_steps_out_beside_the_seat() -> void:
 	(fixture.root as Node).free()
 
 
+## Something parked on the exit spot moves the pilot along the passage, never back into the seat.
+func test_unstrap_with_blocked_exit_finds_another_clear_spot() -> void:
+	var fixture: Dictionary = _fixture()
+	var player: Player = fixture.player
+	var ship: PlayerShip = fixture.ship
+	var interaction: ShipInteraction = fixture.interaction
+	var crate: StaticBody3D = StaticBody3D.new()
+	var shape: CollisionShape3D = CollisionShape3D.new()
+	shape.shape = BoxShape3D.new()
+	(shape.shape as BoxShape3D).size = Vector3(0.4, 0.4, 0.4)
+	crate.add_child(shape)
+	ship.add_child(crate)
+	crate.position = PlayerShip.SEAT_EXIT_POSITION
+	player.position = PlayerShip.SEAT_POSITION
+	await _frames(2)
+	check(interaction.strap_in(), "pilot straps in")
+	interaction.unstrap()
+	var seat_point: Vector3 = ship.to_global(PlayerShip.SEAT_POSITION)
+	check(player.global_position.distance_to(seat_point) > 1.2, "pilot does not stay in the seat")
+	check(player.global_position.distance_to(crate.global_position) > 0.5, "pilot does not stand inside the crate")
+	check(interaction._pose_is_clear(player.global_transform), "the chosen spot overlaps nothing")
+	(fixture.root as Node).free()
+
+
 ## The terminal's warp refusal asks for C, so C must reach the suit while that screen is open.
 func test_wheel_dump_key_works_while_a_screen_is_open() -> void:
 	var fixture: Dictionary = _fixture()

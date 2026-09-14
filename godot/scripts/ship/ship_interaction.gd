@@ -6,6 +6,8 @@ const STRAP_REACH_M: float = 2.0
 const STRAP_MAX_SPEED_MPS: float = 1.0
 const SEAT_READY_HINT: String = "F strap into pilot seat | Tab tablet"
 const SEAT_APPROACH_HINT: String = "Move within 2 m of the pilot seat and slow below 1 m/s to strap in | Tab tablet"
+## Ship-frame shifts from the seat exit spot, tried in order, all along the clear centre passage.
+const SEAT_EXIT_OFFSETS: Array[Vector3] = [Vector3.ZERO, Vector3(0, 0, -0.5), Vector3(0, 0, 0.5), Vector3(0, 0, -1.0), Vector3(0, 0, 1.0), Vector3(0.4, 0, 0), Vector3(0, 0, -1.5)]
 
 var player: Player
 var ship: PlayerShip
@@ -218,22 +220,43 @@ func _seat_within_reach() -> bool:
 
 
 ## Stand the released pilot in the clear passage beside the seat instead of inside it.
+## Something left in the passage moves the spot along it rather than keeping the
+## pilot in the cushions.
 func _step_out_of_seat() -> void:
-	var exit_pose: Transform3D = Transform3D(player.global_basis, ship.to_global(PlayerShip.SEAT_EXIT_POSITION))
-	if _pose_is_clear(exit_pose):
-		player.global_transform = exit_pose
+	var blockers: PackedStringArray = []
+	for offset: Vector3 in SEAT_EXIT_OFFSETS:
+		var exit_pose: Transform3D = Transform3D(player.global_basis, ship.to_global(PlayerShip.SEAT_EXIT_POSITION + offset))
+		var found: PackedStringArray = _pose_blockers(exit_pose)
+		if found.is_empty():
+			player.global_transform = exit_pose
+			return
+		if blockers.is_empty():
+			blockers = found
+	DebugLog.anomaly("seat", "no clear spot to stand up beside the seat (exit blocked by %s)" % ", ".join(blockers))
 
 
 func _pose_is_clear(pose: Transform3D) -> bool:
+	return _pose_blockers(pose).is_empty()
+
+
+func _pose_blockers(pose: Transform3D) -> PackedStringArray:
+	var names: PackedStringArray = []
 	var collision: CollisionShape3D = player.get_node_or_null("CollisionShape3D") as CollisionShape3D
 	if collision == null:
-		return true
+		return names
 	var query: PhysicsShapeQueryParameters3D = PhysicsShapeQueryParameters3D.new()
 	query.shape = collision.shape
 	query.transform = pose * collision.transform
 	query.exclude = [player.get_rid()]
 	query.collision_mask = player.collision_mask
-	return player.get_world_3d().direct_space_state.intersect_shape(query, 1).is_empty()
+	for hit: Dictionary in player.get_world_3d().direct_space_state.intersect_shape(query, 4):
+		var body: CollisionObject3D = hit.get("collider") as CollisionObject3D
+		if body == null:
+			names.append("unknown")
+			continue
+		var owner: Node = body.shape_owner_get_owner(body.shape_find_owner(int(hit.get("shape", 0)))) as Node
+		names.append(str(body.name) + ("/" + str(owner.name) if owner != null else ""))
+	return names
 
 
 func _is_debug_key(event: InputEvent) -> bool:
