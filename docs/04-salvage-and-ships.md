@@ -95,7 +95,7 @@ with wrecks and ship interiors; hauling obeys the combined mass and inertia.
 |---|---|---|
 | Cutter | Sever a cut point you are aiming at within range. Progress bar; time scales with material thickness and cutter power. | Range 8 m. Heat: overuse forces a cooldown. Cutting near a hazard triggers it. |
 | Grapple | Tether to a surface or object. Reel in to pull yourself to it, or pull it to you if it is lighter than you. | One tether at a time. Max length 30 m. |
-| Hands | Hold a nearby surface, remain attached while cutting, and carry the freed part with suit thrust. | Reach 2 m, finite catch and holding loads; release preserves motion. |
+| Winch | Place a small device on two different objects; a powered cable reels them together. | Reach 2 m to place, 30 m max cable, 4 device kits carried. |
 | Scanner | Reveal part kinds, values, masses, and hazard markers within range. | Range 20 m. Takes a few seconds; you must hold still. |
 
 Later tools (not first version): free-cut plating, a deployable tow rig, a demolition charge.
@@ -118,7 +118,7 @@ rope sag and wrapping are not simulated.
 
 M2 tool tuning and controls:
 
-- Keys 1/2/3/4 select grapple/cutter/hands/scanner. Capture clicks, Escape,
+- Keys 1/2/3/4 select grapple/cutter/winch/scanner. Capture clicks, Escape,
   focus loss, and switching tools cannot carry a held trigger into a new action.
 - Cutter: hold left click on a visible gold marker within 8 m. Both sides of a
   joint are selectable. Cutting time is thickness / 4 mm/s, with a 0.6 multiplier
@@ -191,12 +191,17 @@ control enabled, its controller reacts to the resulting motion using its own
 wheel capacity and battery. Release C to stop unloading. Dumping uses no
 propellant and does not guarantee that you or the carrier will stop rotating.
 
-G toggles a hand grip with any tool selected; slot 3 also offers left-click grab
-and right-click release. A grip is a live six-axis physical constraint, with no
-pose or velocity reset. Catching a spinning wreck conserves angular momentum;
-the inelastic catch can dissipate kinetic energy. The combined rotational
-inertia slows the shared spin. Holding Alt acts on both bodies through the suit's
-finite jets. Large loads can exceed the grip or exhaust the suit's fuel.
+G toggles a hand grip with any tool selected. A grip is a live six-axis physical
+constraint, with no pose or velocity reset. Catching a spinning wreck conserves
+angular momentum; the inelastic catch can dissipate kinetic energy. The combined
+rotational inertia slows the shared spin. Holding Alt acts on both bodies through
+the suit's finite jets. Large loads can exceed the grip or exhaust the suit's fuel.
+Ordinary thrust while holding is balanced the same way (2026-09-14): the jets push
+from the suit, not from the pair's shared centre of mass, so opposed jets cancel
+that turning effect. Past their 60 N·m torque the push is reduced, so sideways
+thrust with a heavy or far-off-centre load is weaker, while thrust along the line
+through the load keeps full force. Mouse turns plan their stop with the pair's
+combined inertia, so a held load no longer overshoots and wobbles.
 
 The grip follows the selected part through cutting. Hold Shift to aim the cutter
 while holding; normal mouse movement steers the combined
@@ -204,6 +209,19 @@ load using reaction wheels, and Q/E rolls it. A heavy load turns slowly and
 fills the suit wheels; unload them before the next turn. The carried part retains its collisions and
 must fit through the cargo door. Release it inside the bay before clamps secure it.
 The grapple remains the longer-range tether; the tractor beam has been removed.
+
+Slot 3 is the winch (2026-09-14, replacing the old left-click grab/release on
+hands). Left click places a small device on the first solid surface within 2 m
+of the camera; a second left click places a matching device on a different
+object within 30 m of the first, and a cable starts reeling them together at
+0.2 m/s, up to 500 N of pull. Right click picks the first device back up before
+the second is placed, or removes the winch nearest the crosshair within reach.
+The suit carries four device kits; a removed or auto-detached winch returns its
+kit. Each device has its own 250 kJ battery for the reel motor; an empty battery
+stops the cable shortening further but the tension already on it still holds.
+Off-centre placement spins whatever it is anchored to. A winch on a wreck part
+follows that part through a cut; it detaches if a body is freed outright or the
+cable stretches past 31 m.
 
 A tap of B arms magnetic boots; they keep checking for aligned sole contact with a designated
 steel surface at low relative speed. Descend onto it with Ctrl to latch automatically.

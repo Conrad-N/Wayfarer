@@ -79,7 +79,7 @@ grow_horizontal = 2
 grow_vertical = 0
 mouse_filter = 2
 theme_override_font_sizes/font_size = 18
-text = "WASD thrust | Space / Ctrl up / down | Q / E roll | Mouse turn | Hold Shift / middle mouse free look | X wheel brake | Alt RCS brake\n1 Grapple: left attach / right release / R-T reel | 2 Cutter: hold left on a gold joint\n3 Hands: left grab / right release | G grip | Mouse steers held load | 4 Scanner: hold left while still | F12 screenshot\nB boots | Hold B approach | Boots: mouse look/WASD walk | F seat/terminal | V unstrap | Tab tablet | C dump wheels\nRelease Shift or middle mouse to centre your view. C transfers wheel momentum into you and anything held."
+text = "WASD thrust | Space / Ctrl up / down | Q / E roll | Mouse turn | Hold Shift / middle mouse free look | X wheel brake | Alt RCS brake\n1 Grapple: left attach / right release / R-T reel | 2 Cutter: hold left on a gold joint\n3 Winch: left place on two objects / right remove | G grab / release | Mouse steers held load | 4 Scanner: hold left while still | F12 screenshot\nB boots | Hold B approach | Boots: mouse look/WASD walk | F seat/terminal | V unstrap | Tab tablet | C dump wheels\nRelease Shift or middle mouse to centre your view. C transfers wheel momentum into you and anything held."
 
 [node name="GrappleStatus" type="Label" parent="HUD"]
 offset_left = 16.0

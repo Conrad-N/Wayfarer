@@ -173,11 +173,11 @@ func _physics_process(delta: float) -> void:
 	if _boot_approach_active and not _wheel_braking:
 		_boot_approach_active = false
 		_cancel_body_look()
-		_apply_suit_forces(_boot_approach_force.limit_length(thrust_force_n), Vector3.ZERO, delta)
+		_apply_thrust(_boot_approach_force.limit_length(thrust_force_n), delta)
 		var approach_delivered: Vector3 = attitude.drive(_boot_approach_torque, omega_body, roll_torque_nm, delta, suit, global_basis.transposed() * inverse_inertia * global_basis)
 		apply_torque(global_basis * approach_delivered)
 		return
-	_apply_suit_forces(global_basis * _translation_input * thrust_force_n, Vector3.ZERO, delta)
+	_apply_thrust(global_basis * _translation_input * thrust_force_n, delta)
 	var motor_torque: Vector3 = Vector3.BACK * _roll_input * roll_torque_nm
 	if _wheel_braking:
 		_body_follow = false
@@ -223,7 +223,13 @@ func _update_body_look() -> void:
 func _body_look_torque(omega_body: Vector3, inverse_inertia: Basis) -> Vector3:
 	if inverse_inertia.determinant() <= 0.0:
 		return Vector3.ZERO
-	var inverse_body: Basis = global_basis.transposed() * inverse_inertia * global_basis
+	# A held load turns with the suit; plan the stop with the pair's inertia or it overshoots.
+	var world_inverse: Basis = inverse_inertia
+	if brake_reference.is_valid():
+		var reference: Dictionary = brake_reference.call()
+		if reference.has("inertia") and (reference.inertia as Basis).determinant() > 0.0:
+			world_inverse = (reference.inertia as Basis).inverse()
+	var inverse_body: Basis = global_basis.transposed() * world_inverse * global_basis
 	var error: Vector3 = Vector3(_look_remaining.y, _look_remaining.x, 0.0)
 	var desired_rate: Vector3 = Vector3.ZERO
 	for axis: int in 2:
@@ -405,6 +411,21 @@ func _apply_brake(delta: float) -> void:
 	# Equal motor and jet torques cancel; the expelled gas carries the removed
 	# rotor momentum. Do not submit cancelling floats as separate engine forces.
 	_apply_suit_forces(force, torque, delta)
+
+
+func _apply_thrust(force: Vector3, delta: float) -> void:
+	var offset: Vector3 = Vector3.ZERO
+	if brake_reference.is_valid():
+		offset = (brake_reference.call() as Dictionary).get("force_offset", offset)
+	# Jets push at the suit's own centre, which turns a held load about the pair's
+	# shared centre of mass. Opposed jets cancel that moment; past their torque
+	# rating the push is reduced, so sideways thrust with a big load is weaker.
+	var moment: Vector3 = offset.cross(force)
+	var budget: float = maxf(brake_torque_nm, 0.0)
+	if moment.length() > budget:
+		force *= budget / moment.length()
+		moment = offset.cross(force)
+	_apply_suit_forces(force, -moment, delta)
 
 
 func _apply_suit_forces(force: Vector3, torque: Vector3, delta: float) -> void:

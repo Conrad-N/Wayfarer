@@ -148,8 +148,9 @@ its contextual seat/terminal behavior.
 The Tab tablet works in either state. A loose suit is affected by ship maneuvers;
 warp and event warp require the seat and remain unavailable near objects.
 
-G grips/releases surfaces with any tool selected; 3 selects hands instead of the
-removed tractor. B arms magnetic soles for automatic steel-surface contact, cancels arming,
+G grips/releases surfaces with any tool selected; 3 selects the winch, which places
+two small devices and reels them together instead of the removed tractor. B arms
+magnetic soles for automatic steel-surface contact, cancels arming,
 or releases a latch. Hold B for 0.35 s while unlatched to align and gently approach
 nearby steel with paid suit thrusters and reaction wheels; release B to cancel
 assistance while retaining armed contact detection. Holding a release press does

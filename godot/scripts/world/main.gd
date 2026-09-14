@@ -38,7 +38,9 @@ func _ready() -> void:
 	var tools: SalvageTools = SalvageTools.new()
 	tools.name = "SalvageTools"
 	_player.add_child(tools)
-	tools.configure(_player, _wreck, _hazards)
+	# Winch links attach under Main, not the suit, so they stay put in the world
+	# and keep reeling even if the player later leaves or the suit is freed.
+	tools.configure(_player, _wreck, _hazards, self)
 	_player.salvage_tools = tools
 	var impacts: SuitImpacts = SuitImpacts.new()
 	impacts.name = "SuitImpacts"

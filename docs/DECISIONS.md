@@ -434,3 +434,29 @@ decide something the docs did not cover.
   body yet, so the array (and the scene light) use a fixed placeholder Sun at 1 AU
   along +X until a real Sol is added; `salvage_practice` has no orbital session and
   so never charges.
+- 2026-09-14 — Conrad asks to drop the old slot-3 "Hands" left-click grab/release
+  (G keeps grabbing with any tool) and give slot 3 a winch instead: place a small
+  device on two different solid objects within 2 m reach and 30 m of each other,
+  and a cable reels them together. Tension is computed at the velocity level
+  (effective mass along the cable from both bodies' inverse mass and inverse
+  inertia, removing at most half the position error each tick, capped at 500 N)
+  rather than a fixed spring/damper, so a 1 kg scrap and a 40 t hull are both
+  stable with the same numbers; a plain spring-damper cannot span that mass
+  range without either being too soft for the heavy case or blowing up the
+  light one. The reel shortens at 0.2 m/s, stalling if the load falls more than
+  0.12 m behind, drawing power from the device's own 250 kJ battery (not the
+  suit's) at tension × reel speed / 0.8; an empty battery stops the reel but the
+  existing tension still holds, since the brake needs no power. The suit carries
+  four device kits total; right-click removes the nearest aimed device/winch and
+  returns its kit. The cable is a straight line, like the grapple's: it ignores
+  obstacles between the two anchors, and off-centre placement spins whatever it
+  is anchored to. A winch anchored on a wreck part follows that part through a
+  cut (same body-local/part-local anchor storage as the physical grip) and
+  detaches if a body disappears outright or the cable exceeds 31 m.
+- 2026-09-14 — Conrad reports suit thrusters sending him spinning while holding
+  something. Cause: WASD thrust pushed at the suit's own centre while the braking
+  code alone accounted for the held load's shared centre of mass. Thrust now uses
+  the same balance: opposed jets cancel the moment about the combined centre, and
+  when that moment would exceed the jets' 60 N·m rating the push is scaled down
+  rather than spinning the pair. Mouse steering also planned its stop with the
+  suit's inertia alone and overshot heavy loads; it now uses the combined inertia.

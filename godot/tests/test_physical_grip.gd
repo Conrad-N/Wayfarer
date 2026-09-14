@@ -216,6 +216,69 @@ func test_ray_cannot_grab_through_wall_and_removed_target_releases() -> void:
 	fixture.free()
 
 
+## Suit jets balance thrust around the combined centre of mass, so a held load is pushed, not spun.
+func test_thrust_with_held_load_does_not_spin_the_pair() -> void:
+	var fixture: Node3D = _fixture()
+	var packed: PackedScene = load("res://scenes/player.tscn")
+	var suit: Player = packed.instantiate() as Player
+	suit.input_enabled = false
+	suit.position = Vector3(1.5, 0.0, 0.0)
+	fixture.add_child(suit)
+	var cargo: RigidBody3D = _body(fixture, Vector3.ZERO, 100.0)
+	var grip: PhysicalGrip = _grip(fixture, suit)
+	suit.brake_reference = grip.brake_state
+	await _frames(3)
+	check(grip.grab_body(cargo, Vector3.RIGHT * 0.5), "suit holds cargo beside it")
+	await _frames(3)
+	var fuel: float = suit.suit.propellant_kg
+	var before: Vector3 = _totals(suit, cargo).linear
+	suit.set_motion_input(Vector3.UP, 0.0)
+	await _frames(60)
+	suit.set_motion_input(Vector3.ZERO, 0.0)
+	var sideways: Vector3 = _totals(suit, cargo).linear - before
+	check(grip.is_attached(), "sideways thrust keeps the grip")
+	check(sideways.y > 30.0, "sideways thrust still moves the pair, got %.1f N s" % sideways.y)
+	check(suit.angular_velocity.length() < 0.03, "sideways thrust does not spin the suit, got %.3f rad/s" % suit.angular_velocity.length())
+	check(cargo.angular_velocity.length() < 0.03, "sideways thrust does not spin the load, got %.3f rad/s" % cargo.angular_velocity.length())
+	check(suit.suit.propellant_kg < fuel, "balanced thrust spends suit propellant")
+	await _frames(3)
+	before = _totals(suit, cargo).linear
+	suit.set_motion_input(Vector3.RIGHT, 0.0)
+	await _frames(30)
+	suit.set_motion_input(Vector3.ZERO, 0.0)
+	var along: Vector3 = _totals(suit, cargo).linear - before
+	check(along.x > 0.9 * suit.thrust_force_n * 30.0 / Engine.physics_ticks_per_second, "thrust in line with the load keeps full force, got %.1f N s" % along.x)
+	fixture.free()
+
+
+## A mouse turn while holding a load plans its stop with the pair's inertia and does not overshoot.
+func test_mouse_turn_with_held_load_stops_on_target() -> void:
+	var fixture: Node3D = _fixture()
+	var packed: PackedScene = load("res://scenes/player.tscn")
+	var suit: Player = packed.instantiate() as Player
+	suit.input_enabled = false
+	suit.position = Vector3(1.5, 0.0, 0.0)
+	fixture.add_child(suit)
+	var cargo: RigidBody3D = _body(fixture, Vector3.ZERO, 400.0)
+	var grip: PhysicalGrip = _grip(fixture, suit)
+	suit.brake_reference = grip.brake_state
+	await _frames(3)
+	check(grip.grab_body(cargo, Vector3.RIGHT * 0.5), "suit holds a heavy load")
+	await _frames(3)
+	var start: Basis = suit.global_basis
+	suit.queue_mouse_look(Vector2(-0.5 / suit.mouse_sensitivity, 0.0))
+	var peak: float = 0.0
+	for frame: int in range(300):
+		await (Engine.get_main_loop() as SceneTree).physics_frame
+		peak = maxf(peak, (start.transposed() * suit.global_basis).get_euler().y)
+	var yaw: float = (start.transposed() * suit.global_basis).get_euler().y
+	check(grip.is_attached(), "turning keeps the grip")
+	check(peak < 0.55, "turn does not overshoot 0.5 rad, peaked at %.3f" % peak)
+	check_near(yaw, 0.5, 0.02, "turn settles on the requested angle")
+	check(suit.angular_velocity.length() < 0.002, "pair stops turning, got %.4f rad/s" % suit.angular_velocity.length())
+	fixture.free()
+
+
 func _fixture() -> Node3D:
 	var node: Node3D = Node3D.new()
 	(Engine.get_main_loop() as SceneTree).root.add_child(node)

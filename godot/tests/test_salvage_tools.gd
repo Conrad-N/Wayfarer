@@ -61,11 +61,30 @@ func test_scanner_motion_release_and_switch_cancel() -> void:
 	check_eq(tools.scan_progress, 0.0, "release cancels pulse")
 	tools.set_triggers(true, false)
 	tools._physics_process(0.5)
-	tools.select_tool(SalvageTools.Tool.HANDS)
+	tools.select_tool(SalvageTools.Tool.WINCH)
 	check_eq(tools.scan_progress, 0.0, "tool switch cancels pulse")
 	energy = player.suit.battery_energy_j
 	tools._physics_process(0.1)
-	check_eq(player.suit.battery_energy_j, energy, "switch does not carry held trigger into hands")
+	check_eq(player.suit.battery_energy_j, energy, "switch does not carry held trigger into the winch")
+	fixture.root.free()
+
+
+## Selecting the winch slot uses a device kit on left click instead of grabbing.
+func test_winch_slot_places_a_device_and_does_not_grab() -> void:
+	var fixture: Dictionary = _fixture(_joint_graph())
+	var tools: SalvageTools = fixture.tools
+	var player: Player = fixture.player
+	var grip: PhysicalGrip = PhysicalGrip.new()
+	player.add_child(grip)
+	grip.configure(player, player.get_node("Camera3D") as Camera3D)
+	_wall(fixture.root, Vector3(0.0, 0.55, -1.5))
+	await _frames(3)
+	tools.select_tool(SalvageTools.Tool.WINCH)
+	var kits_before: int = tools._winch.kits_available
+	tools.set_triggers(true, false)
+	tools._physics_process(0.1)
+	check_eq(tools._winch.kits_available, kits_before - 1, "left click on slot 3 spends a winch kit")
+	check(not grip.is_attached(), "left click on slot 3 no longer grabs the aimed surface")
 	fixture.root.free()
 
 

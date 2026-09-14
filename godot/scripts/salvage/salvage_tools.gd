@@ -1,8 +1,9 @@
-## Cutter, physical hand grip, and stationary scanner on the EVA suit.
+## Cutter, suit winch, and stationary scanner on the EVA suit. Grapple selection
+## is handled by Player directly; the physical hand grip (G) works with any tool.
 class_name SalvageTools
 extends Node3D
 
-enum Tool { GRAPPLE, CUTTER, HANDS, SCANNER }
+enum Tool { GRAPPLE, CUTTER, WINCH, SCANNER }
 
 var selected: Tool = Tool.GRAPPLE
 var status: String = "Grapple ready"
@@ -12,24 +13,29 @@ var target_readout: String = ""
 var _overheated: bool = false
 var _primary: bool = false
 var _secondary: bool = false
-var _hand_request: int = 0
+var _winch_request: int = 0
 var _player: Player
 var _camera: Camera3D
 var _wreck: SalvageWreck
 var _hazards: SalvageHazards
+var _winch: SuitWinch
 var _scan_basis: Basis = Basis.IDENTITY
 var _beam: MeshInstance3D
 var _beam_end: Vector3
 var _beam_visible: bool = false
 
 
-## Share the player's finite tool battery and the current salvage scene.
-func configure(player: Player, wreck: SalvageWreck, hazards: SalvageHazards) -> void:
+## Share the player's finite tool battery and the current salvage scene. Winch
+## links attach under links_parent (a stable world node) so they outlive tool
+## switches and do not move with the suit; defaults to this node if omitted.
+func configure(player: Player, wreck: SalvageWreck, hazards: SalvageHazards, links_parent: Node3D = null) -> void:
 	_player = player
 	_camera = player.get_node("Camera3D") as Camera3D
 	_wreck = wreck
 	_hazards = hazards
 	_scan_basis = _camera.global_basis
+	_winch = SuitWinch.new()
+	_winch.configure(_player, _camera, links_parent if links_parent != null else self)
 
 
 ## Switch tools without carrying a held trigger or reel command into the next tool.
@@ -38,16 +44,17 @@ func select_tool(tool: Tool) -> void:
 	cancel_input()
 	if is_instance_valid(_player):
 		_player.grapple.cancel_input()
-	status = ["Grapple ready", "Aim at a gold cut point", "HANDS | G grab / release within reach", "Hold still to scan"][selected]
+	var winch_status: String = _winch.status if is_instance_valid(_winch) else "WINCH | Left: place device on first object"
+	status = ["Grapple ready", "Aim at a gold cut point", winch_status, "Hold still to scan"][selected]
 
 
-## Supply held tool controls; hands use a press edge to grab or release.
+## Supply held tool controls; the winch uses a press edge to place or remove a device.
 func set_triggers(primary: bool, secondary: bool) -> void:
-	if selected == Tool.HANDS:
+	if selected == Tool.WINCH:
 		if secondary and not _secondary:
-			_hand_request = -1
+			_winch_request = -1
 		elif primary and not _primary:
-			_hand_request = 1
+			_winch_request = 1
 	_primary = primary
 	_secondary = secondary
 
@@ -56,7 +63,7 @@ func set_triggers(primary: bool, secondary: bool) -> void:
 func cancel_input() -> void:
 	_primary = false
 	_secondary = false
-	_hand_request = 0
+	_winch_request = 0
 	scan_progress = 0.0
 	_beam_visible = false
 
@@ -79,14 +86,17 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if _hand_request != 0 and is_instance_valid(_player):
-		var grip: PhysicalGrip = _player.get_node_or_null("PhysicalGrip") as PhysicalGrip
-		if grip != null:
-			if _hand_request < 0:
-				grip.release()
-			elif not _player.surface_motion_active and not bool(_player.get_meta("seated", false)):
-				grip.try_grab()
-		_hand_request = 0
+	if is_instance_valid(_winch):
+		# Refresh status before acting on a press edge, so a placement or removal
+		# outcome this tick (an error or a new link) is what the HUD shows next,
+		# not immediately overwritten by the steady-state text.
+		_winch.update(delta)
+		if _winch_request != 0:
+			if _winch_request > 0:
+				_winch.place()
+			else:
+				_winch.remove()
+			_winch_request = 0
 	if not is_instance_valid(_player) or not is_instance_valid(_wreck):
 		return
 	_inspect_target()
@@ -98,8 +108,8 @@ func _physics_process(delta: float) -> void:
 	match selected:
 		Tool.CUTTER:
 			_cutter(delta)
-		Tool.HANDS:
-			status = "HANDS | Left grab / right release | G works with any tool"
+		Tool.WINCH:
+			status = _winch.status
 		Tool.SCANNER:
 			_scanner(delta)
 	if selected == Tool.CUTTER and _primary and not _overheated and not _beam_visible:
