@@ -3,6 +3,9 @@
 ## every .gd file under res://scripts and res://ui, collects the quoted
 ## action names from is_action*() and Input.get_action_strength() calls,
 ## and checks each one against InputMap.
+##
+## T2: the freelook action is bound to Shift and the middle mouse button
+## (2026-09-14 rebinding away from Z), and both bindings actually match.
 extends TestCase
 
 
@@ -21,6 +24,41 @@ func test_input_actions_exist_in_map() -> void:
 	for slot: int in range(1, 5):
 		var slot_action: String = "tool_slot_%d" % slot
 		check(InputMap.has_action(slot_action), "action %s exists" % slot_action)
+
+
+## Free look is bound to exactly Shift plus middle mouse (2026-09-14), so either
+## key recentres the view on release and the retired Z binding is fully gone.
+func test_freelook_bound_to_shift_and_middle_mouse() -> void:
+	var events: Array[InputEvent] = InputMap.action_get_events("freelook")
+	check_eq(events.size(), 2, "freelook has exactly two bindings")
+	var has_shift: bool = false
+	var has_middle_mouse: bool = false
+	for event: InputEvent in events:
+		if event is InputEventKey:
+			var key: InputEventKey = event as InputEventKey
+			check(key.physical_keycode != KEY_Z, "old Z binding still present on freelook")
+			if key.physical_keycode == KEY_SHIFT:
+				has_shift = true
+		elif event is InputEventMouseButton:
+			if (event as InputEventMouseButton).button_index == MOUSE_BUTTON_MIDDLE:
+				has_middle_mouse = true
+	check(has_shift, "freelook is bound to Shift")
+	check(has_middle_mouse, "freelook is bound to the middle mouse button")
+	# Synthesised presses must match the action the same way player.gd reads it
+	# (event.is_action), which also proves the mouse-button binding works.
+	var shift_press: InputEventKey = InputEventKey.new()
+	shift_press.physical_keycode = KEY_SHIFT
+	shift_press.pressed = true
+	check(shift_press.is_action("freelook"), "a Shift press matches the freelook action")
+	var middle_press: InputEventMouseButton = InputEventMouseButton.new()
+	middle_press.button_index = MOUSE_BUTTON_MIDDLE
+	middle_press.button_mask = MOUSE_BUTTON_MASK_MIDDLE
+	middle_press.pressed = true
+	check(middle_press.is_action("freelook"), "a middle-mouse press matches the freelook action")
+	var z_press: InputEventKey = InputEventKey.new()
+	z_press.physical_keycode = KEY_Z
+	z_press.pressed = true
+	check(not z_press.is_action("freelook"), "a Z press no longer matches the freelook action")
 
 
 ## Recursively lists .gd files under [dir_path], appending paths to [out].

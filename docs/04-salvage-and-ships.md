@@ -169,8 +169,8 @@ propellant (torque uses a 0.5 m effective lever arm). Empty tanks preserve motio
 Normal mouse movement requests a suit-body turn through electrically powered
 reaction wheels. The camera stays centred on the torso, and a fast swipe keeps
 its full requested turn while the body accelerates and brakes within its torque
-and momentum limits. There is no artificial turn-speed cap. Hold Z to move only
-the head within ±60° yaw and ±50° pitch; releasing it snaps
+and momentum limits. There is no artificial turn-speed cap. Hold Shift or middle
+mouse to move only the head within ±60° yaw and ±50° pitch; releasing it snaps
 the head back to centre. Q/E roll uses the same wheels. They provide up to
 50 N·m and store up to ±100 N·m·s on each axis. The wearable module follows Conrad's design
 note: 0.0239 kg·m² rotor inertia, about 40,000 rpm at capacity, and a 15 kg
@@ -198,7 +198,7 @@ the inelastic catch can dissipate kinetic energy. The combined rotational
 inertia slows the shared spin. Holding Alt acts on both bodies through the suit's
 finite jets. Large loads can exceed the grip or exhaust the suit's fuel.
 
-The grip follows the selected part through cutting. Hold Z to aim the cutter
+The grip follows the selected part through cutting. Hold Shift to aim the cutter
 while holding; normal mouse movement steers the combined
 load using reaction wheels, and Q/E rolls it. A heavy load turns slowly and
 fills the suit wheels; unload them before the next turn. The carried part retains its collisions and
@@ -212,7 +212,7 @@ attempts cost no energy; engagement is charged only once on success. A broken or
 overloaded latch switches off and requires B to rearm. WASD walks in the camera's
 forward/right directions projected onto the supporting surface. While latched,
 normal mouse movement freely aims the camera through unlimited yaw and ±85° pitch,
-without a modifier or any battery, fuel or wheel momentum cost. Z does not change
+without a modifier or any battery, fuel or wheel momentum cost. Shift does not change
 this walking view. Releasing the boots centres the camera on the torso and restores
 physical EVA turning.
 

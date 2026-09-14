@@ -407,4 +407,9 @@ decide something the docs did not cover.
   with range (√(½·a·d), capped at 20 m/s, proportional crawl inside 15 m) instead
   of a flat 0.5 m/s, so a kilometre takes about three minutes rather than half an
   hour. Conrad also wants ship-scale clamps later so a whole wreck can be towed.
+- 2026-09-14 — Free look moves from Z to Shift, with middle mouse as a second
+  binding on the same `freelook` action, so either key recentres the view on
+  release. Shift is otherwise unused since held-load steering dropped it
+  (2026-09-13); Z is free for future use. The stale "Shift + mouse steer held
+  load" HUD line from before that change is corrected to plain mouse steering.
 

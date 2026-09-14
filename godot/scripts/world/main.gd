@@ -88,7 +88,7 @@ func _process(delta: float) -> void:
 	if _player.has_automatic_freelook() and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		capture_hint = "FREE LOOK"
 	elif _player.is_freelooking():
-		capture_hint = "FREE LOOK / release Z to centre"
+		capture_hint = "FREE LOOK / release to centre"
 	var brake_hint: String = "RCS BRAKE" if _player.is_braking() else ("WHEEL BRAKE" if _player.is_wheel_braking() else "FREE FLIGHT")
 	if _player.is_wheel_dumping() and not _player.is_braking():
 		brake_hint = "WHEEL DUMP / REACTION TORQUE"

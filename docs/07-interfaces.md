@@ -136,11 +136,12 @@ This supersedes the M3 automatic terminal handhold. F opens an aimed nearby
 terminal without changing suit motion. The pilot seat has actual restraints:
 F snaps a slow pilot within 1.5 m into the seated pose facing NAV and centres
 the head/camera; while seated F opens an aimed terminal,
-or unstraps when looking away with Z held. Use that modifier
+or unstraps when looking away with the free-look key held (Shift or middle
+mouse). Use that modifier
 to aim at other terminals while restrained. Closing a screen leaves the harness
 fastened.
 While seated, mouse movement always freely aims the camera (unrestricted yaw,
-±85° pitch) without holding Z or spending suit resources. V unstraps regardless
+±85° pitch) without holding Shift or spending suit resources. V unstraps regardless
 of aim or an open terminal/tablet, closes screen input, restores standing eye
 height, and centres the view for EVA. Existing momentum is preserved. F retains
 its contextual seat/terminal behavior.
@@ -159,12 +160,12 @@ attached. A free suit spins; a carrier may counteract its resulting rotation if
 its own attitude control is active. The HUD shows unloading, attachment status,
 resources and wheel saturation. Unload suit wheels before using orbital warp.
 During EVA, normal mouse motion requests a physical body turn; the camera remains centred
-on the torso. Hold Z for head-only aiming, then release it
+on the torso. Hold Shift or middle mouse for head-only aiming, then release it
 to snap back to centre. The head is limited to ±60° yaw / ±50° pitch; body turns
 retain the full mouse request and have no artificial speed cap. The same mouse
-motion steers a hand-held load; Z free look does not steer it. While boots are latched, normal mouse movement freely looks in any yaw direction
+motion steers a hand-held load; free look does not steer it. While boots are latched, normal mouse movement freely looks in any yaw direction
 and up/down to ±85° without using resources. WASD follows the view along the surface;
-Z is unnecessary. Releasing boots centres the view and restores physical EVA turns.
+Shift is unnecessary. Releasing boots centres the view and restores physical EVA turns.
 Escape and focus loss cancel active motors and tools, retaining passive
 hand/boot/seat attachments. A visual bump indicator gives feedback when the
 suit physically contacts its surroundings.

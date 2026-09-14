@@ -307,7 +307,7 @@ exercised and inspected; captures are under ignored `godot/build/screens/`.
 
 Mouse controls revision (2026-09-10, complete): normal mouse movement
 requests a physical body turn with the camera centred on the torso. Holding
-Z permits head-only aiming; releasing it snaps back to centre.
+Shift permits head-only aiming; releasing it snaps back to centre.
 Fast swipes retain the full requested turn and the artificial turn-rate cap is
 removed. Suit wheel torque increases to 50 N·m at Conrad's request. Boots separate
 powered yaw turns from free look, and restrained or hand-held use retains its
@@ -317,7 +317,7 @@ contact with surrounding bodies.
 Verification: `./check.sh` passes **2,864 checks, zero failures**; main scene boots
 headless without errors. Tests include full 180°/270° turns, modifier release,
 boot pivots and walking during head look, physical bump detection and decay,
-and existing salvage/orbital acceptance. Fullscreen native mouse/Z input completed
+and existing salvage/orbital acceptance. Fullscreen native mouse/free-look input completed
 a half turn with a peak of 4.72 rad/s, recentred the view on release, and displayed
 the fading BUMP label after a real wall collision. Captures are under ignored
 `godot/build/screens/look-*.png`.
@@ -377,7 +377,7 @@ flight, automatic ship-floor contact, and a held release that stays detached.
 
 ### Seat view and exit revision
 
-- [x] Always-on free seated mouse view without Z or resource cost.
+- [x] Always-on free seated mouse view without Shift or resource cost.
 - [x] Dedicated V unstrap action, including while facing NAV or using either screen.
 
 Unstrapping closes screen input, restores standing camera height and centred EVA
