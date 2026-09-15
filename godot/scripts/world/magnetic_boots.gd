@@ -21,6 +21,9 @@ var _height: float = FOOT_HEIGHT_M
 var _armed: bool = false
 var _approach_held: bool = false
 var _approaching: bool = false
+var _approach_was_active: bool = false
+var _last_logged_wait_reason: String = ""
+var _last_wait_log_s: float = -INF
 
 
 ## Bind the physical suit. The controller runs before suit actuators.
@@ -56,7 +59,7 @@ func is_approaching() -> bool:
 ## Arm contact detection, or cancel/release if already enabled.
 func toggle() -> void:
 	if _armed or is_attached():
-		release()
+		release("B pressed")
 		return
 	if not is_instance_valid(player) or bool(player.get_meta("seated", false)):
 		return
@@ -65,6 +68,7 @@ func toggle() -> void:
 		status = "BOOTS OFF | Release your hand grip first"
 		return
 	_armed = true
+	DebugLog.event("boots", "armed: waiting for a steel surface")
 	try_latch()
 
 
@@ -133,28 +137,46 @@ func try_latch() -> bool:
 	player.surface_motion_active = true
 	player.set_motion_input(Vector3.ZERO, 0.0)
 	status = "BOOTS LATCHED | WASD walk | B release"
+	DebugLog.event("boots", "latched to %s at %.2f m/s relative, height %.2f m" % [body.name, relative.length(), height])
 	return true
 
 
-## Mechanical emergency release costs nothing and preserves motion.
-func release() -> void:
+## Mechanical emergency release costs nothing and preserves motion. reason is a
+## short cause for the debug trail; callers that already logged a richer,
+## specific reason (contact loss, overload) should call _teardown() instead.
+func release(reason: String = "") -> void:
+	if is_attached():
+		DebugLog.event("boots", ("released: %s" % reason) if not reason.is_empty() else "released")
+	elif _armed:
+		DebugLog.event("boots", ("arm cancelled: %s" % reason) if not reason.is_empty() else "arm cancelled")
+	_teardown()
+
+
+func _teardown() -> void:
 	set_approach_held(false)
 	_armed = false
 	_target = null
 	_walking = Vector2.ZERO
+	_last_logged_wait_reason = ""
 	if is_instance_valid(player):
 		player.surface_motion_active = false
 	status = "BOOTS OFF | B arm"
 
 
 func _physics_process(delta: float) -> void:
+	if _approaching != _approach_was_active:
+		_approach_was_active = _approaching
+		if _approaching:
+			DebugLog.event("boots", "approach engaged")
+		elif is_instance_valid(player):
+			DebugLog.event("boots", "approach stopped: %.2f kg propellant left" % player.suit.propellant_kg)
 	if is_instance_valid(player):
 		player.set_boot_approach(false)
 	_approaching = false
 	if _armed and is_instance_valid(player):
 		var grip: PhysicalGrip = player.get_node_or_null("PhysicalGrip") as PhysicalGrip
 		if bool(player.get_meta("seated", false)) or (grip != null and grip.is_attached()):
-			release()
+			release("seated" if bool(player.get_meta("seated", false)) else "hand gripping")
 		else:
 			try_latch()
 	if not is_attached():
@@ -169,7 +191,8 @@ func _physics_process(delta: float) -> void:
 	var offset: Vector3 = player.global_position - anchor
 	var hit: Dictionary = _support_ray(player.global_position, normal)
 	if hit.get("collider") != _target or not _magnetic_hit(hit) or offset.dot(normal) > 1.3 or offset.dot(normal) < 0.55:
-		release()
+		DebugLog.event("boots", "released: lost surface contact")
+		_teardown()
 		status = "BOOTS RELEASED | Lost surface contact | B rearm"
 		return
 	var relative: Vector3 = player.linear_velocity - _point_velocity(_target, player.global_position)
@@ -217,7 +240,8 @@ func _physics_process(delta: float) -> void:
 	anchor = _target.to_global(_anchor)
 	var error: Vector3 = anchor + normal * _height - player.global_position
 	if error.slide(normal).length() > 0.45:
-		release()
+		DebugLog.event("boots", "released: step obstructed or holding force exceeded, error %.2f m" % error.slide(normal).length())
+		_teardown()
 		status = "BOOTS RELEASED | Step obstructed or holding force exceeded | B rearm"
 		return
 	var force: Vector3 = error * 16000.0 - relative * 1800.0
@@ -232,7 +256,8 @@ func _physics_process(delta: float) -> void:
 	var point: Vector3 = player.global_position - normal * _height
 	torque -= (point - player.to_global(player.center_of_mass)).cross(force)
 	if force.length() > MAX_FORCE_N or torque.length() > MAX_TORQUE_NM:
-		release()
+		DebugLog.event("boots", "released: overloaded, force %.0f N (max %.0f), torque %.0f N m (max %.0f)" % [force.length(), MAX_FORCE_N, torque.length(), MAX_TORQUE_NM])
+		_teardown()
 		status = "BOOTS RELEASED | Holding force exceeded | B rearm"
 		return
 	player.apply_force(force, point - player.global_position)
@@ -367,6 +392,13 @@ func _foot_ray() -> Dictionary:
 
 
 func _waiting(reason: String) -> void:
+	# Hovering at a surface can flip between two reasons every frame, so a new
+	# reason is also held back until a second has passed since the last one.
+	var now: float = Time.get_ticks_msec() / 1000.0
+	if _armed and reason != _last_logged_wait_reason and now - _last_wait_log_s >= 1.0:
+		_last_logged_wait_reason = reason
+		_last_wait_log_s = now
+		DebugLog.event("boots", "latch refused: " + reason)
 	status = "BOOTS ARMED | " + reason + " | B cancel" if _armed else "BOOTS | " + reason
 
 
@@ -390,4 +422,4 @@ func _point_velocity(body: PhysicsBody3D, point: Vector3) -> Vector3:
 
 
 func _exit_tree() -> void:
-	release()
+	_teardown()

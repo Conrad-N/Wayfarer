@@ -18,6 +18,12 @@ var _approaching: bool = false
 var _publish_elapsed: float = 1.0
 var _wheel_energy_before_j: float = 0.0
 var _suit_dump_settle_s: float = 0.0
+## Warp/attitude/executor/burn state actually logged so far, so the debug
+## trail records only the frame each one changes, never every frame.
+var _last_logged_warp: float = 1.0
+var _last_logged_attitude_mode: String = ""
+var _last_logged_executor_on: bool = false
+var _last_logged_burning: bool = false
 ## Warp a seated pilot asked for while the suit wheels still had to be unloaded.
 var _pending_warp: float = 1.0
 const EVA_REFERENCE_ID: String = "__eva_coast_reference"
@@ -104,6 +110,7 @@ func _physics_process(delta: float) -> void:
 		_advance_local(delta)
 	else:
 		_advance_orbit(delta)
+	_log_flight_state_changes()
 	if reference_id.is_empty():
 		for id: String in session.objects:
 			if str(session.objects[id].get("kind", "")) not in ["station", "derelict"]:
@@ -141,6 +148,31 @@ func _physics_process(delta: float) -> void:
 func _process(_delta: float) -> void:
 	if enabled and ship_is_local:
 		_refresh_local_snapshot()
+
+
+## Log warp, attitude, executor, and burn state only on the frame each one
+## actually changes, so a dump shows what the flight computer decided without
+## per-frame spam from continuously recomputed values (throttle sliders, the
+## distance-limited effective warp rate).
+func _log_flight_state_changes() -> void:
+	var world: OrbitalWorld = session.world
+	if not is_equal_approx(requested_warp, _last_logged_warp):
+		DebugLog.event("flight", "warp requested: %.0fx" % requested_warp)
+		_last_logged_warp = requested_warp
+	if world.attitude_mode != _last_logged_attitude_mode:
+		if not _last_logged_attitude_mode.is_empty():
+			DebugLog.event("flight", "attitude mode: %s -> %s" % [_last_logged_attitude_mode, world.attitude_mode])
+		_last_logged_attitude_mode = world.attitude_mode
+	if world.executor_on != _last_logged_executor_on:
+		_last_logged_executor_on = world.executor_on
+		DebugLog.event("flight", "maneuver executor %s: %d node(s) queued" % ["on" if world.executor_on else "off", world.nodes.size()])
+	var burning: bool = world.throttle > 0.0
+	if burning != _last_logged_burning:
+		_last_logged_burning = burning
+		if burning:
+			DebugLog.event("flight", "burn started: throttle %.0f%%, %.0f kg propellant" % [world.throttle * 100.0, world.ship.propellant_kg])
+		else:
+			DebugLog.event("flight", "burn ended: %.0f kg propellant remaining" % world.ship.propellant_kg)
 
 
 func _sync_mass() -> void:

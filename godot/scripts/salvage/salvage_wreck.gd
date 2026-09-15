@@ -93,6 +93,7 @@ func damage_component(ids: PackedStringArray, energy_j: float) -> void:
 	for id: String in valid_ids:
 		var part: ShipPart = graph.get_part(id)
 		part.condition -= loss
+	DebugLog.event("cut", "impact damage: %.0f J across %d part(s), condition -%.2f" % [energy_j, valid_ids.size(), loss])
 
 
 func _make_body(ids: PackedStringArray, pose: Transform3D) -> WreckBody:
@@ -124,12 +125,15 @@ func _sever(edge_id: String) -> void:
 	# All replacement collision is enabled together after the old body leaves
 	# the physics world; there is no frame with duplicate active collision.
 	remove_child(old)
+	var pieces: int = 0
 	for component: PackedStringArray in graph.components():
 		if not old.part_ids.has(component[0]):
 			continue
 		var body: WreckBody = _make_body(component, pose)
 		body.linear_velocity = SalvageMassProperties.fragment_velocity(velocity, spin, centre, body.global_position)
 		body.angular_velocity = spin
+		pieces += 1
 	old.queue_free()
 	_split_pending = false
+	DebugLog.event("cut", "cut completed: %s split into %d piece(s)" % [edge_id.trim_prefix("Joint_"), pieces])
 	structure_changed.emit()

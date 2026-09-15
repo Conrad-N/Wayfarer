@@ -60,6 +60,7 @@ var _braking: bool = false
 var _wheel_braking: bool = false
 var _wheel_dumping: bool = false
 var _auto_wheel_dumping: bool = false
+var _view_handoff_started_s: float = 0.0
 
 
 func _ready() -> void:
@@ -282,6 +283,8 @@ func _begin_view_handoff() -> void:
 	_view_offset = camera.basis.orthonormalized()
 	_view_previous_basis = global_basis
 	_view_handoff = true
+	_view_handoff_started_s = Time.get_ticks_msec() / 1000.0
+	DebugLog.event("player", "view turn begun: %.0f deg off heading" % rad_to_deg(_view_offset.get_rotation_quaternion().get_angle()))
 
 
 ## Latching again mid-turn carries the unfinished view over as free head aim.
@@ -292,6 +295,7 @@ func _view_handoff_to_head() -> void:
 	head_angles_rad = Vector2(atan2(-forward.x, -forward.z), asin(clampf(forward.y, -1.0, 1.0)))
 	_view_handoff = false
 	_view_offset = Basis.IDENTITY
+	DebugLog.event("player", "view turn interrupted: %.1fs elapsed, kept as head aim" % (Time.get_ticks_msec() / 1000.0 - _view_handoff_started_s))
 
 
 ## Hold the view still in space while the suit turns underneath it. A held roll
@@ -321,6 +325,7 @@ func _view_handoff_torque(omega_body: Vector3, inverse_inertia: Basis) -> Vector
 		_view_handoff = false
 		_view_offset = Basis.IDENTITY
 		($Camera3D as Camera3D).basis = Basis.IDENTITY
+		DebugLog.event("player", "view turn finished: %.1fs elapsed" % (Time.get_ticks_msec() / 1000.0 - _view_handoff_started_s))
 		return Vector3.ZERO
 	var inverse_body: Basis = _steering_inverse_inertia(inverse_inertia)
 	var desired_rate: Vector3 = Vector3.ZERO
@@ -406,6 +411,11 @@ func queue_mouse_look(relative: Vector2) -> void:
 
 ## Hold suit RCS braking in the local scene's frame; it takes priority over thrust and roll.
 func set_braking(enabled: bool) -> void:
+	if enabled != _braking:
+		if enabled:
+			DebugLog.event("player", "jet brake engaged: killing %.2f m/s" % linear_velocity.length())
+		else:
+			DebugLog.event("player", "jet brake ended: %.2f m/s remaining" % linear_velocity.length())
 	_braking = enabled
 
 
@@ -416,6 +426,11 @@ func is_braking() -> bool:
 
 ## Hold rotation-only wheel braking; translation remains available and no jets fire for rotation.
 func set_wheel_braking(enabled: bool) -> void:
+	if enabled != _wheel_braking:
+		if enabled:
+			DebugLog.event("player", "wheel brake engaged: %.2f rad/s spin" % angular_velocity.length())
+		else:
+			DebugLog.event("player", "wheel brake finished: %.2f rad/s spin" % angular_velocity.length())
 	_wheel_braking = enabled
 
 
@@ -426,13 +441,30 @@ func is_wheel_braking() -> bool:
 
 ## Hold rotor unloading: its real reaction spins the suit and any physical support.
 func set_wheel_dumping(enabled: bool) -> void:
+	var before: bool = is_wheel_dumping()
 	_wheel_dumping = enabled
+	_log_wheel_dump_transition(before)
 
 
 ## Let the ship's flight controller unload the rotors on the pilot's behalf (warp).
 ## Independent of the held C key so per-frame input polling cannot cancel it.
 func set_automatic_wheel_dump(enabled: bool) -> void:
+	var before: bool = is_wheel_dumping()
 	_auto_wheel_dumping = enabled
+	_log_wheel_dump_transition(before)
+
+
+## Log wheel dumping starting or finishing, whichever setter changed it. Both
+## setters are called every input frame with the same value while held, so
+## this only fires on the frame the combined manual-or-automatic state flips.
+func _log_wheel_dump_transition(before: bool) -> void:
+	var after: bool = is_wheel_dumping()
+	if after == before:
+		return
+	if after:
+		DebugLog.event("player", "wheel dump engaged: %.1f N m s stored" % attitude.momentum_body.length())
+	else:
+		DebugLog.event("player", "wheel dump finished: %.1f N m s remaining" % attitude.momentum_body.length())
 
 
 ## Report unloading, held or automatic, including in a seat or latched boots.

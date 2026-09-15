@@ -490,3 +490,17 @@ decide something the docs did not cover.
   ShipApi's own save; the cargo hold only regrows geometry and the mass frame, so a
   load with the cargo door shut does not re-run the loading checks. The save is
   written to a temporary file and renamed so a failed write keeps the old save.
+- 2026-09-15 — Conrad: the debug trail is too thin, and seat problems are rare enough
+  that every F and V press should save debug info. `DebugDump` now listens to the
+  window's input (before any node can consume it) and logs one-off key actions to
+  the event trail, plus releases of held ones; movement, key repeats and mouse motion
+  are left out. Each F or V press writes `user://debug/presses/press_<key>_*.json`
+  0.5 s later, holding every section at that moment plus an `at_press` copy taken
+  at the press. Files are about 20 KB and are not pruned. The trail keeps 800 lines
+  (was 400). Seat, screen, pause, save and load changes log what happened with the
+  numbers behind refusals and where an unstrapped pilot stood up; the seat section
+  gains the pilot's pose in the ship, camera height, harness status and what blocks
+  the exit spot. Other systems log discrete state changes only, never per frame.
+  Values that can hover at a threshold need a margin before "recovered" is logged
+  (suit stores 2% of capacity, ship battery 1%), and refusal reasons that can flip
+  every frame (boot latch, cargo securing) log a new reason at most once a second.

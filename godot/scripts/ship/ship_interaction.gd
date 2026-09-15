@@ -56,6 +56,7 @@ func open_tablet() -> void:
 		close_screen()
 	_begin_input(tablet)
 	tablet.visible = true
+	DebugLog.event("screen", "opened tablet")
 
 
 ## Snap a nearby, slow pilot into the forward-facing seated pose and fasten the harness.
@@ -65,13 +66,17 @@ func strap_in() -> bool:
 	var seat_position: Vector3 = ship.to_global(PlayerShip.SEAT_POSITION)
 	if not _seat_within_reach():
 		hint = SEAT_APPROACH_HINT
+		DebugLog.event("seat", "strap-in refused: %.2f m from the seat (limit %.1f), %.2f m/s relative to the ship (limit %.1f)"
+			% [player.global_position.distance_to(seat_position), STRAP_REACH_M, _relative_speed(), STRAP_MAX_SPEED_MPS])
 		return false
 	# The requested seating shortcut changes pose once; the live harness owns motion afterward.
 	var approach_pose: Transform3D = player.global_transform
 	player.global_transform = ship.global_transform * Transform3D(Basis(Vector3.UP, PI / 2.0), PlayerShip.SEAT_POSITION)
 	if not _seat_restraint.grab_body(ship, seat_position):
 		player.global_transform = approach_pose
+		DebugLog.event("seat", "strap-in refused: the harness did not catch (%s)" % _seat_restraint.status)
 		return false
+	DebugLog.event("seat", "strapped in; came from %s in the ship" % _in_ship(approach_pose.origin))
 	_standing_camera_position = _camera.position
 	_seat_pose_active = true
 	_camera.position = Vector3(0, 0.35, 0)
@@ -98,6 +103,8 @@ func is_seated() -> bool:
 ## simply broke (step_out false) leaves them wherever physics put them.
 func unstrap(step_out: bool = true) -> void:
 	var was_posed: bool = _seat_pose_active
+	if is_instance_valid(player) and is_instance_valid(ship) and (was_posed or is_seated()):
+		DebugLog.event("seat", "%s at %s in the ship" % ["unstrapping" if step_out else "harness gone, leaving the pilot where they are", _in_ship(player.global_position)])
 	if _seat_pose_active:
 		close_screen()
 		_camera.position = _standing_camera_position
@@ -117,8 +124,10 @@ func open_terminal(screen: WorldScreen) -> bool:
 		return false
 	if _camera.global_position.distance_to(screen.global_position) > 2.5:
 		hint = "Approach within 2.5 m to use the terminal"
+		DebugLog.event("screen", "%s terminal refused: %.2f m away (limit 2.5)" % [screen.panel.current_app, _camera.global_position.distance_to(screen.global_position)])
 		return false
 	_begin_input(screen)
+	DebugLog.event("screen", "opened %s terminal%s" % [screen.panel.current_app, " while seated" if is_seated() else ""])
 	return true
 
 
@@ -126,6 +135,7 @@ func open_terminal(screen: WorldScreen) -> bool:
 func close_screen() -> void:
 	if not is_open():
 		return
+	DebugLog.event("screen", "closed %s" % ("tablet" if active_screen == tablet else "%s terminal" % active_screen.panel.current_app))
 	active_screen.panel.cancel_input()
 	tablet.visible = false
 	active_screen = null
@@ -229,10 +239,23 @@ func _step_out_of_seat() -> void:
 		var found: PackedStringArray = _pose_blockers(exit_pose)
 		if found.is_empty():
 			player.global_transform = exit_pose
+			DebugLog.event("seat", "stood up at %s in the ship%s" % [_in_ship(exit_pose.origin),
+				"" if offset == Vector3.ZERO else " (exit spot blocked by %s)" % ", ".join(blockers)])
 			return
 		if blockers.is_empty():
 			blockers = found
 	DebugLog.anomaly("seat", "no clear spot to stand up beside the seat (exit blocked by %s)" % ", ".join(blockers))
+
+
+func _in_ship(point: Vector3) -> String:
+	# Rounding first and adding zero turns a tiny negative into "0.00", not "-0.00".
+	var local: Vector3 = ship.to_local(point).snappedf(0.01) + Vector3.ZERO
+	return "(%.2f, %.2f, %.2f)" % [local.x, local.y, local.z]
+
+
+func _relative_speed() -> float:
+	var carrier_velocity: Vector3 = ship.linear_velocity + ship.angular_velocity.cross(player.global_position - ship.to_global(ship.center_of_mass))
+	return (player.linear_velocity - carrier_velocity).length()
 
 
 func _pose_is_clear(pose: Transform3D) -> bool:

@@ -7,6 +7,10 @@ var wreck: SalvageWreck
 var hazards: SalvageHazards
 var _passages: Dictionary = {}
 var _mesh_vertices: Dictionary = {}
+## Last refusal reason logged per body (by instance id), so a stalled cargo
+## item logs its reason once, not every physics frame it keeps failing.
+var _logged_refusal: Dictionary = {}
+var _last_refusal_log_s: float = -INF
 ## One entry per secured cargo item, keyed by its manifest id, kept only so
 ## to_save() can serialize freight that is no longer represented by any live
 ## WreckBody. See to_save() for the shape.
@@ -73,11 +77,11 @@ func _physics_process(_delta: float) -> void:
 			_passages[id] = false
 		if near_door:
 			if not bool(ship.api.get_telemetry().cargo_door_open):
-				ship.api.set_cargo_message("Cargo door closed")
+				_refuse(id, "Cargo door closed")
 				if _passages.has(id):
 					_passages[id] = false
 			elif not clear:
-				ship.api.set_cargo_message("Align cargo with the 2.2 × 2.2 m doorway")
+				_refuse(id, "Align cargo with the 2.2 × 2.2 m doorway")
 				if _passages.has(id):
 					_passages[id] = false
 			elif _passages.has(id) and end.z >= -7.2:
@@ -86,18 +90,31 @@ func _physics_process(_delta: float) -> void:
 			continue
 		var point_velocity: Vector3 = ship.linear_velocity + ship.angular_velocity.cross(body.global_position - ship.to_global(ship.center_of_mass))
 		if (body.linear_velocity - point_velocity).length() > 0.5 or (body.angular_velocity - ship.angular_velocity).length() > 0.35:
-			ship.api.set_cargo_message("Inside bay: slow drift below 0.5 m/s and spin below 20 deg/s to secure")
+			_refuse(id, "Inside bay: slow drift below 0.5 m/s and spin below 20 deg/s to secure")
 			continue
 		var leaking: bool = false
 		for part_id: String in body.part_ids:
 			leaking = leaking or (is_instance_valid(hazards) and hazards.is_part_active(part_id))
 		if leaking:
-			ship.api.set_cargo_message("Wait for the active leak to stop before securing cargo")
+			_refuse(id, "Wait for the active leak to stop before securing cargo")
 			continue
 		if int(body.get_meta("physical_grip_count", 0)) > 0:
-			ship.api.set_cargo_message("Release your grip to secure cargo")
+			_refuse(id, "Release your grip to secure cargo")
 			continue
 		_secure(body, bounds)
+
+
+## Publish a cargo refusal reason and log it once per distinct reason per body,
+## so a body stuck against the same obstruction does not spam the trail.
+func _refuse(id: int, reason: String) -> void:
+	ship.api.set_cargo_message(reason)
+	# A body drifting at the doorway edge can flip between two reasons every frame,
+	# so a new reason is also held back until a second has passed since the last one.
+	var now: float = Time.get_ticks_msec() / 1000.0
+	if String(_logged_refusal.get(id, "")) != reason and now - _last_refusal_log_s >= 1.0:
+		_logged_refusal[id] = reason
+		_last_refusal_log_s = now
+		DebugLog.event("cargo", "refused: %s" % reason)
 
 
 func _secure(body: WreckBody, bounds: AABB) -> void:
@@ -122,6 +139,10 @@ func _secure(body: WreckBody, bounds: AABB) -> void:
 	angular_momentum += (old_center - new_center).cross(ship.linear_velocity * old_mass)
 	angular_momentum += (body.global_position - new_center).cross(body.linear_velocity * body.mass)
 	if not ship.api.register_cargo(cargo_id, bounds.size, body.mass, volume, {"value_cr": value, "parts": ids}):
+		var reason: String = ship.api.last_message
+		if String(_logged_refusal.get(body.get_instance_id(), "")) != reason:
+			_logged_refusal[body.get_instance_id()] = reason
+			DebugLog.event("cargo", "secure refused: %s (%s)" % [reason, cargo_id])
 		return
 	# Record what to_save() needs while the part data and body pose are still
 	# live: each part's own save (definition asset, condition, scan state — the
@@ -160,11 +181,13 @@ func _secure(body: WreckBody, bounds: AABB) -> void:
 	ship.linear_velocity = momentum / new_mass
 	ship.angular_velocity = ship.global_basis * ((local_basis * angular_momentum) / diagonal)
 	_passages.erase(body.get_instance_id())
+	_logged_refusal.erase(body.get_instance_id())
 	wreck.bodies.erase(body)
 	body.get_parent().remove_child(body)
 	body.queue_free()
 	wreck.structure_changed.emit()
 	ship.api.set_cargo_message("Secured %s — %.0f kg" % [cargo_id, new_mass - old_mass])
+	DebugLog.event("cargo", "secured %s: %.0f kg" % [cargo_id, new_mass - old_mass])
 
 
 func _parallel_diagonal(offset: Vector3, weight: float) -> Vector3:

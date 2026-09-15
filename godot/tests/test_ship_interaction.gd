@@ -344,6 +344,36 @@ func test_unstrap_with_blocked_exit_finds_another_clear_spot() -> void:
 	(fixture.root as Node).free()
 
 
+## Seat and screen changes leave a readable trail: refusals with numbers, where the pilot stood up.
+func test_seat_and_screen_changes_are_logged() -> void:
+	var fixture: Dictionary = _fixture()
+	var player: Player = fixture.player
+	var interaction: ShipInteraction = fixture.interaction
+	DebugLog.clear()
+	player.position = PlayerShip.SEAT_POSITION + Vector3(3.0, 0, 0)
+	await _frames(2)
+	check(not interaction.strap_in(), "too far to strap in")
+	check(_logged("strap-in refused: ") and _logged("m from the seat (limit 2.0)"), "the refusal says how far away the pilot was: %s" % " | ".join(DebugLog.entries))
+	player.position = PlayerShip.SEAT_POSITION
+	await _frames(2)
+	check(interaction.strap_in(), "pilot straps in")
+	check(_logged("strapped in"), "strapping in is logged")
+	interaction.open_tablet()
+	interaction.close_screen()
+	check(_logged("opened tablet") and _logged("closed tablet"), "the tablet opening and closing is logged")
+	interaction.unstrap()
+	check(_logged("unstrapping at") and _logged("stood up at (1.00, 0.00, 1.00)"), "unstrapping logs where the pilot started and stood up: %s" % " | ".join(DebugLog.entries))
+	DebugLog.clear()
+	(fixture.root as Node).free()
+
+
+func _logged(text: String) -> bool:
+	for line: String in DebugLog.entries:
+		if line.contains(text):
+			return true
+	return false
+
+
 ## The terminal's warp refusal asks for C, so C must reach the suit while that screen is open.
 func test_wheel_dump_key_works_while_a_screen_is_open() -> void:
 	var fixture: Dictionary = _fixture()

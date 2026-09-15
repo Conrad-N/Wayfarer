@@ -160,6 +160,7 @@ func _build_pause_menu() -> void:
 	add_child(_pause_menu)
 	_player.pause_requested.connect(_open_pause_menu)
 	_pause_menu.closed.connect(_player.resume_control)
+	_pause_menu.closed.connect(func() -> void: DebugLog.event("game", "resumed"))
 	_pause_menu.save_requested.connect(_on_save_requested)
 	_pause_menu.load_requested.connect(_on_load_requested)
 
@@ -167,6 +168,7 @@ func _build_pause_menu() -> void:
 func _open_pause_menu() -> void:
 	_pause_menu.set_available(not salvage_practice, _saves().has_save())
 	_pause_menu.open()
+	DebugLog.event("game", "paused")
 
 
 func _saves() -> SaveGames:
@@ -182,6 +184,7 @@ func _on_save_requested() -> void:
 		return
 	var error: Error = _saves().write(capture_game())
 	_pause_menu.show_message("Game saved." if error == OK else "Save failed: %s." % error_string(error))
+	DebugLog.event("game", "saved to %s" % _saves().save_path if error == OK else "save failed: %s" % error_string(error))
 	_pause_menu.set_available(true, _saves().has_save())
 
 
@@ -221,6 +224,7 @@ func _apply_game(state: Dictionary) -> void:
 		_player.global_transform = _ship.global_transform * Transform3D(Basis(Vector3.UP, PI / 2.0), PlayerShip.SEAT_POSITION)
 		if not _interaction.strap_in():
 			DebugLog.anomaly("save", "loaded a seated pilot but the harness would not fasten")
+	DebugLog.event("game", "loaded save: near '%s', seated %s" % [_flight.reference_id, _interaction.is_seated()])
 
 
 func _on_load_requested() -> void:
@@ -229,6 +233,7 @@ func _on_load_requested() -> void:
 		_pause_menu.show_message("No saved game found.")
 		return
 	# The scene is rebuilt from scratch and applies the waiting state once it is set up.
+	DebugLog.event("game", "loading %s" % _saves().save_path)
 	_saves().request_load(state)
 	_pause_menu.close()
 	reload_action.call()
@@ -277,7 +282,14 @@ func _debug_player_state() -> Dictionary:
 func _debug_seat_state() -> Dictionary:
 	if not is_instance_valid(_interaction):
 		return {}
+	var in_ship: Transform3D = _ship.global_transform.affine_inverse() * _player.global_transform
 	return {
+		"pose_in_ship_m": in_ship.origin,
+		"facing_in_ship": -in_ship.basis.z,
+		"distance_to_seat_m": in_ship.origin.distance_to(PlayerShip.SEAT_POSITION),
+		"camera_local_position": (_player.get_node("Camera3D") as Camera3D).position,
+		"harness_status": _interaction._seat_restraint.status,
+		"exit_spot_blocked_by": _interaction._pose_blockers(Transform3D(_player.global_basis, _ship.to_global(PlayerShip.SEAT_EXIT_POSITION))),
 		"seated": _interaction.is_seated(),
 		"seat_pose_active": _interaction._seat_pose_active,
 		"screen_open": _interaction.is_open(),

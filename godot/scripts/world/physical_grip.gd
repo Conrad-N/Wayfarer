@@ -48,10 +48,17 @@ func try_grab() -> bool:
 	var hit: Dictionary = _player.get_world_3d().direct_space_state.intersect_ray(query)
 	if hit.is_empty() or not hit.collider is RigidBody3D:
 		status = "NO HANDHOLD IN REACH"
+		DebugLog.event("grip", "grab refused: no handhold in reach")
 		return false
 	var body: RigidBody3D = hit.collider as RigidBody3D
 	var id: String = (body as WreckBody).part_at_shape(int(hit.shape)) if body is WreckBody else ""
-	return grab_body(body, hit.position, id)
+	var distance: float = origin.distance_to(hit.position)
+	var caught: bool = grab_body(body, hit.position, id)
+	if caught:
+		DebugLog.event("grip", "grabbed %s%s at %.2f m" % [body.name, (" part " + id) if not id.is_empty() else "", distance])
+	else:
+		DebugLog.event("grip", "grab refused: %s (target %s)" % [status, body.name])
+	return caught
 
 
 ## Hold a reachable rigid surface at the current relative pose, preserving live motion.
@@ -98,6 +105,12 @@ func grab_body(body: RigidBody3D, world_point: Vector3, part_id: String = "") ->
 
 ## Release without changing either object's position, velocity, or spin.
 func release() -> void:
+	if is_attached():
+		DebugLog.event("grip", "released %s" % (held_part_id if not held_part_id.is_empty() else _target.name))
+	_teardown()
+
+
+func _teardown() -> void:
 	_remove_joint()
 	if is_instance_valid(_wreck):
 		if _wreck.structure_changing.is_connected(_before_structure_change):
@@ -172,7 +185,7 @@ func _physics_process(delta: float) -> void:
 	if error > 0.3 or (_settle_seconds <= 0.0 and (force > max_grip_force_n or torque > max_grip_torque_nm)):
 		DebugLog.event("grip " + name, "let go of %s: anchor error %.3f m, force %.0f N (max %.0f), torque %.0f N m (max %.0f)"
 			% [_target.name, error, force, max_grip_force_n, torque, max_grip_torque_nm])
-		release()
+		_teardown()
 		status = "GRIP LOST: LOAD TOO HIGH"
 
 
@@ -235,6 +248,7 @@ func _after_structure_change() -> void:
 	_target_anchor = _target.to_local(point)
 	_make_joint(point)
 	_rebuilding = false
+	DebugLog.event("grip", "regrasped %s on new fragment after cut" % held_part_id)
 	attachment_changed.emit()
 
 

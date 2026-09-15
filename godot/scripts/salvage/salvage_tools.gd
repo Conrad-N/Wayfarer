@@ -19,6 +19,7 @@ var _camera: Camera3D
 var _wreck: SalvageWreck
 var _hazards: SalvageHazards
 var _winch: SuitWinch
+var _cutting_edge: String = ""
 var _scan_basis: Basis = Basis.IDENTITY
 var _beam: MeshInstance3D
 var _beam_end: Vector3
@@ -40,8 +41,10 @@ func configure(player: Player, wreck: SalvageWreck, hazards: SalvageHazards, lin
 
 ## Switch tools without carrying a held trigger or reel command into the next tool.
 func select_tool(tool: Tool) -> void:
-	selected = tool
 	cancel_input()
+	if tool != selected:
+		DebugLog.event("tools", "selected %s" % ["grapple", "cutter", "winch", "scanner"][tool])
+	selected = tool
 	if is_instance_valid(_player):
 		_player.grapple.cancel_input()
 	var winch_status: String = _winch.status if is_instance_valid(_winch) else "WINCH | Left: place device on first object"
@@ -61,11 +64,22 @@ func set_triggers(primary: bool, secondary: bool) -> void:
 
 ## Release controls on Escape, focus loss, or a tool switch.
 func cancel_input() -> void:
+	_log_cutter_stop()
 	_primary = false
 	_secondary = false
 	_winch_request = 0
 	scan_progress = 0.0
 	_beam_visible = false
+
+
+## Log the cutting beam leaving an edge, if it was on one; called on any path
+## that stops cutting (tool switch, target lost, battery empty, overheat).
+func _log_cutter_stop() -> void:
+	if _cutting_edge.is_empty():
+		return
+	var progress: float = float(_wreck.cut_progress.get(_cutting_edge, 0.0)) if is_instance_valid(_wreck) else 0.0
+	DebugLog.event("cut", "cutter stopped on %s: %.0f%% done" % [_cutting_edge.trim_prefix("Joint_"), progress * 100.0])
+	_cutting_edge = ""
 
 
 func _ready() -> void:
@@ -105,6 +119,7 @@ func _physics_process(delta: float) -> void:
 		heat = maxf(0.0, heat - delta * 0.18)
 	if _overheated and heat <= 0.25:
 		_overheated = false
+		DebugLog.event("tools", "cutter cooled down")
 	match selected:
 		Tool.CUTTER:
 			_cutter(delta)
@@ -157,32 +172,44 @@ func _inspect_target() -> void:
 		target_readout += " (RUPTURED)"
 
 
+## Run the cutter and report which edge (if any) actually received powered
+## time this frame, so the wrapper below can log the beam starting or leaving
+## an edge only on that transition, never every frame it stays on one.
 func _cutter(delta: float) -> void:
+	var edge: String = _cutter_step(delta)
+	if edge != _cutting_edge:
+		_log_cutter_stop()
+		if not edge.is_empty():
+			DebugLog.event("cut", "cutter starting on %s" % edge.trim_prefix("Joint_"))
+		_cutting_edge = edge
+
+
+func _cutter_step(delta: float) -> String:
 	if _overheated:
 		status = "CUTTER cooling | %.0f%% heat" % (heat * 100.0)
-		return
+		return ""
 	if not _primary:
 		status = "CUTTER | Hold left click on a gold joint | %.0f%% heat" % (heat * 100.0)
-		return
+		return ""
 	var hit: Dictionary = _ray(8.0, 2, true)
 	if hit.is_empty():
 		status = "CUTTER | No joint within 8 m"
-		return
+		return ""
 	var marker: Area3D = hit.collider as Area3D
 	if marker == null or not marker.has_meta("edge_id"):
-		return
+		return ""
 	var part_id: String = str(marker.get_meta("part_id"))
 	var solid: Dictionary = _ray(_camera.global_position.distance_to(marker.global_position))
 	if not solid.is_empty():
 		var body: WreckBody = solid.collider as WreckBody
 		if body == null or body.part_at_shape(int(solid.shape)) != part_id:
 			status = "CUTTER | Joint blocked by material"
-			return
+			return ""
 	var powered_time: float = minf(delta, maxf(0.0, 1.0 - heat) / 0.24)
 	var seconds: float = _player.suit.consume_energy(powered_time * 1200.0) / 1200.0
 	if seconds <= 0.0:
 		status = "CUTTER | Battery empty"
-		return
+		return ""
 	_beam_end = marker.global_position
 	_beam_visible = true
 	heat = minf(1.0, heat + seconds * 0.24)
@@ -192,6 +219,8 @@ func _cutter(delta: float) -> void:
 	status = "CUTTER | %s %.0f%% | %.0f%% heat" % [edge.trim_prefix("Joint_"), float(_wreck.cut_progress.get(edge, 0.0)) * 100.0, heat * 100.0]
 	if heat >= 1.0:
 		_overheated = true
+		DebugLog.event("tools", "cutter overheated")
+	return edge
 
 
 func _scanner(delta: float) -> void:
@@ -222,3 +251,4 @@ func _scanner(delta: float) -> void:
 			_wreck.graph.get_part(id).scanned = true
 			count += 1
 	status = "SCANNER | Revealed %d parts; cyan coolant / orange fuel" % count
+	DebugLog.event("tools", "scan completed: revealed %d part(s)" % count)

@@ -4,7 +4,7 @@
 class_name DebugLog
 extends RefCounted
 
-const CAPACITY: int = 400
+const CAPACITY: int = 800
 
 static var entries: PackedStringArray = PackedStringArray()
 ## Called with (source, message) for anomalies so DebugDump can save a snapshot.

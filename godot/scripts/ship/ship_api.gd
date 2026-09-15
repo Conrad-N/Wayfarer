@@ -19,6 +19,7 @@ var last_message: String:
 
 var _propellant_kg: float = PROPELLANT_CAPACITY_KG
 var _battery_energy_j: float = BATTERY_CAPACITY_J
+var _battery_logged_empty: bool = false
 var _cargo_door_open: bool = false
 var _airlock_inner_open: bool = true
 var _airlock_outer_open: bool = false
@@ -105,6 +106,7 @@ func set_cargo_door(opening: bool) -> bool:
 		return false
 	_cargo_door_open = opening
 	_spend_door_energy()
+	DebugLog.event("ship", "cargo door %s" % ("opened" if opening else "closed"))
 	_publish_command("set_cargo_door", {"open": opening}, "CARGO DOOR OPEN" if opening else "CARGO DOOR CLOSED")
 	return true
 
@@ -126,6 +128,7 @@ func set_airlock_door(which: String, opening: bool) -> bool:
 	else:
 		_airlock_outer_open = opening
 	_spend_door_energy()
+	DebugLog.event("ship", "%s airlock door %s" % [which, "opened" if opening else "closed"])
 	_publish_command("set_airlock_door", {"which": which, "open": opening}, "%s AIRLOCK %s" % [which.to_upper(), "OPEN" if opening else "CLOSED"])
 	return true
 
@@ -152,6 +155,7 @@ func set_system_enabled(id: String, enabled: bool) -> bool:
 		return true
 	state["enabled"] = enabled
 	_refresh_brake()
+	DebugLog.event("ship", "system %s %s" % [id, "enabled" if enabled else "disabled"])
 	_publish_command("set_system_enabled", {"id": id, "enabled": enabled}, "%s %s" % [id.to_upper(), "ON" if enabled else "OFF"])
 	return true
 
@@ -190,6 +194,7 @@ func consume_energy(request_j: float) -> float:
 		return 0.0
 	var supplied: float = minf(request_j, _battery_energy_j)
 	_battery_energy_j -= supplied
+	_note_battery_transition()
 	_refresh_brake()
 	if supplied > 0.0:
 		changed.emit()
@@ -202,6 +207,7 @@ func store_energy(recovered_j: float) -> float:
 		return 0.0
 	var stored: float = minf(recovered_j, BATTERY_CAPACITY_J - _battery_energy_j)
 	_battery_energy_j += stored
+	_note_battery_transition()
 	if stored > 0.0:
 		changed.emit()
 	return stored
@@ -219,6 +225,7 @@ func apply_damage(system: String, amount: float) -> float:
 	_refresh_brake()
 	if lost > 0.0:
 		_last_message = "%s DAMAGED" % system.to_upper()
+		DebugLog.event("ship", "damage to %s: -%.2f health, now %.2f" % [system, lost, float(state["health"])])
 		changed.emit()
 	return lost
 
@@ -273,6 +280,7 @@ func remove_cargo(id: String) -> bool:
 		if String(_manifest[index]["id"]) == id:
 			_manifest.remove_at(index)
 			_last_message = "CARGO RELEASED: %s" % id
+			DebugLog.event("cargo", "released: %s" % id)
 			changed.emit()
 			return true
 	return false
@@ -324,7 +332,20 @@ func _can_move_door(door: String, opening: bool) -> bool:
 
 func _spend_door_energy() -> void:
 	_battery_energy_j -= DOOR_ENERGY_J
+	_note_battery_transition()
 	_refresh_brake()
+
+
+## Log the battery crossing zero, in either direction, once per transition.
+## Recovery must reach 1% of capacity before it is logged, so a battery hovering at
+## empty (wheel braking on regeneration against a load) logs once, not every frame.
+func _note_battery_transition() -> void:
+	if not _battery_logged_empty and _battery_energy_j <= 0.0:
+		_battery_logged_empty = true
+		DebugLog.event("ship", "battery depleted: no power")
+	elif _battery_logged_empty and _battery_energy_j > BATTERY_CAPACITY_J * 0.01:
+		_battery_logged_empty = false
+		DebugLog.event("ship", "battery restored: %.0f J" % _battery_energy_j)
 
 
 func _publish_command(command: String, args: Dictionary, message: String) -> void:
@@ -361,17 +382,32 @@ func publish_flight(snapshot: Dictionary, main_propellant_kg: float) -> void:
 
 
 ## Send a flight command through the same validation path for every client.
+## Refusals are logged for every command except set_throttle (a continuously
+## dragged UI slider would otherwise spam identical refusals). Accepted
+## set_warp/set_attitude_mode/execute_plan/cancel_plan/cutoff/set_throttle are
+## not logged here either: orbital_flight.gd logs their actual effect (warp
+## rate, attitude mode, executor on/off, burn start/end) only when it changes.
 func flight_command(command: String, arguments: Dictionary = {}) -> bool:
+	var loggable: bool = command != "set_throttle"
 	if not _flight_handler.is_valid():
+		if loggable:
+			DebugLog.event("flight", "%s refused: flight computer unavailable" % command)
 		return _reject("FLIGHT COMPUTER UNAVAILABLE")
 	var releasing_rcs: bool = command == "rcs_translate" and arguments.get("direction") is Vector3 and arguments["direction"] == Vector3.ZERO
 	# STOP ROTATION stays available on a flat battery: wheel braking can pay for itself.
 	var stopping_rotation: bool = command == "set_attitude_mode" and str(arguments.get("mode", "")) == "kill" and _system_working("power")
 	if not _has_power() and not releasing_rcs and not stopping_rotation and command not in ["cutoff", "cancel_plan", "set_warp"]:
+		if loggable:
+			DebugLog.event("flight", "%s refused: needs ship power" % command)
 		return _reject("FLIGHT CONTROLS NEED SHIP POWER")
 	var result: Dictionary = _flight_handler.call(command, arguments.duplicate(true))
 	if not bool(result.get("ok", false)):
-		return _reject(str(result.get("message", "FLIGHT COMMAND REJECTED")))
+		var reason: String = str(result.get("message", "FLIGHT COMMAND REJECTED"))
+		if loggable:
+			DebugLog.event("flight", "%s refused: %s" % [command, reason])
+		return _reject(reason)
+	if loggable and command not in ["set_warp", "set_attitude_mode", "execute_plan", "cancel_plan", "cutoff"]:
+		DebugLog.event("flight", "%s: %s" % [command, str(result.get("message", "FLIGHT COMMAND ACCEPTED"))])
 	_publish_command(command, arguments, str(result.get("message", "FLIGHT COMMAND ACCEPTED")))
 	return true
 
@@ -457,6 +493,7 @@ func to_save() -> Dictionary:
 func apply_save(data: Dictionary) -> void:
 	_propellant_kg = clampf(float(data.get("propellant_kg", _propellant_kg)), 0.0, PROPELLANT_CAPACITY_KG)
 	_battery_energy_j = clampf(float(data.get("battery_energy_j", _battery_energy_j)), 0.0, BATTERY_CAPACITY_J)
+	_battery_logged_empty = _battery_energy_j <= 0.0
 	_cargo_door_open = bool(data.get("cargo_door_open", _cargo_door_open))
 	_airlock_inner_open = bool(data.get("airlock_inner_open", _airlock_inner_open))
 	_airlock_outer_open = bool(data.get("airlock_outer_open", _airlock_outer_open)) and not _airlock_inner_open

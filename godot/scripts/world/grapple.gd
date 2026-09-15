@@ -57,17 +57,20 @@ func _physics_process(delta: float) -> void:
 		_cast_from_camera()
 	if not is_attached():
 		if _target != null:
-			detach()
+			DebugLog.event("grapple", "cable lost target")
+			_teardown()
 			status = "TARGET LOST"
 		return
 	var anchor: Vector3 = get_anchor_position()
 	var distance: float = _body.global_position.distance_to(anchor)
 	if distance > MAX_LENGTH_M:
-		detach()
+		DebugLog.event("grapple", "cable limit: %.1f m exceeds %.0f m max, detached from %s" % [distance, MAX_LENGTH_M, _target.name])
+		_teardown()
 		status = "OUT OF RANGE"
 		return
 	if _line_blocked(anchor):
-		detach()
+		DebugLog.event("grapple", "cable blocked: line of sight lost to %s" % _target.name)
+		_teardown()
 		status = "TETHER BLOCKED"
 		return
 	status = "TETHER HELD"
@@ -100,6 +103,7 @@ func configure(body: RigidBody3D, stores: SuitResources, camera: Camera3D) -> vo
 ## Queue one aiming ray for the next physics tick, when collision queries are safe.
 func request_attach() -> void:
 	_attach_requested = true
+	DebugLog.event("grapple", "fired")
 
 
 ## Attach to a known surface point; callers performing selection must raycast first.
@@ -110,25 +114,35 @@ func attach_to(target: PhysicsBody3D, world_point: Vector3) -> bool:
 		return false
 	if not (target is RigidBody3D or target is StaticBody3D):
 		status = "UNSUPPORTED SURFACE"
+		DebugLog.event("grapple", "attach refused: unsupported surface (%s)" % target.name)
 		return false
 	var distance: float = _body.global_position.distance_to(world_point)
 	if distance > MAX_LENGTH_M or distance < 0.001:
 		status = "OUT OF RANGE"
+		DebugLog.event("grapple", "attach refused: %.1f m out of range" % distance)
 		return false
 	var cost: float = maxf(attach_energy_j, 0.0)
 	if _stores.battery_energy_j < cost:
 		status = "INSUFFICIENT BATTERY"
+		DebugLog.event("grapple", "attach refused: battery too low, needs %.0f J" % cost)
 		return false
 	_stores.consume_energy(cost)
 	_target = target
 	_local_anchor = target.to_local(world_point)
 	_cable_length_m = clampf(distance, MIN_LENGTH_M, MAX_LENGTH_M)
 	status = "ATTACHED"
+	DebugLog.event("grapple", "attached to %s at %.1f m" % [target.name, _cable_length_m])
 	return true
 
 
 ## Release the tether without changing either body's momentum or spending power.
 func detach() -> void:
+	if is_attached():
+		DebugLog.event("grapple", "detached from %s" % _target.name)
+	_teardown()
+
+
+func _teardown() -> void:
 	_target = null
 	_cable_length_m = 0.0
 	_attach_requested = false
@@ -168,6 +182,7 @@ func _cast_from_camera() -> void:
 	var hit: Dictionary = get_world_3d().direct_space_state.intersect_ray(query)
 	if hit.is_empty():
 		status = "NO SURFACE WITHIN 30 m"
+		DebugLog.event("grapple", "attach refused: no surface within 30 m")
 		return
 	var target: PhysicsBody3D = hit.get("collider") as PhysicsBody3D
 	var point: Vector3 = hit.get("position", Vector3.ZERO)
