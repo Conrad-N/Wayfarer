@@ -102,6 +102,27 @@ func test_warp_eva_and_local_guards() -> void:
 	fixture.root.free()
 
 
+## Door commands see effective warp immediately, even between regular panel updates.
+func test_airlock_tracks_effective_warp_without_publish_delay() -> void:
+	var fixture: Dictionary = _fixture()
+	var flight: OrbitalFlight = fixture.flight
+	var api: ShipApi = fixture.ship.api
+	check(api.set_airlock_door("inner", false), "close inner before warp")
+	check(api.set_warp(10.0), "request accelerated coast")
+	flight._publish_elapsed = 0.0
+	flight.enabled = true
+	flight._physics_process(1.0 / 60.0)
+	flight.enabled = false
+	check(not api.set_airlock_door("outer", true), "first accelerated tick already locks airlock")
+	check(api.last_message.contains("DROP TO 1X"), "live API explains warp lock")
+	check(api.set_warp(1.0), "request real time")
+	flight.enabled = true
+	flight._physics_process(1.0 / 60.0)
+	flight.enabled = false
+	check(api.set_airlock_door("outer", true), "first real-time tick unlocks airlock")
+	fixture.root.free()
+
+
 ## Warp rate membership is judged with is_equal_approx (T5), so a control that
 ## hands over a slightly-off float is accepted and a genuinely wrong rate is not.
 func test_warp_rate_accepts_rounding() -> void:

@@ -409,6 +409,8 @@ errors or node-leak warnings. The main scene boots headless cleanly.
 Goal: the whole job, once.
 
 - [ ] Free movement inside the ship during warp, airlock locked above 1x (Q9, see DECISIONS 2026-09-12). Do this first.
+      Airlock motor lock implemented 2026-09-16; movement remains pending resolution
+      of the Q9 coast-only premise versus existing 10x burns and turns.
 - [ ] Station docking (approach a docking ring, dock when slow enough).
 - [ ] Market, contract board, spares, propellant, oxygen.
 - [ ] Insurance (hull, rescue, cargo). Rescue call and tug arrival. Debt and interest.

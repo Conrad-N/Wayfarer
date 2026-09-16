@@ -34,3 +34,9 @@ it here.
   offset the seated pilot already receives so nobody hits a wall;
   (5) unstrapping mid-warp no longer ends warp. GPT task, first thing in M5.
   See DECISIONS.
+  Implementation finding (2026-09-16): `OrbitalWorld.advance()` does integrate
+  thrust and rotation above 1x, up to the existing 10x cap. The coast-only premise
+  therefore does not hold during maneuvers. Asked Conrad whether an unstrapped
+  pilot should force 1x physical flight during burns/turns, or whether accelerated
+  maneuvers should require the seat. The airlock movement lock is implemented;
+  free interior movement awaits this clarification.

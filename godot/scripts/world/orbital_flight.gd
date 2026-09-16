@@ -140,7 +140,8 @@ func _physics_process(delta: float) -> void:
 		_leave_local_ship()
 		_leave_encounter()
 	_publish_elapsed += delta
-	if _publish_elapsed >= 0.2:
+	# Door interlocks must see a changed effective rate before the next input event.
+	if _publish_elapsed >= 0.2 or float(ship.api.get_telemetry().flight.get("warp", 1.0)) != session.world.rate:
 		_publish_elapsed = 0.0
 		_publish()
 

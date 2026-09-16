@@ -78,6 +78,31 @@ func test_airlock_interlock() -> void:
 	check_eq(api.get_telemetry()["battery_energy_j"], ShipApi.BATTERY_CAPACITY_J - 4000.0, "only four actual movements charged")
 
 
+## Accelerated flight locks both airlock motors without charging for refused moves.
+func test_airlock_locked_above_real_time() -> void:
+	for rate: float in [10.0, 100.0, 1000.0]:
+		var api: ShipApi = ShipApi.new()
+		api.publish_flight({"available": true, "warp": rate}, 24000.0)
+		check(not api.set_airlock_door("inner", false), "warp prevents closing inner door")
+		check(api.last_message.contains("DROP TO 1X"), "warp refusal explains recovery")
+		check(api.get_telemetry().airlock_inner_open, "refusal preserves open inner door")
+		check_eq(api.get_telemetry().battery_energy_j, ShipApi.BATTERY_CAPACITY_J, "refused close spends no power")
+		api.publish_flight({"available": true, "warp": 1.0}, 24000.0)
+		check(api.set_airlock_door("inner", false), "real time restores inner motor")
+		var energy: float = api.get_telemetry().battery_energy_j
+		api.publish_flight({"available": true, "warp": rate}, 24000.0)
+		check(not api.set_airlock_door("inner", true), "warp prevents opening inner door")
+		check(not api.set_airlock_door("outer", true), "warp prevents opening outer door")
+		check_eq(api.get_telemetry().battery_energy_j, energy, "refused opens spend no power")
+		api.publish_flight({"available": true, "warp": 1.0}, 24000.0)
+		check(api.set_airlock_door("outer", true), "real time restores outer motor")
+		energy = api.get_telemetry().battery_energy_j
+		api.publish_flight({"available": true, "warp": rate}, 24000.0)
+		check(not api.set_airlock_door("outer", false), "warp prevents closing outer door")
+		check_eq(api.get_telemetry().battery_energy_j, energy, "refused outer close spends no power")
+		check(api.set_airlock_door("outer", true), "unchanged door requests stay harmless")
+
+
 ## Clearance callbacks block closing and opening before state or battery changes.
 func test_door_clearance_validation() -> void:
 	var api: RefCounted = API_SCRIPT.new()

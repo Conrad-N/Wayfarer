@@ -121,6 +121,10 @@ Both ship terminals and the tablet run these same apps through ShipApi. PLAN
 replaces its M3 placeholder; later COMMS, market, repairs and the optional AI are
 still outside M4.
 
+Airlock door movements are refused above 1× with a request to return to real time.
+Refused movements leave the doors and battery unchanged. Effective warp changes
+reach this interlock immediately, including between regular screen updates.
+
 To fly the starter trip: approach the pilot seat and press F to strap in. This
 centres your seated view toward NAV; press F again (or use Tab), select PLAN, leave Kestrel
 and 160 minutes selected, then CALCULATE PREVIEW and EXECUTE BURNS. Switch to
