@@ -19,24 +19,9 @@ it here.
   salvaged parts using the same graph? Probably yes, later. Not before M6.
 - **Q8 resolved (2026-09-10).** Conrad approved magnetic boots, physical grips,
   a restrained pilot seat, and bounded suit reaction wheels before M5. See DECISIONS.
-- **Q9 resolved (2026-09-12).** Conrad chose a fourth option: the player may move
-  freely inside the ship during warp, and may not leave it. The ship never applies
-  thrust above 1x (warp is auto-capped to 10x while rotating or burning and forced
-  to 1x near objects), so the frozen hull is a still room and Jolt can simulate a
-  walking or floating player against it without any fudge. Required pieces:
-  (1) stop the seat/boots/wheel gating in `set_warp` and the per-tick limit at
-  `orbital_flight.gd:199`; keep the 1x-near-objects rule and the 10x auto-cap;
-  (2) during warp, keep simulating the player in Jolt against the frozen hull
-  instead of copying the player transform from the orbital state each tick;
-  (3) refuse airlock door moves while warp is above 1x, with a HUD message such as
-  "DROP TO 1X BEFORE OPENING THE AIRLOCK", in `_can_move_door`;
-  (4) on the drop back to local mode, give an unseated player the same velocity
-  offset the seated pilot already receives so nobody hits a wall;
-  (5) unstrapping mid-warp no longer ends warp. GPT task, first thing in M5.
-  See DECISIONS.
-  Implementation finding (2026-09-16): `OrbitalWorld.advance()` does integrate
-  thrust and rotation above 1x, up to the existing 10x cap. The coast-only premise
-  therefore does not hold during maneuvers. Asked Conrad whether an unstrapped
-  pilot should force 1x physical flight during burns/turns, or whether accelerated
-  maneuvers should require the seat. The airlock movement lock is implemented;
-  free interior movement awaits this clarification.
+- **Q9 resolved (2026-09-12, clarified 2026-09-16).** The player may move
+  freely inside the closed ship during coasting warp. Conrad approved automatic
+  1x physical flight for burns and turns while unstrapped; a seated pilot retains
+  the existing 10x maneuver cap. Nearby encounters remain at 1x. Airlock and cargo
+  hatch motors are locked above 1x, and both exterior openings must be closed
+  before warp. Implemented in M5; see DECISIONS and the roadmap.

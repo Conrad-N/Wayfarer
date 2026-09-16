@@ -320,8 +320,8 @@ func _refresh_brake() -> void:
 
 
 func _can_move_door(door: String, opening: bool) -> bool:
-	if door != "cargo" and float(_flight.get("warp", 1.0)) > 1.0:
-		return _reject("DROP TO 1X BEFORE MOVING THE AIRLOCK")
+	if float(_flight.get("warp", 1.0)) > 1.0:
+		return _reject("DROP TO 1X BEFORE MOVING THE %s" % ("CARGO HATCH" if door == "cargo" else "AIRLOCK"))
 	var system: String = "cargo" if door == "cargo" else "airlock"
 	if not _system_working(system):
 		return _reject("%s SYSTEM UNAVAILABLE" % system.to_upper())

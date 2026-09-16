@@ -186,6 +186,30 @@ func target_root_state(target: Dictionary) -> Dictionary:
 	return {"position": SimVector.add(base["position"], state["position"]), "velocity": SimVector.add(base["velocity"], state["velocity"])}
 
 
+## Sample the executor at the current sim epoch before choosing physical ownership.
+## Does not advance time or spend fuel or wheel energy.
+func prepare_interior_controls() -> void:
+	if executor_on:
+		_drive_executor()
+
+
+## Seconds of stationary coast remaining before a burn or turn, without mutation.
+## The adapter prepares controls first, then stops its coast at this boundary.
+func interior_coast_seconds() -> float:
+	if throttle > 0.0 and float(ship["propellant_kg"]) > 0.0:
+		return 0.0
+	if SimVector.length(angular_vel) >= 1e-9:
+		return 0.0
+	if attitude_mode == "manual":
+		if SimVector.length(manual_torque) > 0.0:
+			return 0.0
+	elif attitude_mode != "kill":
+		return 0.0
+	if executor_on and not nodes.is_empty():
+		return maxf(0.0, _burn_window_start(nodes[0]) - time - _phys_accum)
+	return INF
+
+
 ## Advance validated real seconds multiplied by warp; excess fixed work is carried.
 ## Coasting stops at SOI and burn-window boundaries, including inside a large tick.
 func advance(real_dt_seconds: float) -> void:

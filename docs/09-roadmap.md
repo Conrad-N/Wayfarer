@@ -408,9 +408,9 @@ errors or node-leak warnings. The main scene boots headless cleanly.
 
 Goal: the whole job, once.
 
-- [ ] Free movement inside the ship during warp, airlock locked above 1x (Q9, see DECISIONS 2026-09-12). Do this first.
-      Airlock motor lock implemented 2026-09-16; movement remains pending resolution
-      of the Q9 coast-only premise versus existing 10x burns and turns.
+- [x] Free movement inside the ship during coasting warp; airlock and cargo hatch
+      locked above 1x. Unstrapped burns and turns use 1x physical flight (Q9,
+      DECISIONS 2026-09-12 and 2026-09-16).
 - [ ] Station docking (approach a docking ring, dock when slow enough).
 - [ ] Market, contract board, spares, propellant, oxygen.
 - [ ] Insurance (hull, rescue, cargo). Rescue call and tug arrival. Debt and interest.
@@ -419,6 +419,26 @@ Goal: the whole job, once.
 - [ ] Failure states: stranded, overdue, dead suit. Uninsured loss.
 
 Done when: a new player can take a contract, do it, and come back richer or poorer.
+
+Warp interior completed (2026-09-16): the suit floats, collides, walks on boots,
+and retains interior handholds and grapples at normal movement speed during
+coasting warp. Unstrapping no longer cancels a coast. Unstrapped maneuvers switch
+to live hull physics at 1x before any burn or turn, including when a large warp
+step reaches a planned maneuver. The selected warp resumes after coasting settles.
+Exterior hatches must be closed before warp and cannot move above 1x. Stored suit
+wheel momentum no longer requires unloading; an explicit C dump still uses live
+contact physics. Loads resume at 1x with saved interior pose and drift.
+
+Verification: `./check.sh` passes **4,069 checks, zero failures**, without script
+errors or node-leak warnings. Main scene boots headless cleanly. A Forward+
+windowed exercise used native F/V/B/W/Tab input and NAV controls to strap in,
+start 100x warp, unstrap, walk with latched boots without spending propellant,
+release the soles, and start a burn that returned to 1x. On an isolated display,
+walking covered 2.87 m in 3.35 seconds of suit time while orbit time ran at 100x.
+Inspected the walking HUD, coasting NAV and 1x burn/readable explanation in
+`godot/build/screens/warp-interior-*.png`. Regression coverage includes freefall,
+wall collisions, maneuver boundaries, handoffs, save/load, and station arrival
+from an unstrapped physical interior. Station docking is next.
 
 ## M6 — Ships
 

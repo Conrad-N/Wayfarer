@@ -8,7 +8,7 @@ func test_unrestrained_burn_uses_live_inertial_physics() -> void:
 	var player: Player = main.get_node("Player") as Player
 	var ship: PlayerShip = main.get_node("PlayerShip") as PlayerShip
 	var flight: OrbitalFlight = main.get_node("OrbitalFlight") as OrbitalFlight
-	check(not ship.api.set_warp(10.0), "warp requires the actual seat")
+	check(ship.api.set_warp(10.0), "unrestrained pilot can request coasting warp")
 	player.collision_layer = 0
 	player.collision_mask = 0 # Isolate pre-impact freefall from the later wall collision.
 	var before: Vector3 = ship.to_local(player.global_position)
@@ -18,7 +18,7 @@ func test_unrestrained_burn_uses_live_inertial_physics() -> void:
 	check(ship.to_local(player.global_position).distance_to(before) > 0.5, "ship moves around floating pilot")
 	check(player.linear_velocity.length() < 0.01, "unrestrained suit gains no magical drive impulse")
 	check(ship.linear_velocity.length() > 1.0, "ship accelerates independently")
-	check(not ship.api.set_warp(10.0), "freefall stays at one-times physics")
+	check_near(flight.session.world.rate, 1.0, 1e-9, "unrestrained burn stays at one-times physics")
 	main.free()
 
 
@@ -78,29 +78,20 @@ func test_unstrap_inherits_rotation_and_retains_hull_collision() -> void:
 	main.free()
 
 
-## A seated warp request unloads the suit wheels itself instead of refusing.
-func test_warp_request_unloads_suit_wheels_automatically() -> void:
+## Loaded suit wheels no longer gate coasting warp or trigger forced unloading.
+func test_warp_keeps_suit_wheel_storage() -> void:
 	var main: Node3D = await _main()
 	var player: Player = main.get_node("Player") as Player
 	var ship: PlayerShip = main.get_node("PlayerShip") as PlayerShip
-	var interaction: ShipInteraction = main.get_node("ShipInteraction") as ShipInteraction
 	var flight: OrbitalFlight = main.get_node("OrbitalFlight") as OrbitalFlight
-	player.global_transform = ship.global_transform * Transform3D(Basis(Vector3.UP, PI / 2.0), PlayerShip.SEAT_POSITION)
-	await _frames(3)
-	check(interaction.strap_in(), "pilot straps in")
-	player.attitude.momentum_body = Vector3(0, 8.0, 0) # about ten frames of unloading at the suit's 50 N m
-	await _frames(3)
-	check(flight.ship_is_local, "loaded suit wheels keep the interior physical")
-	check(ship.api.set_warp(10.0), "warp request is accepted with loaded wheels")
-	check_near(float(ship.api.get_telemetry().flight.requested_warp), 10.0, 1e-6, "panel shows the chosen warp while the wheels unload")
-	await _frames(2)
-	check(player.is_wheel_dumping(), "the flight controller unloads the wheels for the pilot")
-	await _frames(100)
-	check(player.attitude.momentum_body.length() < 1e-4, "wheels are unloaded")
-	check(not player.is_wheel_dumping(), "automatic unloading stops once the wheels are empty")
-	check(not flight.ship_is_local, "interior returns to analytic coasting")
-	check_near(flight.requested_warp, 10.0, 1e-6, "the requested warp engages on its own")
-	interaction.unstrap()
+	player.body_follow_enabled = false
+	player.attitude.momentum_body = Vector3(0, 8.0, 0)
+	check(ship.api.set_warp(10.0), "unseated warp request accepted with loaded wheels")
+	await _frames(10)
+	check(not player.is_wheel_dumping(), "warp never starts an unsolicited dump")
+	check_near(player.attitude.momentum_body.y, 8.0, 1e-4, "coast preserves suit rotor storage")
+	check(not flight.ship_is_local and ship.freeze, "coasting hull permits live interior")
+	check_near(flight.session.world.rate, 10.0, 1e-6, "coast reaches requested warp")
 	main.free()
 
 

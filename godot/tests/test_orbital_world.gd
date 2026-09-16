@@ -2,6 +2,52 @@
 extends TestCase
 
 
+## Interior coasts stop before any live engine, rotation or commanded attitude change.
+func test_interior_coast_requires_stationary_unpowered_hull() -> void:
+	var world: OrbitalWorld = OrbitalWorld.new()
+	world.set_attitude_mode("manual")
+	check(is_inf(world.interior_coast_seconds()), "idle coast has no maneuver boundary")
+	world.set_throttle(0.1)
+	check_eq(world.interior_coast_seconds(), 0.0, "engine forbids stationary interior")
+	world.set_throttle(0.0)
+	world.set_manual_torque(SimVector.new(1, 0, 0))
+	check_eq(world.interior_coast_seconds(), 0.0, "manual torque requires physical interior")
+	world.set_manual_torque(SimVector.new())
+	world.angular_vel = SimVector.new(0, 0.01, 0)
+	check_eq(world.interior_coast_seconds(), 0.0, "passive spin requires physical interior")
+	world.set_attitude_mode("kill")
+	check_eq(world.interior_coast_seconds(), 0.0, "braking spin still requires physical interior")
+	world.angular_vel = SimVector.new()
+	check(is_inf(world.interior_coast_seconds()), "settled kill mode allows coast")
+	world.set_attitude_mode("prograde")
+	check_eq(world.interior_coast_seconds(), 0.0, "direction tracking requires physical interior")
+
+
+## Sampling an executor boundary resolves its controls without advancing or spending stores.
+func test_interior_coast_stops_at_pointing_window() -> void:
+	var world: OrbitalWorld = OrbitalWorld.new()
+	world.set_attitude_mode("kill")
+	world.attitude_lead_seconds = 120.0
+	world.nodes.assign([{"time": 1000.0, "dv_local": {"prograde": 20.0, "normal": 0.0, "radial": 0.0}}])
+	world.set_executor(true)
+	var fuel: float = world.ship.propellant_kg
+	var charge: float = world.reaction_wheel.battery_energy_j
+	var duration: float = 20.0 * world.current_mass() / float(world.ship.thrust_n)
+	var boundary: float = 1000.0 - duration * 0.5 - 120.0
+	world.prepare_interior_controls()
+	check_near(world.interior_coast_seconds(), boundary, 1e-9, "reports exact finite-burn pointing window")
+	check_eq(world.time, 0.0, "control preparation advances no time")
+	check_eq(world.ship.propellant_kg, fuel, "control preparation spends no fuel")
+	check_eq(world.reaction_wheel.battery_energy_j, charge, "control preparation spends no wheel energy")
+	world.set_rate(1000.0)
+	world.advance(boundary / 1000.0)
+	check_near(world.time, boundary, 1e-9, "coast lands on boundary")
+	world.prepare_interior_controls()
+	check_eq(world.interior_coast_seconds(), 0.0, "boundary requests live maneuver physics")
+	check_eq(world.attitude_mode, "node", "executor prepares real maneuver attitude")
+	check_eq(world.ship.propellant_kg, fuel, "preparing turn does not burn early")
+
+
 ## Legacy 18: finite prograde thrust changes the conic and folds continuously.
 func test_powered_burn_raises_orbit_and_spends_fuel() -> void:
 	var world: OrbitalWorld = _aligned_world()

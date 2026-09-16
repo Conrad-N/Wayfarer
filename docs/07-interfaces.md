@@ -121,7 +121,8 @@ Both ship terminals and the tablet run these same apps through ShipApi. PLAN
 replaces its M3 placeholder; later COMMS, market, repairs and the optional AI are
 still outside M4.
 
-Airlock door movements are refused above 1× with a request to return to real time.
+Airlock and cargo hatch movements are refused above 1× with a request to return
+to real time. Both exterior openings must be closed before warp can start.
 Refused movements leave the doors and battery unchanged. Effective warp changes
 reach this interlock immediately, including between regular screen updates.
 
@@ -153,7 +154,10 @@ passage is used, and if none is clear an anomaly is logged naming what blocked i
 Existing momentum is preserved. F retains
 its contextual seat/terminal behavior.
 The Tab tablet works in either state. A loose suit is affected by ship maneuvers;
-warp and event warp require the seat and remain unavailable near objects.
+warp and event warp permit free movement inside the closed ship while coasting,
+and remain unavailable near objects. Burns and turns use 1× physical flight while
+unstrapped; the selected warp resumes when coasting settles. Seated maneuvers
+retain the 10× cap.
 
 G grips/releases surfaces with any tool selected; 3 selects the winch, which places
 two small devices and reels them together instead of the removed tractor. B arms
@@ -166,7 +170,8 @@ using battery-powered wheels only; Alt uses jets to brake drift/spin and unload
 wheels. Hold C to unload wheel momentum into the suit and whatever is physically
 attached. A free suit spins; a carrier may counteract its resulting rotation if
 its own attitude control is active. The HUD shows unloading, attachment status,
-resources and wheel saturation. Unload suit wheels before using orbital warp.
+resources and wheel saturation. Stored suit wheel momentum no longer blocks
+coasting warp; holding C temporarily returns to 1× to transmit unloading forces.
 During EVA, normal mouse motion requests a physical body turn; the camera remains centred
 on the torso. Hold Shift or middle mouse for head-only aiming, then release it
 to snap back to centre. The head is limited to ±60° yaw / ±50° pitch; body turns

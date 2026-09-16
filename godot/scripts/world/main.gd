@@ -309,7 +309,6 @@ func _debug_flight_state() -> Dictionary:
 		"ship_is_local": _flight.ship_is_local,
 		"reference_id": _flight.reference_id,
 		"requested_warp": _flight.requested_warp,
-		"pending_warp": _flight._pending_warp,
 		"dump_settle_s": _flight._suit_dump_settle_s,
 		"world_rate": _flight.session.world.rate,
 		"world_time_s": _flight.session.world.time,

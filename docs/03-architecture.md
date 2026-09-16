@@ -157,8 +157,9 @@ The pre-M5 physical interaction update replaces the old frozen terminal handhold
 with a live seat constraint. Terminal use alone does not restrain the suit.
 Unrestrained suits activate a local coast frame even away from other objects,
 so Jolt handles freefall, forces and collisions during both coasts and burns.
-Hands and boots likewise require the local inertial frame. Restrained transit can use analytic flight;
-warp requires the pilot seat. Local constraints retain relative anchors through
+Hands and boots use the local inertial frame at 1x. Restrained transit can use
+analytic flight; coasting warp also permits a live unrestrained suit inside the
+closed ship (see the M5 update below). Local constraints retain relative anchors through
 recentring and body replacement. Flight mass budgets include the transported suit;
 the physical ship body excludes it because its live suit body supplies that mass.
 
@@ -170,11 +171,37 @@ ordinary contact. Ship attitude control observes body motion independently.
 There is no cross-wheel momentum shortcut. A suit with stored wheel momentum,
 an active C dump, or the short post-dump settling interval retains local physics
 even when seated, including passive gyroscopic reactions through its restraint.
-Unload the suit wheels before orbital warp; ship wheel momentum remains in its
-own persistent scalar simulation state during warp.
+At 1x, loaded suit wheels retain physical ownership. Coasting warp no longer
+requires unloading them; ship wheel momentum remains in its persistent scalar
+simulation state during warp.
 
 Local control returns motor torque only. `PlayerShip` applies the passive body
 and rotor gyroscopic reaction using its full physical inertia tensor; `Player`
 uses the same stable midpoint helper. In orbital flight the pure wheel module
 integrates passive precession with a matching orientation update. This avoids
 double-applying gyroscopic torque or adding energy at high stored momentum.
+
+## M5 coasting interior warp (2026-09-16)
+
+During coasting warp the hull is frozen in the nearby ship frame, while the suit,
+boots, grips and grapple continue at normal physics speed against its collision
+geometry. The free suit is not copied to the hull's pose every tick. This stationary
+room is the explicit Q9 warp allowance; at 1x the hull is live and contacts exchange
+momentum normally. Stored suit wheel momentum does not gate warp or trigger an
+automatic dump. Holding C temporarily restores 1x physical flight so its unloading
+reaction reaches the hull; the ordinary settling interval is retained.
+
+An unstrapped pilot forces physical flight at 1x whenever the ship burns or turns.
+`OrbitalWorld.prepare_interior_controls()` samples the executor at the current
+simulation epoch; `interior_coast_seconds()` reads the exact upcoming pointing
+boundary. The adapter limits the accelerated coast to that boundary, so even a
+large warp tick cannot integrate part of a maneuver against the frozen interior.
+The requested warp remains selected and resumes once the ship coasts without
+turning. A seated pilot retains the existing 10x maneuver cap.
+
+The outer airlock and cargo hatch must be closed to request warp. All airlock and
+cargo door movements are refused above 1x; refusal spends no battery. Commands
+use the effective rate, published immediately when it changes. Actual encounters
+always force 1x, including arrival while using the free-flight physical interior.
+Frame changes preserve suit-relative pose, drift and spin, and rebase grip load
+estimates. Disk loads resume at 1x before publishing door state.

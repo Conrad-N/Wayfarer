@@ -24,8 +24,6 @@ var _last_logged_warp: float = 1.0
 var _last_logged_attitude_mode: String = ""
 var _last_logged_executor_on: bool = false
 var _last_logged_burning: bool = false
-## Warp a seated pilot asked for while the suit wheels still had to be unloaded.
-var _pending_warp: float = 1.0
 const EVA_REFERENCE_ID: String = "__eva_coast_reference"
 const ATTITUDE_TORQUE_NM: float = 5500.0
 ## Fastest closing speed the local approach will command, whatever the range.
@@ -73,6 +71,9 @@ func capture_save() -> Dictionary:
 ## encounter the normal way so its wreck pieces return from the session record.
 func apply_save(data: Dictionary) -> void:
 	session.apply_save(data.get("session", {}) as Dictionary)
+	# A rebuilt scene resumes at real time, before publishing its first door state.
+	requested_warp = 1.0
+	session.world.set_rate(1.0)
 	ship.api.apply_save(data.get("ship_api", {}) as Dictionary)
 	ship.global_basis = LocalOrbitFrame.ship_basis(session.world.orientation)
 	ship.global_position = -(ship.global_basis * ship.center_of_mass)
@@ -97,8 +98,14 @@ func _physics_process(delta: float) -> void:
 		return
 	_sync_mass()
 	_sync_attitude_authority()
-	_drive_pending_warp()
 	_suit_dump_settle_s = 0.3 if player.is_wheel_dumping() else maxf(0.0, _suit_dump_settle_s - delta)
+	if ship_is_local:
+		_refresh_local_snapshot()
+	if not _seated():
+		session.world.prepare_interior_controls()
+	if reference_id == EVA_REFERENCE_ID and ship_is_local and _warp_interior_ready():
+		_leave_local_ship()
+		_leave_encounter()
 	if reference_id.is_empty() and (not is_aboard() or _needs_inertial_interior()):
 		_begin_open_space_eva()
 	if not bool(ship.api.get_telemetry().power_available):
@@ -111,12 +118,15 @@ func _physics_process(delta: float) -> void:
 	else:
 		_advance_orbit(delta)
 	_log_flight_state_changes()
-	if reference_id.is_empty():
+	if reference_id.is_empty() or (reference_id == EVA_REFERENCE_ID and is_aboard()):
 		for id: String in session.objects:
 			if str(session.objects[id].get("kind", "")) not in ["station", "derelict"]:
 				continue
 			var target: Dictionary = session.object_state(id, session.world.time)
 			if not target.is_empty() and SimVector.distance(session.world.ship_root_state().position, target.position) <= LocalOrbitFrame.LOCAL_RADIUS_M + 1.0:
+				if reference_id == EVA_REFERENCE_ID:
+					_leave_local_ship()
+					_leave_encounter()
 				_enter_encounter(id)
 				break
 	else:
@@ -129,14 +139,14 @@ func _physics_process(delta: float) -> void:
 			_leave_local_ship()
 			if is_aboard():
 				_leave_encounter()
-		if player.global_position.length() > LocalOrbitFrame.RECENTRE_DISTANCE_M:
-			var nodes: Array[Node3D] = [ship, player]
-			for body: WreckBody in wreck.bodies:
-				nodes.append(body)
-			if is_instance_valid(_station):
-				nodes.append(_station)
-			frame.recentre(nodes, player.global_position)
-	if reference_id == EVA_REFERENCE_ID and ship_is_local and is_aboard() and not player.grapple.is_attached() and not _needs_inertial_interior():
+	if not reference_id.is_empty() and player.global_position.length() > LocalOrbitFrame.RECENTRE_DISTANCE_M:
+		var nodes: Array[Node3D] = [ship, player]
+		for body: WreckBody in wreck.bodies:
+			nodes.append(body)
+		if is_instance_valid(_station):
+			nodes.append(_station)
+		frame.recentre(nodes, player.global_position)
+	if reference_id == EVA_REFERENCE_ID and ship_is_local and is_aboard() and not _needs_inertial_interior():
 		_leave_local_ship()
 		_leave_encounter()
 	_publish_elapsed += delta
@@ -186,7 +196,8 @@ func _sync_mass() -> void:
 
 func _advance_local(delta: float) -> void:
 	_sync_attitude_authority()
-	requested_warp = 1.0
+	if reference_id != EVA_REFERENCE_ID or not _warp_ready():
+		requested_warp = 1.0
 	session.world.set_rate(1.0)
 	var reference: Dictionary = session.object_state(reference_id, session.world.time)
 	frame.set_reference(reference.position, reference.velocity)
@@ -318,10 +329,20 @@ func _advance_orbit(delta: float) -> void:
 	var aboard: bool = is_aboard()
 	var relative_pose: Transform3D = ship.global_transform.affine_inverse() * player.global_transform
 	var old_basis: Basis = ship.global_basis
-	var limit: float = requested_warp if aboard and _seated() and reference_id.is_empty() else 1.0
+	var limit: float = requested_warp if _warp_ready() and reference_id.is_empty() else 1.0
 	if limit > 10.0 and (world.throttle > 0.0 or not world.powered_state.is_empty() or world.attitude_mode not in ["manual", "kill"] or SimVector.length(world.angular_vel) > 1e-9):
 		limit = 10.0
 	var sim_delta: float = delta * limit
+	if aboard and not _seated():
+		world.prepare_interior_controls()
+		var coast_seconds: float = world.interior_coast_seconds()
+		if coast_seconds <= delta:
+			_begin_open_space_eva()
+			_advance_local(delta)
+			return
+		# Stop exactly at the pointing window; never integrate a powered remainder
+		# against a frozen room, even when one warp tick would cross the event.
+		sim_delta = minf(sim_delta, coast_seconds)
 	var root_state: Dictionary = session.world.ship_root_state()
 	for id: String in session.objects:
 		if str(session.objects[id].get("kind", "")) not in ["station", "derelict"]:
@@ -347,7 +368,7 @@ func _advance_orbit(delta: float) -> void:
 		frame.set_reference(target.position, target.velocity)
 	ship.global_basis = LocalOrbitFrame.ship_basis(session.world.orientation)
 	ship.global_position = frame.to_local_position(root_state.position) - ship.global_basis * ship.center_of_mass
-	if aboard:
+	if aboard and _seated():
 		player.global_transform = ship.global_transform * relative_pose
 		player.linear_velocity = ship.global_basis * old_basis.transposed() * player.linear_velocity
 	ship.api.publish_flight(ship.api.get_telemetry().flight, float(session.world.ship.propellant_kg))
@@ -374,13 +395,18 @@ func _enter_encounter(id: String) -> void:
 	elif str(session.objects[id].kind) == "station":
 		_make_station()
 	_enter_local_ship()
-	ship.api.set_cargo_message("ARRIVED NEAR " + str(session.objects[id].name).to_upper())
+	if id != EVA_REFERENCE_ID:
+		ship.api.set_cargo_message("ARRIVED NEAR " + str(session.objects[id].name).to_upper())
+	elif requested_warp > 1.0:
+		ship.api.set_cargo_message("1× UNTIL MANEUVER OR WHEEL UNLOADING FINISHES")
 	DebugLog.event("flight", "entered %s near %s at %.1f m/s" % [str(session.objects[id].kind), id, ship.linear_velocity.length()])
 
 
 func _enter_local_ship() -> void:
 	ship_is_local = true
-	requested_warp = 1.0
+	if reference_id != EVA_REFERENCE_ID:
+		requested_warp = 1.0
+	session.world.set_rate(1.0)
 	ship.rotor_momentum_body = LocalOrbitFrame.GODOT_TO_SIM_BODY.transposed() * LocalOrbitFrame.native(session.world.reaction_wheel.momentum_body)
 	ship.freeze = false
 	ship.collision_layer = 1
@@ -425,8 +451,9 @@ func _rebase_grips() -> void:
 func _leave_encounter() -> void:
 	if str(session.objects[reference_id].kind) == "derelict":
 		EncounterStore.capture(session, reference_id, frame, wreck, hazards)
-	player.grapple.detach()
-	player.salvage_tools.cancel_input()
+	if reference_id != EVA_REFERENCE_ID:
+		player.grapple.detach()
+		player.salvage_tools.cancel_input()
 	for body: WreckBody in wreck.bodies:
 		body.get_parent().remove_child(body)
 		body.queue_free()
@@ -481,12 +508,8 @@ func _command(command: String, args: Dictionary) -> Dictionary:
 			var value: float = args.get("rate", NAN)
 			if not is_finite(value) or not _is_allowed_warp(value):
 				return _result(false, "SELECT 1, 10, 100 OR 1000× WARP")
-			if value > 1.0 and not _warp_seat_ready():
-				return _result(false, "STRAP INTO THE PILOT SEAT TO WARP; 1× NEAR OBJECTS")
-			if value > 1.0 and _suit_holding_on():
-				return _result(false, "LET GO OF HANDHOLDS, BOOTS AND GRAPPLE BEFORE WARP")
-			# Loaded suit wheels are unloaded for the pilot; warp follows once settled.
-			_pending_warp = value if value > 1.0 and _needs_inertial_interior() else 1.0
+			if value > 1.0 and not _warp_ready():
+				return _result(false, _warp_refusal())
 			requested_warp = value
 			if value > 1.0 and not world.executor_on:
 				world.set_attitude_mode("kill")
@@ -539,13 +562,10 @@ func _command(command: String, args: Dictionary) -> Dictionary:
 			_approaching = false
 			_rcs_direction = Vector3.ZERO
 		"next_event":
-			if not _warp_seat_ready():
-				return _result(false, "STRAP INTO THE PILOT SEAT FOR EVENT WARP; UNAVAILABLE NEAR OBJECTS")
-			if _suit_holding_on():
-				return _result(false, "LET GO OF HANDHOLDS, BOOTS AND GRAPPLE BEFORE EVENT WARP")
+			if not _warp_ready():
+				return _result(false, _warp_refusal())
 			if world.nodes.is_empty():
 				return _result(false, "NO MANEUVER EVENT QUEUED")
-			_pending_warp = 1000.0 if _needs_inertial_interior() else 1.0
 			requested_warp = 1000.0
 		"rcs_translate":
 			if not ship_is_local:
@@ -632,7 +652,7 @@ func _publish() -> void:
 	for entry: Dictionary in world.targets:
 		targets.append({"id": entry.id, "name": entry.name, "kind": entry.kind})
 	var data: Dictionary = ship.api.get_telemetry()
-	var snapshot: Dictionary = {"available": true, "time_s": world.time, "warp": world.rate, "requested_warp": maxf(requested_warp, _pending_warp),
+	var snapshot: Dictionary = {"available": true, "time_s": world.time, "warp": world.rate, "requested_warp": requested_warp,
 		"local": not reference_id.is_empty(), "reference_name": str(session.objects[reference_id].name) if not reference_id.is_empty() else "OPEN SPACE",
 		"body_name": world.get_body().name, "body_radius_m": world.get_body().radius,
 		"orbit": {"altitude_m": state.altitude, "periapsis_altitude_m": state.periapsis_altitude, "apoapsis_altitude_m": state.apoapsis_altitude,
@@ -747,11 +767,27 @@ func _seated() -> bool:
 	return bool(player.get_meta("seated", false))
 
 
-## Seated, aboard, and not parked near an object: the only state that may warp.
-## The free-flight reference is allowed because a seated pilot is only there while
-## the interior waits for the suit wheels to unload.
-func _warp_seat_ready() -> bool:
-	return _seated() and is_aboard() and (reference_id.is_empty() or reference_id == EVA_REFERENCE_ID)
+## Warp is confined to the closed ship, away from other physical objects.
+func _warp_ready() -> bool:
+	var data: Dictionary = ship.api.get_telemetry()
+	return is_aboard() and (reference_id.is_empty() or reference_id == EVA_REFERENCE_ID) \
+		and not bool(data.airlock_outer_open) and not bool(data.cargo_door_open)
+
+
+func _warp_refusal() -> String:
+	if not is_aboard() or (not reference_id.is_empty() and reference_id != EVA_REFERENCE_ID):
+		return "WARP REQUIRES BEING ABOARD; 1× NEAR OBJECTS"
+	return "CLOSE THE OUTER AIRLOCK AND CARGO HATCH BEFORE WARP"
+
+
+## Coasting warp is a stationary room with a live suit and real-time controls.
+## Active wheel unloading still needs the live hull to receive its reaction.
+func _warp_interior_ready() -> bool:
+	if requested_warp <= 1.0 or not _warp_ready() or player.is_wheel_dumping() or _suit_dump_settle_s > 0.0:
+		return false
+	if _rcs_direction != Vector3.ZERO or _approaching or bool(ship.api.get_telemetry().braking):
+		return false
+	return _seated() or session.world.interior_coast_seconds() > 0.0
 
 
 ## Whether the suit is physically attached to anything besides the seat harness.
@@ -761,23 +797,9 @@ func _suit_holding_on() -> bool:
 	return (grip != null and grip.is_attached()) or (boots != null and boots.is_attached()) or player.grapple.is_attached()
 
 
-## Unload the seated pilot's suit wheels for a pending warp request, then engage
-## it once the harness has settled and the interior is analytic again.
-func _drive_pending_warp() -> void:
-	if _pending_warp <= 1.0:
-		player.set_automatic_wheel_dump(false)
-		return
-	if not _warp_seat_ready() or _suit_holding_on():
-		_pending_warp = 1.0
-		player.set_automatic_wheel_dump(false)
-		return
-	player.set_automatic_wheel_dump(player.attitude.momentum_body.length_squared() > 1e-8)
-	if reference_id.is_empty() and not _needs_inertial_interior():
-		requested_warp = _pending_warp
-		_pending_warp = 1.0
-
-
 func _needs_inertial_interior() -> bool:
+	if _warp_interior_ready():
+		return false
 	# A live joint must transmit the suit motor's impulse. Keep physical ownership
 	# while its spinning rotors can react against the carrier, and briefly after
 	# unloading so the constraint solver finishes transmitting the last impulse.
@@ -785,8 +807,8 @@ func _needs_inertial_interior() -> bool:
 		return true
 	if _suit_holding_on():
 		return true
-	# Even coasting collisions and walking must exchange momentum with a live hull.
-	# Only the strapped pilot permits analytic transit; free suits always use Jolt.
+	# At 1×, contacts exchange momentum with a live hull. Coasting warp above
+	# explicitly permits a frozen room, while the suit still uses real-time Jolt.
 	return not _seated()
 
 

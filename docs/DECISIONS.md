@@ -504,3 +504,15 @@ decide something the docs did not cover.
   Values that can hover at a threshold need a margin before "recovered" is logged
   (suit stores 2% of capacity, ship battery 1%), and refusal reasons that can flip
   every frame (boot latch, cargo securing) log a new reason at most once a second.
+
+- 2026-09-16 — Conrad approves automatic 1x physical flight for burns and turns
+  while unstrapped, resolving the Q9 coast-only premise against the existing 10x
+  maneuver integrator. Coasting warp permits a live suit, boots, hands and grapple
+  against the frozen interior; suit movement runs at ordinary speed and its pose
+  is not copied from the hull. The adapter stops at the executor's actual pointing
+  boundary before handing motion to Jolt. Requested warp resumes when coasting
+  settles; seated maneuvers keep their 10x cap and nearby encounters always use 1x.
+  Stored suit wheel momentum no longer gates warp or starts automatic unloading.
+  An explicit C dump still uses 1x live contact physics to transfer its reaction.
+  Both exterior openings must be closed before warp; cargo joins the airlock motor
+  lock above 1x so it cannot serve as an alternate EVA exit. Loading resumes at 1x.
