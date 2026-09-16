@@ -99,11 +99,11 @@ use; the suit's existing battery continues to power salvage tools.
 
 ## M4 flight screens (2026-09-10)
 
-NAV now has ORBIT, FLIGHT and APPROACH/RCS pages. ORBIT shows the projected ship
+NAV has ORBIT, FLIGHT and RCS pages, plus DOCK added in M5. ORBIT shows the projected ship
 and target paths, altitude, apsides, inclination and a body-relative navball.
 FLIGHT shows simulation time, effective warp, mass, main-drive propellant and
 remaining delta-v, with throttle, attitude, cutoff and event-warp commands.
-APPROACH/RCS has six held translation buttons, local station holding and a bounded
+RCS has six held translation buttons, local station holding and a bounded
 RCS approach to the nearby reference. Button release, switching apps, closing a
 screen and power loss cannot leave a manual RCS command held.
 
@@ -131,7 +131,7 @@ centres your seated view toward NAV; press F again (or use Tab), select PLAN, le
 and 160 minutes selected, then CALCULATE PREVIEW and EXECUTE BURNS. Switch to
 NAV → FLIGHT and use COAST TO NEXT EVENT. The executor points, burns and coasts
 through all five nodes, returning to 1× near the wreck. After the final match,
-NAV → APPROACH / RCS provides the short final approach and station holding.
+NAV → RCS provides the short final approach and station holding.
 The Tab tablet offers the same controls. Open the airlock from SHIP for EVA;
 the scanner, cutter, grapple and physical grips work on the arrived wreck.
 
@@ -191,3 +191,11 @@ plus a WHEELS toggle independent of RCS. NAV → FLIGHT shows storage and contro
 status. Choose AUTO OFF to let the hull react freely; STOP ROTATION and direction
 holds enable independent attitude compensation. Saturation and loss of power
 are visible. Fixed terminals and the tablet share these controls through ShipApi.
+
+NAV → DOCK exposes Lowline Yard's live collar gap, lateral offset, point speed,
+axis alignment, spin and capture/refusal status. GUIDE TO RING starts the optional
+finite-RCS docking approach; CANCEL APPROACH stops it. DOCK / ENGAGE CLAMP and
+UNDOCK / RELEASE are separate commands. The same page appears on physical panels
+and the handheld tablet, through ShipApi's `approach_dock`, `dock`, `undock`, and
+`cancel_plan` commands and copied `flight.docking` telemetry. NAV → RCS's existing
+APPROACH TARGET also uses ring guidance when the selected local object is a station.

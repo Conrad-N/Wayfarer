@@ -12,7 +12,7 @@ var reference_id: String = ""
 var requested_warp: float = 1.0
 var enabled: bool = true
 var ship_is_local: bool = false
-var _station: StaticBody3D
+var _station: StationDock
 var _rcs_direction: Vector3 = Vector3.ZERO
 var _approaching: bool = false
 var _publish_elapsed: float = 1.0
@@ -64,7 +64,7 @@ func capture_save() -> Dictionary:
 		_refresh_local_snapshot()
 	if not reference_id.is_empty() and str(session.objects[reference_id].get("kind", "")) == "derelict":
 		EncounterStore.capture(session, reference_id, frame, wreck, hazards)
-	return {"session": session.to_save(), "ship_api": ship.api.to_save(), "reference_id": reference_id}
+	return {"session": session.to_save(), "ship_api": ship.api.to_save(), "reference_id": reference_id, "docking": _station.capture_save(ship) if is_instance_valid(_station) else {}}
 
 
 ## Rebuild a captured moment on a freshly configured flight, re-entering the saved
@@ -85,6 +85,9 @@ func apply_save(data: Dictionary) -> void:
 	var id: String = str(data.get("reference_id", ""))
 	if not id.is_empty() and session.objects.has(id):
 		_enter_encounter(id)
+		if is_instance_valid(_station) and _station.restore(ship, data.get("docking", {}) as Dictionary):
+			_stop_docked_controls()
+			_refresh_local_snapshot()
 	_publish()
 
 
@@ -112,7 +115,7 @@ func _physics_process(delta: float) -> void:
 		session.world.set_executor(false)
 		session.world.set_throttle(0.0)
 		_rcs_direction = Vector3.ZERO
-		_approaching = false
+		_cancel_approach()
 	if ship_is_local:
 		_advance_local(delta)
 	else:
@@ -207,7 +210,8 @@ func _advance_local(delta: float) -> void:
 	var omega: Vector3 = LocalOrbitFrame.GODOT_TO_SIM_BODY * (ship.global_basis.transposed() * ship.angular_velocity)
 	_sync_physical_inertia()
 	var time_before: float = session.world.time
-	var controls: Dictionary = session.world.advance_local(delta, SimVector.sub(root_position, parent.position), SimVector.sub(root_velocity, parent.velocity), LocalOrbitFrame.orbital_orientation(ship.global_basis), LocalOrbitFrame.scalar(omega))
+	var local_heading: SimVector = LocalOrbitFrame.scalar(-_station.global_basis.z) if is_instance_valid(_station) and _station.guiding else null
+	var controls: Dictionary = session.world.advance_local(delta, SimVector.sub(root_position, parent.position), SimVector.sub(root_velocity, parent.velocity), LocalOrbitFrame.orbital_orientation(ship.global_basis), LocalOrbitFrame.scalar(omega), local_heading)
 	_settle_wheel_energy()
 	_advance_solar(time_before)
 	ship.api.publish_flight(ship.api.get_telemetry().flight, float(controls.propellant_kg))
@@ -436,7 +440,7 @@ func _leave_local_ship() -> void:
 	ship.angular_velocity = Vector3.ZERO
 	ship.collision_layer = 1 if is_aboard() else 0
 	ship.collision_mask = ship.collision_layer
-	_approaching = false
+	_cancel_approach()
 	_rcs_direction = Vector3.ZERO
 	_rebase_grips()
 	DebugLog.event("flight", "ship physics off (reference %s)" % reference_id)
@@ -480,7 +484,17 @@ func _apply_rcs(delta: float) -> void:
 	if not bool(data.power_available) or not bool(data.systems.rcs.enabled) or float(data.systems.rcs.health) <= 0.0:
 		return
 	var force: Vector3 = ship.global_basis * _rcs_direction * PlayerShip.BRAKE_FORCE_N
-	if _approaching:
+	if is_instance_valid(_station) and _station.guiding:
+		if bool(data.braking):
+			_cancel_approach()
+			return
+		var closing: Vector3 = _station.guidance_position(ship) - ship.to_global(ship.center_of_mass)
+		var acceleration: float = PlayerShip.BRAKE_FORCE_N / maxf(ship.mass, 1.0)
+		var speed: float = minf(closing.length() * 0.15, sqrt(0.5 * acceleration * closing.length()))
+		speed = minf(speed, 0.5 if _station.final_approach else APPROACH_SPEED_LIMIT_MPS)
+		var desired: Vector3 = closing.normalized() * speed
+		force = ((desired - ship.linear_velocity) * ship.mass / 2.0).limit_length(PlayerShip.BRAKE_FORCE_N)
+	elif _approaching:
 		var reference_point: Vector3 = frame.to_local_position(frame.reference_position)
 		var offset: Vector3 = ship.to_global(ship.center_of_mass) - reference_point
 		var stand_off: Vector3 = offset.normalized() * 30.0 if offset.length() > 0.001 else Vector3.BACK * 30.0
@@ -493,7 +507,7 @@ func _apply_rcs(delta: float) -> void:
 		var desired_velocity: Vector3 = closing.normalized() * minf(speed, APPROACH_SPEED_LIMIT_MPS) if remaining > 0.001 else Vector3.ZERO
 		force = ((desired_velocity - ship.linear_velocity) * ship.mass / 2.0).limit_length(PlayerShip.BRAKE_FORCE_N)
 		if (offset - stand_off).length() < 1.0 and ship.linear_velocity.length() < 0.1:
-			_approaching = false
+			_cancel_approach()
 			ship.api.set_braking(true)
 	var requested: float = force.length() * delta / PlayerShip.EXHAUST_VELOCITY_MPS
 	if requested > 0.0:
@@ -503,7 +517,35 @@ func _apply_rcs(delta: float) -> void:
 
 func _command(command: String, args: Dictionary) -> Dictionary:
 	var world: OrbitalWorld = session.world
+	if _is_docked():
+		if command in ["execute_plan", "approach", "approach_dock"] \
+				or (command == "set_throttle" and float(args.get("throttle", 0.0)) != 0.0) \
+				or (command == "rcs_translate" and args.get("direction") != Vector3.ZERO) \
+				or command == "set_attitude_mode":
+			return _result(false, "UNDOCK BEFORE FIRING THRUSTERS OR TURNING")
 	match command:
+		"dock":
+			if not ship_is_local or not is_instance_valid(_station):
+				return _result(false, "DOCKING REQUIRES A NEARBY STATION RING")
+			if _is_docked():
+				return _result(false, "ALREADY DOCKED")
+			if world.throttle > 0.0 or world.executor_on or _rcs_direction != Vector3.ZERO:
+				return _result(false, "CUT MAIN THRUST AND RELEASE RCS BEFORE DOCKING")
+			if not _station.capture(ship):
+				return _result(false, str(_station.reading(ship).status))
+			_stop_docked_controls()
+		"undock":
+			if not _is_docked():
+				return _result(false, "SHIP IS NOT DOCKED")
+			var data: Dictionary = ship.api.get_telemetry()
+			if bool(data.cargo_door_open) or bool(data.airlock_outer_open):
+				return _result(false, "CLOSE EXTERIOR HATCHES BEFORE UNDOCKING")
+			_station.release()
+			ship.sleeping = false
+		"approach_dock":
+			var result: Dictionary = _start_dock_approach()
+			if not bool(result.ok):
+				return result
 		"set_warp":
 			var value: float = args.get("rate", NAN)
 			if not is_finite(value) or not _is_allowed_warp(value):
@@ -519,7 +561,9 @@ func _command(command: String, args: Dictionary) -> Dictionary:
 				return _result(false, "THROTTLE MUST BE BETWEEN ZERO AND ONE")
 			world.set_executor(false)
 			world.set_throttle(value)
+			_cancel_approach()
 		"set_attitude_mode":
+			_cancel_approach()
 			if not world.set_attitude_mode(str(args.get("mode", ""))):
 				return _result(false, "UNKNOWN ATTITUDE MODE")
 		"select_target":
@@ -527,7 +571,7 @@ func _command(command: String, args: Dictionary) -> Dictionary:
 			for index: int in world.targets.size():
 				if str(world.targets[index].id) == str(args.get("id", "")):
 					world.selected_target = index
-					_approaching = false
+					_cancel_approach()
 					found = true
 			if not found:
 				return _result(false, "UNKNOWN TARGET")
@@ -552,14 +596,14 @@ func _command(command: String, args: Dictionary) -> Dictionary:
 			world.pending_maneuver = {}
 			world.set_executor(true)
 			ship.api.set_braking(false)
-			_approaching = false
+			_cancel_approach()
 			_rcs_direction = Vector3.ZERO
 		"cancel_plan", "cutoff":
 			world.set_executor(false)
 			world.set_throttle(0.0)
 			world.nodes.clear()
 			world.pending_maneuver = {}
-			_approaching = false
+			_cancel_approach()
 			_rcs_direction = Vector3.ZERO
 		"next_event":
 			if not _warp_ready():
@@ -574,7 +618,7 @@ func _command(command: String, args: Dictionary) -> Dictionary:
 			if not direction is Vector3 or not (direction as Vector3).is_finite():
 				return _result(false, "INVALID RCS DIRECTION")
 			_rcs_direction = (direction as Vector3).limit_length(1.0)
-			_approaching = false
+			_cancel_approach()
 			ship.api.set_braking(false)
 		"approach":
 			if str(world.selected_target_def().get("id", "")) != reference_id:
@@ -583,8 +627,13 @@ func _command(command: String, args: Dictionary) -> Dictionary:
 				return _result(false, "MATCH VELOCITY NEAR THE TARGET BEFORE LOCAL APPROACH")
 			if ship.linear_velocity.length() > 10.0:
 				return _result(false, "RELATIVE SPEED TOO HIGH FOR RCS APPROACH")
-			_approaching = true
-			ship.api.set_braking(false)
+			if is_instance_valid(_station):
+				var result: Dictionary = _start_dock_approach()
+				if not bool(result.ok):
+					return result
+			else:
+				_approaching = true
+				ship.api.set_braking(false)
 		_:
 			return _result(false, "UNKNOWN FLIGHT COMMAND")
 	_publish()
@@ -661,10 +710,24 @@ func _publish() -> void:
 		"dv_budget_mps": ManeuverMath.dv_budget(world.ship.propellant_kg, world.structural_mass_kg(), world.ship.isp_seconds),
 		"throttle": world.throttle, "attitude_mode": world.attitude_mode, "executor_on": world.executor_on,
 		"reaction_wheel": world.reaction_wheel.snapshot(),
-		"burn_status": "RCS APPROACH" if _approaching else ("EXECUTING %d NODES" % world.nodes.size() if world.executor_on else ("MAIN THRUST" if world.throttle > 0.0 and float(world.ship.propellant_kg) > 0.0 else "COASTING")),
+		"docking": _station.reading(ship) if is_instance_valid(_station) else {"available": false, "docked": false},
+		"burn_status": _burn_status(),
 		"target": {"id": target.id, "name": target.name, "range_m": SimVector.length(relative), "relative_speed_mps": SimVector.length(relative_velocity)},
 		"targets": targets, "plan": _plan_snapshot(), "scope": _scope_snapshot(state, target), "navball": _navball_snapshot(state, relative)}
 	ship.api.publish_flight(snapshot, float(world.ship.propellant_kg))
+
+
+func _burn_status() -> String:
+	var world: OrbitalWorld = session.world
+	if _is_docked():
+		return "DOCKED"
+	if is_instance_valid(_station) and _station.guiding:
+		return "DOCKING APPROACH"
+	if _approaching:
+		return "RCS APPROACH"
+	if world.executor_on:
+		return "EXECUTING %d NODES" % world.nodes.size()
+	return "MAIN THRUST" if world.throttle > 0.0 and float(world.ship.propellant_kg) > 0.0 else "COASTING"
 
 
 func _plan_snapshot() -> Dictionary:
@@ -736,31 +799,53 @@ func _make_sky() -> void:
 
 
 func _make_station() -> void:
-	_station = StaticBody3D.new()
+	_station = StationDock.new()
 	_station.name = "LowlineYard"
 	get_parent().add_child(_station)
 	_station.position = frame.to_local_position(frame.reference_position)
-	for side: float in [-1.0, 1.0]:
-		var mesh: MeshInstance3D = MeshInstance3D.new()
-		var box: BoxMesh = BoxMesh.new()
-		box.size = Vector3(8, 8, 24)
-		mesh.mesh = box
-		mesh.position.x = side * 8.0
-		var material: StandardMaterial3D = StandardMaterial3D.new()
-		material.albedo_color = Color(0.25, 0.5, 0.55)
-		mesh.material_override = material
-		_station.add_child(mesh)
-		var shape: CollisionShape3D = CollisionShape3D.new()
-		var bounds: BoxShape3D = BoxShape3D.new()
-		bounds.size = box.size
-		shape.shape = bounds
-		shape.position = mesh.position
-		_station.add_child(shape)
-	var sign: Label3D = Label3D.new()
-	sign.text = "LOWLINE YARD"
-	sign.position = Vector3(0, 6, 0)
-	sign.pixel_size = 0.02
-	_station.add_child(sign)
+
+
+func _is_docked() -> bool:
+	return is_instance_valid(_station) and _station.is_docked()
+
+
+func _cancel_approach() -> void:
+	_approaching = false
+	if is_instance_valid(_station):
+		_station.guiding = false
+
+
+func _stop_docked_controls() -> void:
+	_cancel_approach()
+	_rcs_direction = Vector3.ZERO
+	ship.api.set_braking(false)
+	session.world.set_executor(false)
+	session.world.nodes.clear()
+	session.world.pending_maneuver = {}
+	session.world.set_attitude_mode("manual")
+	session.world.set_manual_torque(SimVector.new())
+	# Discard fractional cached control forces from before capture, without losing time.
+	var state: Dictionary = session.world.orbit()
+	session.world.replace_state(state.position, state.velocity)
+	requested_warp = 1.0
+	session.world.set_rate(1.0)
+
+
+func _start_dock_approach() -> Dictionary:
+	if not ship_is_local or not is_instance_valid(_station) or str(session.world.selected_target_def().get("id", "")) != reference_id:
+		return _result(false, "SELECT THE NEARBY STATION BEFORE DOCKING APPROACH")
+	var data: Dictionary = ship.api.get_telemetry()
+	if session.world.executor_on or session.world.throttle > 0.0 or ship.linear_velocity.length() > 2.0:
+		return _result(false, "CUT MAIN THRUST AND MATCH SPEED BELOW 2 m/s")
+	if not bool(data.systems.rcs.enabled) or float(data.systems.rcs.health) <= 0.0 or float(data.propellant_kg) <= 0.0 or not _attitude_available():
+		return _result(false, "DOCKING APPROACH NEEDS RCS FUEL AND REACTION WHEELS")
+	if not _station.start_guidance(ship):
+		return _result(false, "MOVE TO THE FRONT OF THE RING: AT LEAST 14 m CLEAR")
+	_approaching = false
+	_rcs_direction = Vector3.ZERO
+	ship.api.set_braking(false)
+	session.world.set_attitude_mode("target")
+	return _result(true, "APPROACHING RING; PRESS DOCK WHEN READY")
 
 
 func _seated() -> bool:

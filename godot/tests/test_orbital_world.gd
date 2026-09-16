@@ -510,3 +510,24 @@ func _advance_total(world: OrbitalWorld, total: float, chunk: float) -> void:
 		var delta: float = minf(chunk, total - elapsed)
 		world.advance(delta)
 		elapsed += delta
+
+
+## A nearby target and the measured local hull must be sampled at the same epoch.
+func test_local_target_heading_does_not_advance_past_station() -> void:
+	var world: OrbitalWorld = OrbitalWorld.new()
+	var rv: Dictionary = world.current_rv()
+	world.targets[0].elements = ManeuverMath.state_to_elements(SimVector.add(rv.r, SimVector.new(20, 0, 0)), rv.v, world.get_body(), world.time)
+	world.selected_target = 0
+	world.set_attitude_mode("target")
+	var result: Dictionary = world.advance_local(0.05, rv.r, rv.v, FlightMath.IDENTITY_Q, SimVector.new())
+	check_near(SimVector.length(result.torque_body), 0.0, 0.01, "aligned close target does not slew as only its clock advances")
+	check_near(world.time, 0.05, 1e-12, "held heading still advances every accepted control fragment")
+	world = OrbitalWorld.new()
+	rv = world.current_rv()
+	world.set_attitude_mode("target")
+	result = world.advance_local(0.05, rv.r, rv.v, FlightMath.IDENTITY_Q, SimVector.new(), SimVector.new(0, 1, 0))
+	check(SimVector.length(result.torque_body) > 0.0, "local berth heading commands real motor torque")
+	check(SimVector.length(world.reaction_wheel.momentum_body) > 0.0, "berth alignment stores reaction momentum")
+	var time_before: float = world.time
+	world.advance_local(0.05, rv.r, rv.v, FlightMath.IDENTITY_Q, SimVector.new(), SimVector.new(NAN, 0, 0))
+	check_eq(world.time, time_before, "invalid local heading fails without changing time")

@@ -195,3 +195,35 @@ is hit) rather than read once at the end of the jump, so a fast warp does not mi
 eclipse. With the fixed Sun in the default 400 km orbit's plane, about 61% of each
 orbit is lit (the planet's shadow covers roughly 140° of arc); a full orbit from empty
 gains more than the 20 MJ battery holds.
+
+## Station docking — first berth (2026-09-16)
+
+Lowline Yard has an open octagonal service ring. Approach its marked front with
+Wayfarer's cargo end first. This first berth is a mechanical clamp, not a pressure
+seal or a station interior. The solar wings remain outside the ring. Roll is free;
+the cargo-end axis must face into the ring within 5 degrees.
+
+Capture is an explicit ShipApi `dock` command. The cargo collar must be 0–0.50 m
+in front of the ring plane, within 0.30 m of its centre, moving at no more than
+0.30 m/s at the collar (including rotation), and spinning no faster than 0.02 rad/s.
+Close the cargo hatch and outer airlock, cut main thrust and release held RCS first.
+A six-axis physical constraint catches the existing pose; it does not teleport or
+freeze the hull. The station absorbs the small capture impulse. Holding uses no
+propellant, remains engaged without ship power, and leaves the suit free to move.
+
+Docked flight remains at 1x. Main thrust, translation, RCS braking, attitude turns,
+and maneuver execution are inhibited. Door use remains available at the normal
+power cost. Close both exterior hatches before `undock`; mechanical release works
+without power, preserves the ship's current pose and motion, and gives no free
+push. Departure uses the ship's own thrusters. The clamp does not refill stores,
+repair systems, unload wheel momentum automatically, or grant market access yet.
+
+`approach_dock` is optional finite-RCS assistance. Select the nearby station and
+match relative speed below 2 m/s. Enter from the clear front apron with the collar
+at least 14 m ahead of the ring, or from an already aligned close corridor. The
+assist closes to a staging point outside the ring at up to 20 m/s, with stopping
+distance limited by available thrust, aligns using reaction wheels, and creeps inward
+at up to 0.5 m/s, aiming for a 0.20 m gap. Capture still needs the pilot's command.
+Manual translation, a new throttle/attitude/target command, cutoff/cancel, or loss
+of power cancels approach. It needs working RCS, propellant, wheels and power;
+it does not route around station structures from the back or side.

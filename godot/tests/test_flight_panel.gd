@@ -126,6 +126,53 @@ func test_world_screen_target_popup_accepts_forwarded_input() -> void:
 	screen.free()
 
 
+## Both physical screens and tablet panels send docking actions through ShipApi.
+func test_docking_controls_and_live_status() -> void:
+	_commands.clear()
+	var api: ShipApi = _api()
+	var flight: Dictionary = api.get_telemetry().flight
+	flight.docking = {"available": true, "docked": false, "guiding": true, "ready": true,
+		"status": "READY TO DOCK", "gap_m": 0.2, "lateral_m": 0.1, "speed_mps": 0.05, "angle_rad": 0.01, "spin_rad_s": 0.005}
+	api.publish_flight(flight, 24000.0)
+	var panel: ShipPanel = _panel(api, "NAV")
+	panel.get_button("nav_dock").pressed.emit()
+	check(panel._nav_pages.dock.visible, "NAV exposes dedicated docking page")
+	check(panel._dock_readout.text.contains("READY TO DOCK"), "capture status comes from copied telemetry")
+	check(panel._dock_readout.text.contains("0.20 m"), "gap shown in metres")
+	for action: String in ["approach_dock", "dock", "dock_cancel"]:
+		panel.get_button(action).pressed.emit()
+		check_eq(_commands.back().name, "cancel_plan" if action == "dock_cancel" else action, "docking action uses shared command path")
+	flight.docking.docked = true
+	flight.docking.status = "DOCKED / LOWLINE YARD"
+	api.publish_flight(flight, 24000.0)
+	panel.refresh()
+	check(panel.get_button("dock").disabled and not panel.get_button("undock").disabled, "capture and release reflect the live clamp")
+	check(not panel._throttle.editable and panel._attitude.disabled, "dock disables propulsion controls")
+	panel.get_button("undock").pressed.emit()
+	check_eq(_commands.back().name, "undock", "release uses shared command path")
+	panel.free()
+	var tree: SceneTree = Engine.get_main_loop() as SceneTree
+	var screen: WorldScreen = SCREEN.instantiate() as WorldScreen
+	screen.configure(api, "NAV", false)
+	tree.root.add_child(screen)
+	screen.panel.get_button("nav_dock").pressed.emit()
+	await tree.process_frame
+	var point: Vector2 = screen.panel.get_button("undock").get_global_rect().get_center()
+	var world_point: Vector3 = screen.to_global(Vector3((point.x / 640.0 - 0.5) * 1.6, 0.5 - point.y / 400.0, 0))
+	_commands.clear()
+	var mouse: InputEventMouseButton = InputEventMouseButton.new()
+	mouse.button_index = MOUSE_BUTTON_LEFT
+	mouse.pressed = true
+	screen.forward_input(mouse, world_point)
+	mouse.pressed = false
+	screen.forward_input(mouse, world_point)
+	await tree.process_frame
+	check(not _commands.is_empty(), "physical screen click reaches docking command")
+	if not _commands.is_empty():
+		check_eq(_commands.back().name, "undock", "physical screen uses identical release validation")
+	screen.free()
+
+
 func _api() -> ShipApi:
 	var api: ShipApi = ShipApi.new()
 	api.bind_flight(_record_command)

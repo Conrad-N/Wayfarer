@@ -109,6 +109,12 @@ state and selected tool. Near a derelict, the wreck pieces are recorded with the
 same `EncounterStore.capture` used when leaving an encounter; it does not disturb
 the live pieces.
 
+Station berths additionally save a station-relative hull pose in `flight.docking`.
+On load, the station rebuilds its physical clamp before cargo and suit restoration.
+The saved pose refers to the hull origin, so a later cargo COM reconstruction does
+not move the hull away from the ring. Existing open hatches and lost power do not
+undo an already engaged clamp. Older saves without this field remain undocked.
+
 Load stores the state in `Game`, reloads the main scene, and `Main._ready` applies
 it after the normal setup: the session is restored, the saved encounter is
 re-entered the normal way (so pieces return from the encounter record), cargo

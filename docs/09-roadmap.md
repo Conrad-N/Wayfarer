@@ -411,7 +411,7 @@ Goal: the whole job, once.
 - [x] Free movement inside the ship during coasting warp; airlock and cargo hatch
       locked above 1x. Unstrapped burns and turns use 1x physical flight (Q9,
       DECISIONS 2026-09-12 and 2026-09-16).
-- [ ] Station docking (approach a docking ring, dock when slow enough).
+- [x] Station docking (approach a docking ring, dock when slow enough).
 - [ ] Market, contract board, spares, propellant, oxygen.
 - [ ] Insurance (hull, rescue, cargo). Rescue call and tug arrival. Debt and interest.
 - [ ] Save and load. First version done 2026-09-14 (Esc menu, one slot; see
@@ -438,7 +438,28 @@ walking covered 2.87 m in 3.35 seconds of suit time while orbit time ran at 100x
 Inspected the walking HUD, coasting NAV and 1x burn/readable explanation in
 `godot/build/screens/warp-interior-*.png`. Regression coverage includes freefall,
 wall collisions, maneuver boundaries, handoffs, save/load, and station arrival
-from an unstrapped physical interior. Station docking is next.
+from an unstrapped physical interior.
+
+
+Station docking completed (2026-09-16): Lowline Yard has a marked service ring
+with optional paid RCS/wheel guidance and explicit slow, aligned capture. NAV →
+DOCK on both terminals and the tablet reports gap, lateral error, speed, alignment
+and spin. The physical clamp holds the live hull, inhibits propulsion and warp,
+survives save/load, and releases without a free push. Exterior hatches must be
+closed for capture/release. This is a mechanical berth; station interiors,
+pressure sealing, trading and services remain later work.
+
+Verification: `./check.sh` passes **4,163 checks, zero failures**, without script
+errors or node-leak warnings. Main scene boots headless cleanly. Forward+ rendered
+verification used native F/Tab/V and tablet pointer input to guide into the ring,
+dock, reload the production save, unstrap and undock. Inspected ring/wing clearance
+and readable approach, capture, loaded/unstrapped and release screens in
+`godot/build/screens/station-dock-*.png`. Headless coverage includes capture gates,
+finite guidance, external pushes, floating origin, orbital snapshot, cargo COM
+restoration, unpowered release, older saves, and real RCS departure. An additional
+accelerated-physics stress exercise covered a 3 km approach in 343 sim seconds,
+peaking at 18.68 m/s and spending 442.52 kg of RCS propellant before safe capture.
+Market, contracts and station supplies are next.
 
 ## M6 — Ships
 

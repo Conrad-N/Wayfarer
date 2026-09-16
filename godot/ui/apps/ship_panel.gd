@@ -21,6 +21,7 @@ var _nav_pages: Dictionary = {}
 var _nav_page: String = "scope"
 var _flight_readout: Label
 var _scope_readout: Label
+var _dock_readout: Label
 var _rcs_readout: Label
 var _wheel_readout: Label
 var _flight_wheels: Label
@@ -185,6 +186,21 @@ func _refresh_nav(data: Dictionary) -> void:
 	_buttons["nav_brake"].text = "RELEASE HOLD" if bool(data.get("braking", false)) else "HOLD STATION"
 	for action: String in ["throttle_cutoff", "next_event", "approach"]:
 		_buttons[action].disabled = not available
+	var docking: Dictionary = flight.get("docking", {})
+	var nearby: bool = bool(docking.get("available", false))
+	var docked: bool = bool(docking.get("docked", false))
+	_dock_readout.text = "NO STATION RING NEARBY\nSelect Lowline Yard in PLAN and match velocity."
+	if nearby:
+		_dock_readout.text = "%s\nGAP %.2f m / 0–0.50   SIDE %.2f m / ≤0.30\nSPEED %.2f m/s / ≤0.30   ALIGN %.1f° / ≤5\nSPIN %.2f°/s / ≤1.15\n%s" % [str(docking.status), float(docking.gap_m), float(docking.lateral_m), float(docking.speed_mps), rad_to_deg(float(docking.angle_rad)), rad_to_deg(float(docking.spin_rad_s)), "GUIDING — press DOCK when ready" if bool(docking.get("guiding", false)) else "Enter from the marked front; cargo end first."]
+	_buttons["approach_dock"].disabled = not nearby or docked
+	_buttons["dock"].disabled = not nearby or docked
+	_buttons["undock"].disabled = not docked
+	_buttons["dock_cancel"].disabled = not bool(docking.get("guiding", false))
+	if docked:
+		_throttle.editable = false
+		_attitude.disabled = true
+		_buttons["nav_brake"].disabled = true
+		_buttons["approach"].disabled = true
 
 
 func _refresh_plan(data: Dictionary) -> void:
@@ -311,7 +327,7 @@ func _command(action: String) -> void:
 		return
 	var data: Dictionary = api.get_telemetry()
 	match action:
-		"nav_scope", "nav_flight", "nav_rcs":
+		"nav_scope", "nav_flight", "nav_rcs", "nav_dock":
 			_release_rcs()
 			_nav_page = action.trim_prefix("nav_")
 		"plan_setup", "plan_preview":
@@ -326,6 +342,14 @@ func _command(action: String) -> void:
 			api.flight_command("cutoff")
 		"next_event":
 			api.advance_to_next_event()
+		"approach_dock":
+			api.approach_dock()
+		"dock":
+			api.dock()
+		"undock":
+			api.undock()
+		"dock_cancel":
+			api.cancel_plan()
 		"approach":
 			api.flight_command("approach")
 		"nav_brake":
@@ -342,10 +366,11 @@ func _command(action: String) -> void:
 
 
 func _build_nav() -> void:
-	_button(_nav, "nav_scope", "ORBIT", Rect2(16, 54, 192, 34))
-	_button(_nav, "nav_flight", "FLIGHT", Rect2(224, 54, 192, 34))
-	_button(_nav, "nav_rcs", "APPROACH / RCS", Rect2(432, 54, 192, 34))
-	for page: String in ["scope", "flight", "rcs"]:
+	_button(_nav, "nav_scope", "ORBIT", Rect2(16, 54, 144, 34))
+	_button(_nav, "nav_flight", "FLIGHT", Rect2(172, 54, 144, 34))
+	_button(_nav, "nav_rcs", "RCS", Rect2(328, 54, 144, 34))
+	_button(_nav, "nav_dock", "DOCK", Rect2(484, 54, 140, 34))
+	for page: String in ["scope", "flight", "rcs", "dock"]:
 		var control: Control = Control.new()
 		control.name = page
 		control.visible = page == "scope"
@@ -405,6 +430,12 @@ func _build_nav() -> void:
 	_label(rcs_page, Vector2(140, 226), Vector2(116, 28), 12, MUTED).text = "HOLD TO THRUST"
 	_button(rcs_page, "nav_brake", "HOLD STATION", Rect2(16, 310, 292, 34))
 	_button(rcs_page, "approach", "APPROACH TARGET", Rect2(324, 310, 300, 34))
+	var dock_page: Control = _nav_pages.dock
+	_dock_readout = _label(dock_page, Vector2(16, 100), Vector2(608, 160), 16, AMBER)
+	_button(dock_page, "approach_dock", "GUIDE TO RING", Rect2(16, 268, 292, 34))
+	_button(dock_page, "dock_cancel", "CANCEL APPROACH", Rect2(324, 268, 300, 34))
+	_button(dock_page, "dock", "DOCK / ENGAGE CLAMP", Rect2(16, 310, 292, 34))
+	_button(dock_page, "undock", "UNDOCK / RELEASE", Rect2(324, 310, 300, 34))
 
 
 func _build_plan() -> void:

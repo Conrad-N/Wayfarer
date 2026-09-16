@@ -135,6 +135,8 @@ func set_airlock_door(which: String, opening: bool) -> bool:
 
 ## Command the ship's local-frame RCS brake; releasing it is always permitted.
 func set_braking(enabled: bool) -> bool:
+	if enabled and bool((_flight.get("docking", {}) as Dictionary).get("docked", false)):
+		return _reject("SHIP IS CLAMPED: UNDOCK BEFORE USING RCS")
 	if enabled and (not _system_working("rcs") or not _has_power() or _propellant_kg <= 0.0):
 		return _reject("RCS BRAKE UNAVAILABLE: CHECK POWER, RCS AND PROPELLANT")
 	if _braking == enabled:
@@ -398,7 +400,7 @@ func flight_command(command: String, arguments: Dictionary = {}) -> bool:
 	var releasing_rcs: bool = command == "rcs_translate" and arguments.get("direction") is Vector3 and arguments["direction"] == Vector3.ZERO
 	# STOP ROTATION stays available on a flat battery: wheel braking can pay for itself.
 	var stopping_rotation: bool = command == "set_attitude_mode" and str(arguments.get("mode", "")) == "kill" and _system_working("power")
-	if not _has_power() and not releasing_rcs and not stopping_rotation and command not in ["cutoff", "cancel_plan", "set_warp"]:
+	if not _has_power() and not releasing_rcs and not stopping_rotation and command not in ["cutoff", "cancel_plan", "set_warp", "undock"]:
 		if loggable:
 			DebugLog.event("flight", "%s refused: needs ship power" % command)
 		return _reject("FLIGHT CONTROLS NEED SHIP POWER")
@@ -516,3 +518,18 @@ func apply_save(data: Dictionary) -> void:
 	_braking = bool(data.get("braking", _braking))
 	_refresh_brake()
 	changed.emit()
+
+
+## Guide toward the nearby station ring using finite RCS and reaction wheels.
+func approach_dock() -> bool:
+	return flight_command("approach_dock")
+
+
+## Engage a nearby station clamp only within its capture envelope.
+func dock() -> bool:
+	return flight_command("dock")
+
+
+## Mechanically release a station clamp, without an artificial departure impulse.
+func undock() -> bool:
+	return flight_command("undock")

@@ -516,3 +516,16 @@ decide something the docs did not cover.
   An explicit C dump still uses 1x live contact physics to transfer its reaction.
   Both exterior openings must be closed before warp; cargo joins the airlock motor
   lock above 1x so it cannot serve as an alternate EVA exit. Loading resumes at 1x.
+
+- 2026-09-16 — First station docking uses Lowline Yard's cargo-end service ring:
+  0–0.50 m axial gap, ≤0.30 m lateral offset, ≤0.30 m/s collar speed, ≤5° axis
+  error, and ≤0.02 rad/s spin. Roll is unrestricted. Capture joins the live hull
+  to the station at its existing pose; the berth is a mechanical clamp, not a
+  pressure seal or station interior. Close exterior hatches for capture/release.
+  Holding needs no propellant or power; release is mechanical and adds no impulse.
+  Docking inhibits propulsion, powered turning and warp. Optional guidance uses
+  paid RCS and reaction wheels from the front apron, with explicit final capture.
+  Shared NAV controls expose the whole operation. Save/load retains the station-
+  relative hull pose and reconstructs the clamp independently of cargo COM order.
+  Nearby local target aiming samples ship and target at the same control-tick
+  epoch; docking supplies the fixed ring axis to the same finite wheel controller.

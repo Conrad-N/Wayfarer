@@ -276,18 +276,26 @@ func advance(real_dt_seconds: float) -> void:
 ## Advance main-drive controls while local physics owns position and attitude.
 ## Commands are sampled on the same fixed control grid; returned time-averaged
 ## forces preserve impulse and fuel across fractional local physics frames.
-func advance_local(delta: float, r: SimVector, v: SimVector, q: Dictionary, omega_body: SimVector) -> Dictionary:
+func advance_local(delta: float, r: SimVector, v: SimVector, q: Dictionary, omega_body: SimVector, local_target_direction: SimVector = null) -> Dictionary:
 	var result: Dictionary = {"force_world": SimVector.new(), "torque_body": SimVector.new(), "propellant_kg": ship["propellant_kg"], "throttle": throttle}
 	if not is_finite(delta) or delta <= 0.0 or delta > 1.0 or not SimVector.is_finite_vector(r) or not SimVector.is_finite_vector(v) or not SimVector.is_finite_vector(omega_body) or SimVector.length(r) <= 0.0:
 		return result
 	for component: String in ["w", "x", "y", "z"]:
 		if not q.has(component) or not is_finite(float(q[component])):
 			return result
+	if local_target_direction != null and not SimVector.is_finite_vector(local_target_direction):
+		return result
 	_local_rv = {"r": _copy(r), "v": _copy(v)}
 	powered_state = {}
 	orientation = FlightMath.q_normalize(q)
 	angular_vel = _copy(omega_body)
 	ship["elements"] = ManeuverMath.state_to_elements(r, v, get_body(), time)
+	# Local position is sampled at the start of this adapter tick. Sample the target
+	# at that same epoch; advancing its orbit during the control loop while holding
+	# the ship's position fixed would introduce hundreds of metres of aiming error.
+	var held_target: SimVector = local_target_direction
+	if held_target == null and attitude_mode in ["target", "anti_target"]:
+		held_target = attitude_target_dir()
 	var remaining: float = delta
 	var impulse: SimVector = SimVector.new()
 	var angular_impulse: SimVector = SimVector.new()
@@ -297,7 +305,7 @@ func advance_local(delta: float, r: SimVector, v: SimVector, q: Dictionary, omeg
 			if executor_on:
 				_drive_executor()
 			_local_force = SimVector.scale(FlightMath.thrust_axis_world(orientation), float(ship["thrust_n"]) * throttle)
-			_local_torque = FlightMath.clamp_magnitude(manual_torque, ship["max_torque_nm"]) if attitude_mode == "manual" else FlightMath.control_torque_body(orientation, angular_vel, attitude_target_dir(), ship["inertia"], ship["max_torque_nm"], _slew_rate_cap())
+			_local_torque = FlightMath.clamp_magnitude(manual_torque, ship["max_torque_nm"]) if attitude_mode == "manual" else FlightMath.control_torque_body(orientation, angular_vel, held_target if attitude_mode in ["target", "anti_target"] else attitude_target_dir(), ship["inertia"], ship["max_torque_nm"], _slew_rate_cap())
 			_local_control_remaining = DT_PHYS
 		var step: float = minf(remaining, _local_control_remaining)
 		var thrust: float = SimVector.length(_local_force)
