@@ -138,12 +138,7 @@ func _secure(body: WreckBody, bounds: AABB) -> void:
 	var angular_momentum: Vector3 = ship_inverse.inverse() * ship.angular_velocity + cargo_inverse.inverse() * body.angular_velocity
 	angular_momentum += (old_center - new_center).cross(ship.linear_velocity * old_mass)
 	angular_momentum += (body.global_position - new_center).cross(body.linear_velocity * body.mass)
-	if not ship.api.register_cargo(cargo_id, bounds.size, body.mass, volume, {"value_cr": value, "parts": ids}):
-		var reason: String = ship.api.last_message
-		if String(_logged_refusal.get(body.get_instance_id(), "")) != reason:
-			_logged_refusal[body.get_instance_id()] = reason
-			DebugLog.event("cargo", "secure refused: %s (%s)" % [reason, cargo_id])
-		return
+	ship.api.register_cargo(cargo_id, bounds.size, body.mass, volume, {"value_cr": value, "parts": ids})
 	# Record what to_save() needs while the part data and body pose are still
 	# live: each part's own save (definition asset, condition, scan state — the
 	# wreck graph entry becomes orphaned the moment the body is freed below) and

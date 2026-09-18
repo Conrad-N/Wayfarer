@@ -8,9 +8,6 @@ signal command_requested(command: String, args: Dictionary)
 const DRY_MASS_KG: float = 8000.0
 const PROPELLANT_CAPACITY_KG: float = 2000.0
 const BATTERY_CAPACITY_J: float = 20000000.0
-const CARGO_CAPACITY_M3: float = 50.4
-const DOOR_SIZE_M: Vector2 = Vector2(2.2, 2.2)
-const BAY_SIZE_M: Vector3 = Vector3(3.6, 2.8, 5.0)
 const DOOR_ENERGY_J: float = 1000.0
 
 var last_message: String:
@@ -81,9 +78,6 @@ func get_telemetry() -> Dictionary:
 		"braking": _braking,
 		"cargo_mass_kg": cargo_mass,
 		"cargo_volume_m3": cargo_volume,
-		"cargo_capacity_m3": CARGO_CAPACITY_M3,
-		"door_size_m": DOOR_SIZE_M,
-		"bay_size_m": BAY_SIZE_M,
 		"cargo_manifest": _manifest.duplicate(true),
 		"motion": _motion.duplicate(true),
 		"power_available": _has_power(),
@@ -232,42 +226,14 @@ func apply_damage(system: String, amount: float) -> float:
 	return lost
 
 
-## Assess projected bay-local dimensions, mass, occupied volume, and duplicate identity.
-func assess_cargo(id: String, size_in_bay: Vector3, mass_kg: float, volume_m3: float) -> Dictionary:
-	if id.strip_edges().is_empty():
-		return _assessment(false, "CARGO HAS NO ID")
-	for entry: Dictionary in _manifest:
-		if String(entry["id"]) == id:
-			return _assessment(false, "CARGO ALREADY ABOARD")
-	if not size_in_bay.is_finite() or size_in_bay.x <= 0.0 or size_in_bay.y <= 0.0 or size_in_bay.z <= 0.0 or not is_finite(mass_kg) or mass_kg <= 0.0 or not is_finite(volume_m3) or volume_m3 <= 0.0:
-		return _assessment(false, "INVALID CARGO DIMENSIONS OR MASS")
-	if not _cargo_door_open:
-		return _assessment(false, "OPEN CARGO DOOR FIRST")
-	if not _system_working("cargo"):
-		return _assessment(false, "CARGO SYSTEM UNAVAILABLE")
-	if not _has_power():
-		return _assessment(false, "CARGO CLAMPS NEED SHIP POWER")
-	if size_in_bay.x > DOOR_SIZE_M.x or size_in_bay.y > DOOR_SIZE_M.y:
-		return _assessment(false, "PART DOES NOT FIT THROUGH DOOR: ROTATE OR CUT SMALLER")
-	if size_in_bay.x > BAY_SIZE_M.x or size_in_bay.y > BAY_SIZE_M.y or size_in_bay.z > BAY_SIZE_M.z:
-		return _assessment(false, "PART DOES NOT FIT INSIDE BAY")
-	var occupied: float = 0.0
-	var loaded_mass: float = DRY_MASS_KG + _propellant_kg + _main_propellant_kg
-	for entry: Dictionary in _manifest:
-		occupied += float(entry["volume_m3"])
-		loaded_mass += float(entry["mass_kg"])
-	if occupied + volume_m3 > CARGO_CAPACITY_M3:
-		return _assessment(false, "CARGO BAY FULL")
-	if not is_finite(loaded_mass + mass_kg):
-		return _assessment(false, "INVALID CARGO MASS")
-	return _assessment(true, "CARGO FITS")
-
-
-## The owning scene records a secured physical part after checking its current fit.
+## Record a physically secured cargo part on the manifest for the tablet and ship
+## mass. The owning scene (`cargo_hold.gd`) is the sole gameplay gate: it only calls
+## this once a piece has actually settled inside the bay (observed outside, came
+## through the doorway, wholly contained, slow, not spinning, no leak, not gripped).
+## This never refuses; it only guards against non-finite values corrupting the ledger.
 func register_cargo(id: String, size_in_bay: Vector3, mass_kg: float, volume_m3: float, details: Dictionary = {}) -> bool:
-	var assessment: Dictionary = assess_cargo(id, size_in_bay, mass_kg, volume_m3)
-	if not bool(assessment["ok"]):
-		return _reject(String(assessment["reason"]))
+	if not size_in_bay.is_finite() or not is_finite(mass_kg) or not is_finite(volume_m3):
+		return _reject("INVALID CARGO DIMENSIONS OR MASS")
 	var entry: Dictionary = details.duplicate(true)
 	entry.merge({"id": id, "size_m": size_in_bay, "mass_kg": mass_kg, "volume_m3": volume_m3}, true)
 	_manifest.append(entry)
@@ -362,10 +328,6 @@ func _reject(message: String) -> bool:
 	_last_message = message
 	changed.emit()
 	return false
-
-
-func _assessment(ok: bool, reason: String) -> Dictionary:
-	return {"ok": ok, "reason": reason}
 
 
 ## Bind flight commands to the owning orbital session; no app accesses its internals.

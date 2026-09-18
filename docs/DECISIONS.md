@@ -529,3 +529,17 @@ decide something the docs did not cover.
   relative hull pose and reconstructs the clamp independently of cargo COM order.
   Nearby local target aiming samples ship and target at the same control-tick
   epoch; docking supplies the fixed ring axis to the same finite wheel controller.
+
+- 2026-09-18 — Conrad: cargo clamps refuse nothing. Securing has exactly one
+  condition — the piece physically settles inside the bay (observed outside,
+  crossed the open doorway, wholly contained, slow, not spinning, no active leak,
+  not gripped) — enforced entirely by `cargo_hold.gd`. `ShipApi.register_cargo`
+  only records the result (mass, volume, value, parts) for the tablet and ship
+  mass; it no longer checks door state, power, cargo system health, door/bay fit,
+  or bay capacity, and always returns true bar a plain non-finite guard.
+  `assess_cargo` is deleted along with `CARGO_CAPACITY_M3`, `DOOR_SIZE_M` and
+  `BAY_SIZE_M`. Rationale: the physical bay geometry already answers "does it
+  fit" correctly on its own, and an open door means things can go in regardless
+  of power — cargo health still blocks moving the door, and power still gates
+  the door motor, but neither gates what happens once something is already
+  inside.

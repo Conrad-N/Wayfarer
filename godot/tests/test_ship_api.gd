@@ -1,4 +1,4 @@
-## Pure ship rules cover shared commands, physical cargo limits, stores, and damage.
+## Pure ship rules cover shared commands, the cargo manifest ledger, stores, and damage.
 extends TestCase
 
 const API_SCRIPT: GDScript = preload("res://scripts/ship/ship_api.gd")
@@ -15,8 +15,6 @@ func test_default_state_and_independence() -> void:
 	check_eq(state["battery_energy_j"], ShipApi.BATTERY_CAPACITY_J, "battery in joules")
 	check_eq(state["cargo_mass_kg"], 0.0, "empty cargo mass")
 	check_eq(state["cargo_volume_m3"], 0.0, "empty cargo volume")
-	check_eq(state["cargo_capacity_m3"], 50.4, "interior volume")
-	check_eq(state["door_size_m"], Vector2(2.2, 2.2), "door clear dimensions")
 	check_eq(state["ship_health"], 1.0, "initial health")
 	check(not state["cargo_door_open"] and state["airlock_inner_open"] and not state["airlock_outer_open"], "safe default doors")
 	first.consume_energy(1000.0)
@@ -188,7 +186,7 @@ func test_damage_health_and_failed_commands() -> void:
 	check(api.get_telemetry()["cargo_door_open"], "damage does not teleport the door")
 	check(not api.set_system_enabled("cargo", true), "switch cannot repair destroyed actuator")
 	check(not api.get_telemetry()["systems"]["cargo"]["enabled"], "destroyed system disabled")
-	check(not api.assess_cargo("box", Vector3.ONE, 1.0, 1.0)["ok"], "damaged cargo system cannot secure new loads")
+	check(api.register_cargo("box", Vector3.ONE, 1.0, 1.0), "manifest still records with a destroyed cargo system: only physical settling gates securing")
 	api.apply_damage("airlock", 1.0)
 	check(not api.set_airlock_door("inner", false), "destroyed airlock actuator cannot move")
 	api.set_braking(true)
@@ -216,41 +214,24 @@ func test_motion_is_local_and_finite() -> void:
 		check_eq(api.get_telemetry()["motion"], motion, "invalid motion component keeps prior snapshot")
 
 
-## The actual projected width and height must both pass the cargo door.
-func test_cargo_door_fit_and_bay_length() -> void:
-	var api: RefCounted = API_SCRIPT.new()
-	check(not api.assess_cargo("box", Vector3.ONE, 10.0, 1.0)["ok"], "closed door denies load")
-	api.set_cargo_door(true)
-	check(api.assess_cargo("box", Vector3(2.2, 2.2, 5.0), 10.0, 20.0)["ok"], "exact clearance dimensions accepted")
-	check(not api.assess_cargo("wide", Vector3(2.201, 1, 1), 10.0, 1.0)["ok"], "width too large")
-	check(not api.assess_cargo("tall", Vector3(1, 2.201, 1), 10.0, 1.0)["ok"], "height too large")
-	check(not api.assess_cargo("long", Vector3(1, 1, 5.001), 10.0, 1.0)["ok"], "part cannot exceed bay length")
-	check(api.assess_cargo("rotated", Vector3(1, 1, 3), 10.0, 3.0)["ok"], "turning long axis toward door allows passage")
-	api.set_system_enabled("cargo", false)
-	check(not api.assess_cargo("disabled", Vector3.ONE, 10.0, 1.0)["ok"], "disabled cargo cannot secure load")
-
-
-## Cargo must have a finite positive shape, mass, volume, and nonblank identity.
+## The manifest only records a physical shape; it never gates on non-finite values.
 func test_invalid_cargo_values() -> void:
 	var api: RefCounted = _open_ship()
-	for id: String in ["", " \t\n"]:
-		check(not api.register_cargo(id, Vector3.ONE, 1.0, 1.0), "blank id rejected")
-	for value: float in [0.0, -1.0, INF, -INF, NAN]:
-		check(not api.assess_cargo("mass", Vector3.ONE, value, 1.0)["ok"], "invalid cargo mass")
-		check(not api.assess_cargo("volume", Vector3.ONE, 1.0, value)["ok"], "invalid cargo volume")
+	for value: float in [INF, -INF, NAN]:
+		check(not api.register_cargo("mass", Vector3.ONE, value, 1.0), "non-finite mass rejected")
+		check(not api.register_cargo("volume", Vector3.ONE, 1.0, value), "non-finite volume rejected")
 		for axis in 3:
 			var dimensions: Vector3 = Vector3.ONE
 			dimensions[axis] = value
-			check(not api.assess_cargo("size", dimensions, 1.0, 1.0)["ok"], "invalid cargo dimension")
+			check(not api.register_cargo("size", dimensions, 1.0, 1.0), "non-finite dimension rejected")
 	check_eq(api.get_telemetry()["cargo_manifest"].size(), 0, "invalid cargo never added")
 
 
-## Every secured part appears once, adds wet mass, and releases its exact ledger totals.
-func test_cargo_registration_duplicates_and_unloading() -> void:
+## Every secured part adds wet mass and releases its exact ledger totals on removal.
+func test_cargo_registration_and_unloading() -> void:
 	var api: RefCounted = _open_ship()
 	check(api.register_cargo("battery", Vector3.ONE, 75.0, 0.8, {"part_kind": "battery"}), "battery secured")
 	check(api.register_cargo("panel", Vector3(2, 1, 1), 25.0, 1.2), "panel secured")
-	check(not api.register_cargo("battery", Vector3.ONE, 999.0, 2.0), "duplicate identity rejected")
 	check_eq(api.get_telemetry()["mass_kg"], ShipApi.DRY_MASS_KG + ShipApi.PROPELLANT_CAPACITY_KG + 100.0, "cargo changes wet ship mass")
 	check_eq(api.get_telemetry()["cargo_mass_kg"], 100.0, "mass ledger")
 	check_eq(api.get_telemetry()["cargo_volume_m3"], 2.0, "volume ledger")
@@ -267,20 +248,14 @@ func test_cargo_registration_duplicates_and_unloading() -> void:
 	check_eq(api.get_telemetry()["cargo_volume_m3"], 0.0, "unloaded volume exact zero")
 
 
-## Capacity is checked again when loading, so stale assessments cannot overfill a bay.
-func test_cargo_volume_limit_rechecks_registration() -> void:
-	var api: RefCounted = _open_ship()
-	check(api.assess_cargo("later", Vector3.ONE, 2.0, 1.0)["ok"], "initial assessment fits")
-	check(api.register_cargo("a", Vector3(2, 2, 5), 100.0, 20.0), "first volume")
-	check(api.register_cargo("b", Vector3(2, 2, 5), 100.0, 20.0), "second volume")
-	check(api.register_cargo("c", Vector3(2, 2, 3), 100.0, 10.4), "exact bay capacity")
-	check_near(api.get_telemetry()["cargo_volume_m3"], 50.4, 0.000001, "full volume")
-	check(not api.register_cargo("later", Vector3.ONE, 2.0, 1.0), "stale approved load denied after bay fills")
-	check_eq(api.get_telemetry()["cargo_manifest"].size(), 3, "rejection leaves ledger unchanged")
-	api.remove_cargo("c")
-	check(api.register_cargo("later", Vector3.ONE, 2.0, 1.0), "unloading restores space")
-	api.set_cargo_door(false)
-	check(not api.register_cargo("closed", Vector3.ONE, 2.0, 1.0), "registration rechecks hatch")
+## The manifest has no capacity cap and no door-state gate; it always records.
+func test_cargo_registration_has_no_capacity_or_door_gate() -> void:
+	var api: RefCounted = API_SCRIPT.new()
+	check(api.register_cargo("a", Vector3(2, 2, 5), 100.0, 20.0), "registers with the door closed")
+	check(api.register_cargo("b", Vector3(2, 2, 5), 100.0, 20.0), "registers past the old bay volume")
+	check(api.register_cargo("c", Vector3(2, 2, 5), 100.0, 20.0), "registers well past the old bay volume")
+	check_near(api.get_telemetry()["cargo_volume_m3"], 60.0, 0.000001, "manifest tracks whatever is recorded")
+	check_eq(api.get_telemetry()["cargo_manifest"].size(), 3, "no gate blocks any of the three entries")
 
 
 ## Clients hear successful commands once and receive readable rejection and cargo feedback.

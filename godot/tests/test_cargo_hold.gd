@@ -152,8 +152,10 @@ func test_clamp_waits_for_full_containment_and_safe_relative_motion() -> void:
 	(fixture.root as Node).free()
 
 
-## A passed doorway stays loose without power; restoring power allows the clamps.
-func test_cargo_clamps_require_available_ship_power() -> void:
+## A piece that has physically settled inside the bay secures even with no ship
+## power and a destroyed cargo system: the manifest only records; the only
+## condition is settling inside the bay (2026-09-18).
+func test_cargo_secures_without_power_or_working_cargo_system() -> void:
 	var fixture: Dictionary = _fixture(Vector3.ONE)
 	var ship: PlayerShip = fixture.ship
 	var hold: CargoHold = fixture.hold
@@ -161,12 +163,26 @@ func test_cargo_clamps_require_available_ship_power() -> void:
 	await _cross(fixture)
 	await _place(fixture, Vector3(0, 0, -4.5))
 	ship.api.set_system_enabled("power", false)
+	ship.api.apply_damage("cargo", 1.0)
 	hold._physics_process(1.0 / 60.0)
-	check_eq(ship.api.get_telemetry().cargo_manifest.size(), 0, "unpowered clamp cannot merge cargo")
-	check(ship.api.last_message.contains("POWER"), "unpowered clamp explains the power requirement")
-	ship.api.set_system_enabled("power", true)
+	check_eq(ship.api.get_telemetry().cargo_manifest.size(), 1, "physical settling secures cargo with no power and a destroyed cargo system")
+	await _frames(1)
+	(fixture.root as Node).free()
+
+
+## Once a body has already crossed the doorway, closing the hatch afterward does
+## not retroactively block it: the passage check only runs while a body is still
+## near the door, not while it settles further inside.
+func test_door_closed_after_crossing_still_secures() -> void:
+	var fixture: Dictionary = _fixture(Vector3.ONE)
+	var ship: PlayerShip = fixture.ship
+	var hold: CargoHold = fixture.hold
+	ship.api.set_cargo_door(true)
+	await _cross(fixture)
+	ship.api.set_cargo_door(false)
+	await _place(fixture, Vector3(0, 0, -4.5))
 	hold._physics_process(1.0 / 60.0)
-	check_eq(ship.api.get_telemetry().cargo_manifest.size(), 1, "restoring power allows pending cargo to clamp")
+	check_eq(ship.api.get_telemetry().cargo_manifest.size(), 1, "already-crossed cargo secures even after the door later closes")
 	await _frames(1)
 	(fixture.root as Node).free()
 

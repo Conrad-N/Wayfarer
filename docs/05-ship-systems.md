@@ -79,8 +79,10 @@ fuel and coolant plumes cumulatively damage power and RCS respectively, using
 
 Cargo must be observed outside, pass the open aperture with clear alignment,
 fit entirely inside, and settle below 0.5 m/s and 0.35 rad/s relative to the ship.
-An active leak prevents clamping. Powered clamps then add the load's mass and
-volume to the shared manifest. The load becomes part of the ship's compound
+An active leak prevents clamping. This physical settling is the only condition;
+clamping needs no power and no working cargo system. Clamping then adds the
+load's mass and volume to the shared manifest, which only records what is
+already secured — it never refuses. The load becomes part of the ship's compound
 collision body, so its mass is counted once. Loading preserves linear and angular
 momentum; it is an inelastic attachment, with ship-axis diagonal inertia used as
 an approximation after clamping. There is no sale, unloading UI or repair yet.

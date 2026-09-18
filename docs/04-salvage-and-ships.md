@@ -210,7 +210,8 @@ The grip follows the selected part through cutting. Hold Shift to aim the cutter
 while holding; normal mouse movement steers the combined
 load using reaction wheels, and Q/E rolls it. A heavy load turns slowly and
 fills the suit wheels; unload them before the next turn. The carried part retains its collisions and
-must fit through the cargo door. Release it inside the bay before clamps secure it.
+must fit through the cargo door. Release it inside the bay so it can settle and
+clamps secure it — clamping needs no power or working cargo system.
 The grapple remains the longer-range tether; the tractor beam has been removed.
 
 Slot 3 is the winch (2026-09-14, replacing the old left-click grab/release on
